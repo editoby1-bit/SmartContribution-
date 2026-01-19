@@ -589,8 +589,13 @@ h3 {
   cursor: pointer;
 }
 
+.approval-item {
+  background: #ffffff;
+  transition: background-color 0.12s ease;
+}
+
 .approval-item:hover {
-  background: #f7fcfd; /* VERY light */
+  background: rgba(15, 185, 177, 0.04);
 }
 
 /* Lock modal height */
