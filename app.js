@@ -311,7 +311,7 @@ window.currentStaff = currentStaff;
     const payload = JSON.stringify({
   time,
   actor,
-  actorId: staff?.id || null,
+  actorId: staff?.id || actor || null,
   role,
   action,
   details,
