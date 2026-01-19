@@ -1391,38 +1391,61 @@ function reject(id) {
 
   function renderAudit() {
   const staff = currentStaff();
-  const el = $("#audit");
-  if (!el) return;
+  const el = document.getElementById("audit");
+  if (!el || !staff) return;
 
-  // 🔑 CEO & MANAGER see everything
-  const visibleAudits = isManager()
+  const audits = isManager()
     ? state.audit
-    : state.audit.filter(
-        a => a.actorId && staff && a.actorId === staff.id
-      );
+    : state.audit.filter(a => a.actorId === staff.id);
 
   el.innerHTML = "";
 
-  visibleAudits
+  audits
     .slice()
     .reverse()
-    .forEach((a) => {
+    .forEach(a => {
       const d = document.createElement("div");
       d.style.padding = "8px";
       d.style.borderBottom = "1px solid rgba(11,27,43,0.04)";
 
       d.innerHTML = `
-        <div class="small">
+        <div class="small muted">
           ${new Date(a.time).toLocaleString()}
-          • ${a.actor || "System"}
-          • ${a.role || "system"}
+          • ${a.actor}
+          • ${a.role}
         </div>
-        <div style="font-size:13px">${a.action}</div>
+        <div style="font-size:13px">
+          ${formatAuditMessage(a)}
+        </div>
       `;
 
       el.appendChild(d);
     });
 }
+
+function formatAuditMessage(a) {
+  const d = a.details || {};
+
+  if (a.action === "approval") {
+    return `
+      ${d.decision === "approve" ? "Approved" : "Rejected"}
+      ₦${Number(d.amount || 0).toLocaleString()}
+      for <b>${d.customerName || "Unknown customer"}</b>
+    `;
+  }
+
+  if (a.action === "transaction") {
+    return `
+      ${d.txType.toUpperCase()}
+      ₦${Number(d.amount || 0).toLocaleString()}
+      for <b>${d.customerName || "Unknown customer"}</b>
+    `;
+  }
+
+  return a.action;
+}
+
+
 // ---- DEBUG MARK ----
   const modalBack = $("#modalBack"),
   modal = $("#modal"),
@@ -2774,12 +2797,18 @@ cust.transactions.push({
 
 
   // ===== AUDIT =====
-  await pushAudit(
-    staff.name,
-    staff.role,
-    `approval_${app.status}`,
-    JSON.stringify(app)
-  );
+await pushAudit(
+  staff.name,
+  staff.role,
+  "approval",
+  {
+    decision: action,                 // "approve" | "reject"
+    customerId: customer.id,
+    customerName: customer.name,
+    amount: tx.amount,
+    txType: tx.type
+  }
+);
 
   // ===== CLEAN UP =====
   save();
