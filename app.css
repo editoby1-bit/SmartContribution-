@@ -926,3 +926,8 @@ body {
 .panel.right #audit {
   flex: 1;
 }
+.panel.middle {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
