@@ -2636,7 +2636,8 @@ async function processApproval(id, action) {
   if (!ok) return;
 
   // ===== APPLY DECISION =====
-  app.status = action === "approve" ? "approved" : "rejected";
+app.status = action === "approve" ? "approved" : "rejected";
+
   app.processedBy = staff.name;
   app.processedAt = new Date().toISOString();
 // =========================
@@ -2794,28 +2795,34 @@ cust.transactions.push({
 
   cust.balance += creditedToBalance;
 }
-
-
-  // ===== AUDIT =====
+// ===== AUDIT (ROLE-AWARE, DETAILED) =====
 await pushAudit(
   staff.name,
   staff.role,
-  "approval",
+  `approval_${app.status}`,
   {
-    decision: action,                 // "approve" | "reject"
-    customerId: customer.id,
-    customerName: customer.name,
-    amount: tx.amount,
-    txType: tx.type
+    approvalId: app.id,
+    decision: action,          // approve | reject
+    customerId: cust.id,
+    customerName: cust.name,
+    amount: app.amount,
+    txType: app.type
   }
 );
 
-  // ===== CLEAN UP =====
-  save();
-  renderApprovals();
-  renderCustomers();
-  refreshCustomerProfile();
-  updateChartData();
+ // 🔑 remove processed approvals from pending list
+state.approvals = state.approvals.filter(a => a.status === "pending");
+
+// persist
+save();
+
+// re-render UI
+renderApprovals();
+renderDashboardApprovals?.(); // safe if exists
+renderCustomers();
+refreshCustomerProfile();
+updateChartData();
+renderAudit();
 
   showToast(
     action === "approve"
