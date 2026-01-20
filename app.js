@@ -3804,6 +3804,7 @@ window.openCloseDayModal = openCloseDayModal;
   const staff = currentStaff();
 
   // ✅ TELLER AUDIT — submission
+  console.log("SUBMIT TX: about to push audit");
   await pushAudit(
     staff.name,
     staff.role,
@@ -3816,6 +3817,7 @@ window.openCloseDayModal = openCloseDayModal;
       description: desc || null
     }
   );
+  console.log("SUBMIT TX: audit pushed", state.audit);
 
   // 🔑 ACTUAL TRANSACTION LOGIC
   processTransaction({
