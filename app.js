@@ -17,9 +17,7 @@
   CEO: "ceo"
 };
 
-document.getElementById("submitTx").onclick = () => {
-  console.log("🔥 SUBMIT BUTTON CLICKED");
-};
+
   
 
 function currentStaff() {
@@ -2543,6 +2541,9 @@ async function confirmDeleteCustomer(id) {
     updateChartData();
   }
 
+document.getElementById("submitTx").onclick = () => {
+  console.log("🔥 SUBMIT BUTTON CLICKED");
+};
 
   // =========================
 // TRANSACTION PROCESSING
