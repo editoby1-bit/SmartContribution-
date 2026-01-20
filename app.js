@@ -3800,23 +3800,24 @@ window.openCloseDayModal = openCloseDayModal;
 
   if (!ok) return;
 
-  // ✅ ONE declaration only
+  // ✅ DECLARE ONCE
   const staff = currentStaff();
 
-  // ✅ Audit: teller action (THIS is what tellers should see)
+  // ✅ TELLER AUDIT — submission
   await pushAudit(
     staff.name,
     staff.role,
-    "transaction_submitted",
+    "tx_submitted",
     {
       txType: type,
       amount: amt,
       customerId: customer.id,
       customerName: customer.name,
-      desc: desc || null
+      description: desc || null
     }
   );
 
+  // 🔑 ACTUAL TRANSACTION LOGIC
   processTransaction({
     type,
     customerId: cid,
