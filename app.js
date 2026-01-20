@@ -1411,10 +1411,15 @@ function reject(id) {
 
   // Manager / CEO see everything, others see own actions
   const visibleAudits = isManager()
-    ? state.audit
-    : state.audit.filter(
-        a => staff && a.actorId === staff.id
-      );
+  ? state.audit
+  : state.audit.filter(
+      a =>
+        staff &&
+        (
+          a.actorId === staff.id ||
+          a.actor === staff.name
+        )
+    );
 
   el.innerHTML = "";
 
