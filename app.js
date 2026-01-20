@@ -2638,14 +2638,7 @@ if (!staff || staff.role !== "manager") {
 
   const cust = state.customers.find(c => c.id === app.customerId);
   if (!cust) return showToast("Customer missing");
-
-  const staff = currentStaff();
-  if (!canApprove()) {
-  showToast("You are not authorized to approve transactions");
-  return;
-}
-
-
+ 
   // ===== CONFIRM =====
   const ok = await openModalGeneric(
     action === "approve" ? "Confirm Approval" : "Confirm Rejection",
