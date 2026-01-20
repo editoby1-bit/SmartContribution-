@@ -2622,6 +2622,11 @@ function detectApprovalAnomalies(app, cust) {
 }
 
 async function processApproval(id, action) {
+  const staff = currentStaff();
+if (!staff || staff.role !== "manager") {
+  showToast("You are not authorized to approve transactions");
+  return;
+}
   const idx = state.approvals.findIndex(a => a.id === id);
   if (idx < 0) return showToast("Approval not found");
 
@@ -3785,12 +3790,26 @@ window.openCloseDayModal = openCloseDayModal;
   );
   // 🔑 STEP 2 ENDS HERE
 
-  processTransaction({
-    type,
-    customerId: cid,
+  const staff = currentStaff();
+
+await pushAudit(
+  staff.name,
+  staff.role,
+  "tx_submitted_for_approval",
+  {
+    customerId: customer.id,
+    customerName: customer.name,
     amount: amt,
-    desc
-  });
+    txType: type
+  }
+);
+
+processTransaction({
+  type,
+  customerId: cid,
+  amount: amt,
+  desc
+});
 });
 
   const dashBtn = document.getElementById("btnDashboard");
