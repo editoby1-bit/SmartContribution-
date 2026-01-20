@@ -1392,34 +1392,53 @@ function reject(id) {
   function renderAudit() {
   const staff = currentStaff();
   const el = document.getElementById("audit");
-  if (!el || !staff) return;
+  if (!el) return;
 
-  const audits = isManager()
+  // Manager / CEO see everything, others see own actions
+  const visibleAudits = isManager()
     ? state.audit
-    : state.audit.filter(a => a.actorId === staff.id);
+    : state.audit.filter(
+        a => staff && a.actorId === staff.id
+      );
 
   el.innerHTML = "";
 
-  audits
+  visibleAudits
     .slice()
     .reverse()
     .forEach(a => {
-      const d = document.createElement("div");
-      d.style.padding = "8px";
-      d.style.borderBottom = "1px solid rgba(11,27,43,0.04)";
+      const row = document.createElement("div");
+      row.style.padding = "8px";
+      row.style.borderBottom = "1px solid rgba(11,27,43,0.06)";
 
-      d.innerHTML = `
-        <div class="small muted">
+      let detailLine = "";
+
+      // 🔍 APPROVAL DETAILS
+      if (a.action?.startsWith("approval") && a.details) {
+        detailLine = `
+          <div style="font-size:13px">
+            <b>${a.details.decision.toUpperCase()}</b>
+            ${a.details.txType} —
+            ₦${fmt(a.details.amount)}
+            <br/>
+            Customer: <b>${a.details.customerName}</b>
+          </div>
+        `;
+      } else {
+        // fallback
+        detailLine = `<div style="font-size:13px">${a.action}</div>`;
+      }
+
+      row.innerHTML = `
+        <div class="small">
           ${new Date(a.time).toLocaleString()}
           • ${a.actor}
           • ${a.role}
         </div>
-        <div style="font-size:13px">
-          ${formatAuditMessage(a)}
-        </div>
+        ${detailLine}
       `;
 
-      el.appendChild(d);
+      el.appendChild(row);
     });
 }
 
@@ -3748,6 +3767,23 @@ window.openCloseDayModal = openCloseDayModal;
   );
 
   if (!ok) return;
+
+  // 🔑 STEP 2 STARTS HERE (ADD THIS BLOCK)
+  const staff = currentStaff();
+
+  await pushAudit(
+    staff.name,
+    staff.role,
+    "transaction_created",
+    {
+      txType: type,
+      amount: amt,
+      customerId: customer.id,
+      customerName: customer.name,
+      desc: desc || null
+    }
+  );
+  // 🔑 STEP 2 ENDS HERE
 
   processTransaction({
     type,
