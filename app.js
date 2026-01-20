@@ -2619,6 +2619,7 @@ save();
 renderApprovals();
 showToast("Transaction sent for approval");
 return;
+}
 
 function drillDownApproval(approval) {
   // 1️⃣ Open the customer modal
