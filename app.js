@@ -3766,13 +3766,14 @@ window.openCloseDayModal = openCloseDayModal;
 
   if (!ok) return;
 
-  // 🔑 STEP 2 STARTS HERE (ADD THIS BLOCK)
+  // ✅ ONE declaration only
   const staff = currentStaff();
 
+  // ✅ Audit: teller action (THIS is what tellers should see)
   await pushAudit(
     staff.name,
     staff.role,
-    "transaction_created",
+    "transaction_submitted",
     {
       txType: type,
       amount: amt,
@@ -3781,27 +3782,13 @@ window.openCloseDayModal = openCloseDayModal;
       desc: desc || null
     }
   );
-  // 🔑 STEP 2 ENDS HERE
 
-  
-await pushAudit(
-  staff.name,
-  staff.role,
-  "tx_submitted_for_approval",
-  {
-    customerId: customer.id,
-    customerName: customer.name,
+  processTransaction({
+    type,
+    customerId: cid,
     amount: amt,
-    txType: type
-  }
-);
-
-processTransaction({
-  type,
-  customerId: cid,
-  amount: amt,
-  desc
-});
+    desc
+  });
 });
 
   const dashBtn = document.getElementById("btnDashboard");
