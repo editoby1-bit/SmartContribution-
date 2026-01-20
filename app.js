@@ -890,9 +890,13 @@ function renderApprovals() {
   const el = document.getElementById("approvals");
   if (!el) return;
 
+  const staff = currentStaff();
+  const isApprover = staff && canApprove(); // manager or CEO
+
   const pending = state.approvals
-  .filter(a => a.status === "pending")
-  .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
+    .filter(a => a.status === "pending")
+    .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
+
   if (pending.length === 0) {
     el.innerHTML = `<div class="small muted">No pending approvals</div>`;
     return;
@@ -910,32 +914,43 @@ function renderApprovals() {
             <div style="font-weight:700">
               ${a.type.toUpperCase()} — ${fmt(a.amount)}
             </div>
+
             <div class="small">
-  Customer: <b>${cust ? cust.name : "Unknown"}</b>
-</div>
+              Customer: <b>${cust ? cust.name : "Unknown"}</b>
+            </div>
 
-<div class="small">
-  Requested by: <b>${a.requestedByName || a.requestedBy}</b>
-</div>
+            <div class="small">
+              Requested by: <b>${a.requestedByName || a.requestedBy}</b>
+            </div>
 
-<div class="small muted">
-  Requested at: ${new Date(a.requestedAt).toLocaleString()}
-</div>
-
-
-          <div style="display:flex;gap:6px">
-            <button
-              class="btn"
-              onclick="processApproval('${a.id}', 'approve')">
-              Approve
-            </button>
-
-            <button
-              class="btn ghost danger"
-              onclick="processApproval('${a.id}', 'reject')">
-              Reject
-            </button>
+            <div class="small muted">
+              Requested at: ${new Date(a.requestedAt).toLocaleString()}
+            </div>
           </div>
+
+          ${
+            isApprover
+              ? `
+                <div style="display:flex;gap:6px">
+                  <button
+                    class="btn"
+                    onclick="processApproval('${a.id}', 'approve')">
+                    Approve
+                  </button>
+
+                  <button
+                    class="btn ghost danger"
+                    onclick="processApproval('${a.id}', 'reject')">
+                    Reject
+                  </button>
+                </div>
+              `
+              : `
+                <div class="small muted" style="margin-top:4px">
+                  ⏳ Awaiting manager review
+                </div>
+              `
+          }
         </div>
       </div>
     `;
@@ -2623,7 +2638,7 @@ function detectApprovalAnomalies(app, cust) {
 
 async function processApproval(id, action) {
   const staff = currentStaff();
-if (!staff || staff.role !== "manager") {
+if (!canApprove()) {
   showToast("You are not authorized to approve transactions");
   return;
 }
