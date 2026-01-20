@@ -35,6 +35,8 @@ document.getElementById("submitTx").addEventListener("click", async (e) => {
     showToast("Enter a valid amount");
     return;
   }
+  });
+  
 
 function currentStaff() {
   const staff = state.staff.find(s => s.id === state.activeStaffId);
