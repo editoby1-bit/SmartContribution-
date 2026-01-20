@@ -2583,8 +2583,8 @@ async function processTransaction({ type, customerId, amount, desc, interest = 0
 
   const now = new Date().toISOString();
 
-  // 🔑 ALL TRANSACTIONS GO FOR APPROVAL (CLIENT REQUIREMENT)
-  state.approvals.push({
+ // 🔑 ALL TRANSACTIONS GO FOR APPROVAL (CLIENT REQUIREMENT)
+state.approvals.push({
   id: uid("ap"),
   type,
   amount,
@@ -2597,15 +2597,28 @@ async function processTransaction({ type, customerId, amount, desc, interest = 0
   status: "pending"
 });
 
+// ✅ AUDIT — TELLER ACTION (ADD THIS, DO NOT REPLACE)
+await pushAudit(
+  staff.name,
+  staff.role,
+  "tx_sent_for_approval",
+  {
+    txType: type,
+    amount,
+    customerId: cust.id,
+    customerName: cust.name,
+    description: desc
+  }
+);
+
 // 🔑 reset after use
 window.currentEmpowermentInterest = null;
 
-
-  save();
-  renderApprovals();
-  showToast("Transaction sent for approval");
-  return;
-}
+// persist + UI
+save();
+renderApprovals();
+showToast("Transaction sent for approval");
+return;
 
 function drillDownApproval(approval) {
   // 1️⃣ Open the customer modal
