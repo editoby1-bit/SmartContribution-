@@ -17,6 +17,25 @@
   CEO: "ceo"
 };
 
+document.getElementById("submitTx").addEventListener("click", async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  console.log("STEP A: submitTx clicked");
+
+  const type = $("#txType").value;
+  const cid = $("#custSel").value;
+  const amt = Number($("#amount").value || 0);
+  const desc = $("#desc").value;
+
+  console.log("STEP B: values", { type, cid, amt });
+
+  if (amt <= 0) {
+    console.log("STEP C: invalid amount");
+    showToast("Enter a valid amount");
+    return;
+  }
+
 function currentStaff() {
   const staff = state.staff.find(s => s.id === state.activeStaffId);
   if (!staff) return null;
@@ -3770,78 +3789,7 @@ window.openCloseDayModal = openCloseDayModal;
       showToast("Customer created");
     }
   });
-  document.getElementById("submitTx").addEventListener("click", async (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-
-  console.log("STEP A: submitTx clicked");
-
-  const type = $("#txType").value;
-  const cid = $("#custSel").value;
-  const amt = Number($("#amount").value || 0);
-  const desc = $("#desc").value;
-
-  console.log("STEP B: values", { type, cid, amt });
-
-  if (amt <= 0) {
-    console.log("STEP C: invalid amount");
-    showToast("Enter a valid amount");
-    return;
-  }
-
-  const customer = state.customers.find(c => c.id === cid);
-  if (!customer) {
-    console.log("STEP D: customer missing");
-    showToast("Customer not found");
-    return;
-  }
-
-  console.log("STEP E: before modal");
-
-  const ok = await openModalGeneric(
-    "Confirm Transaction",
-    `
-      <div class="small">
-        Confirm <b>${type.toUpperCase()}</b> of
-        <b>${fmt(amt)}</b> for <b>${customer.name}</b>?
-      </div>
-    `,
-    "Confirm"
-  );
-
-  console.log("STEP F: modal result =", ok);
-
-  if (!ok) {
-    console.log("STEP G: user cancelled");
-    return;
-  }
-
-  const staff = currentStaff();
-  console.log("STEP H: staff", staff);
-
-  await pushAudit(
-    staff.name,
-    staff.role,
-    "tx_submitted",
-    {
-      txType: type,
-      amount: amt,
-      customerId: customer.id,
-      customerName: customer.name,
-      description: desc || null
-    }
-  );
-
-  console.log("STEP I: audit pushed", state.audit);
-
-  processTransaction({
-    type,
-    customerId: cid,
-    amount: amt,
-    desc
-  });
-});
-
+  
   const dashBtn = document.getElementById("btnDashboard");
 
 if (dashBtn) {
