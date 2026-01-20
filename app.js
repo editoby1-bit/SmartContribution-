@@ -1428,21 +1428,35 @@ function reject(id) {
 
       let detailLine = "";
 
-      // 🔍 APPROVAL DETAILS
-      if (a.action?.startsWith("approval") && a.details) {
-        detailLine = `
-          <div style="font-size:13px">
-            <b>${a.details.decision.toUpperCase()}</b>
-            ${a.details.txType} —
-            ₦${fmt(a.details.amount)}
-            <br/>
-            Customer: <b>${a.details.customerName}</b>
-          </div>
-        `;
-      } else {
-        // fallback
-        detailLine = `<div style="font-size:13px">${a.action}</div>`;
-      }
+     let details = a.details;
+
+// normalize details (string → object)
+if (typeof details === "string") {
+  try {
+    details = JSON.parse(details);
+  } catch {
+    details = null;
+  }
+}
+
+if (a.action?.startsWith("approval") && details) {
+  const decision = details.decision || a.action.replace("approval_", "");
+  const txType = details.txType || details.type || "transaction";
+  const amount = details.amount || 0;
+  const customerName = details.customerName || "Unknown";
+
+  detailLine = `
+    <div style="font-size:13px">
+      <b>${decision.toUpperCase()}</b>
+      ${txType} —
+      ₦${fmt(amount)}
+      <br/>
+      Customer: <b>${customerName}</b>
+    </div>
+  `;
+} else {
+  detailLine = `<div style="font-size:13px">${a.action}</div>`;
+}
 
       row.innerHTML = `
         <div class="small">
