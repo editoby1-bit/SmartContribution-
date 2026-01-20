@@ -3783,8 +3783,7 @@ window.openCloseDayModal = openCloseDayModal;
   );
   // 🔑 STEP 2 ENDS HERE
 
-  const staff = currentStaff();
-
+  
 await pushAudit(
   staff.name,
   staff.role,
