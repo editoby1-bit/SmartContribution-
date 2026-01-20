@@ -1412,17 +1412,10 @@ function reject(id) {
   const el = document.getElementById("audit");
   if (!el) return;
 
-  // Manager / CEO see everything, others see own actions
+  // Manager / CEO see everything, others see own
   const visibleAudits = isManager()
-  ? state.audit
-  : state.audit.filter(
-      a =>
-        staff &&
-        (
-          a.actorId === staff.id ||
-          a.actor === staff.name
-        )
-    );
+    ? state.audit
+    : state.audit.filter(a => a.actorId === staff.id);
 
   el.innerHTML = "";
 
@@ -1434,37 +1427,34 @@ function reject(id) {
       row.style.padding = "8px";
       row.style.borderBottom = "1px solid rgba(11,27,43,0.06)";
 
-      let detailLine = "";
+      let detail = "";
 
-     let details = a.details;
+      // ✅ TRANSACTION SUBMITTED (TELLER)
+      if (a.action === "tx_sent_for_approval" && a.details) {
+        detail = `
+          <div style="font-size:13px">
+            <b>Sent for approval</b><br/>
+            ${a.details.txType.toUpperCase()} — ${fmt(a.details.amount)}<br/>
+            Customer: <b>${a.details.customerName}</b>
+          </div>
+        `;
+      }
 
-// normalize details (string → object)
-if (typeof details === "string") {
-  try {
-    details = JSON.parse(details);
-  } catch {
-    details = null;
-  }
-}
+      // ✅ APPROVAL / REJECTION (MANAGER / CEO)
+      else if (a.action?.startsWith("approval_") && a.details) {
+        detail = `
+          <div style="font-size:13px">
+            <b>${a.details.decision.toUpperCase()}</b><br/>
+            ${a.details.txType.toUpperCase()} — ${fmt(a.details.amount)}<br/>
+            Customer: <b>${a.details.customerName}</b>
+          </div>
+        `;
+      }
 
-if (a.action?.startsWith("approval") && details) {
-  const decision = details.decision || a.action.replace("approval_", "");
-  const txType = details.txType || details.type || "transaction";
-  const amount = details.amount || 0;
-  const customerName = details.customerName || "Unknown";
-
-  detailLine = `
-    <div style="font-size:13px">
-      <b>${decision.toUpperCase()}</b>
-      ${txType} —
-      ₦${fmt(amount)}
-      <br/>
-      Customer: <b>${customerName}</b>
-    </div>
-  `;
-} else {
-  detailLine = `<div style="font-size:13px">${a.action}</div>`;
-}
+      // 🔁 Fallback
+      else {
+        detail = `<div style="font-size:13px">${a.action}</div>`;
+      }
 
       row.innerHTML = `
         <div class="small">
@@ -1472,7 +1462,7 @@ if (a.action?.startsWith("approval") && details) {
           • ${a.actor}
           • ${a.role}
         </div>
-        ${detailLine}
+        ${detail}
       `;
 
       el.appendChild(row);
