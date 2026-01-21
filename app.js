@@ -1015,6 +1015,7 @@ function openCODResolutionModal(cod) {
     showToast("COD resolved successfully");
   };
 }
+window.openCODResolutionModal = openCODResolutionModal;
 
 function renderApprovals() {
   const el = document.getElementById("approvals");
@@ -3219,19 +3220,19 @@ function initCODDatePicker() {
   const picker = document.getElementById("codDatePicker");
   if (!picker) return;
 
-  const _today = new Date().toISOString().slice(0, 10);
-  picker.value = _today;
+  if (!window.activeCODDate) {
+    window.activeCODDate = new Date().toISOString().slice(0, 10);
+  }
+
+  picker.value = window.activeCODDate;
 
   picker.onchange = () => {
-  window.activeCODDate = picker.value;
-  renderCODForDate(picker.value);
-  renderManagerCODSummary(picker.value);
-};
-
-
-  // initial render
-  renderCODForDate(_today);
+    window.activeCODDate = picker.value;
+    renderCODForDate(window.activeCODDate);
+    renderManagerCODSummary?.(window.activeCODDate);
+  };
 }
+
 
 function renderCODForDate(dateStr) {
   const el = document.getElementById("codTodayList");
@@ -3245,17 +3246,17 @@ function renderCODForDate(dateStr) {
 // =========================
 const systemTotals = todaysCOD.reduce(
   (acc, c) => {
-    acc.expected += Number(c.expectedCash || 0);
-    const effectiveDeclared =
-  c.status === "resolved"
-    ? c.resolution?.resolvedDeclared || 0
-    : c.declared || 0;
+    const expected = Number(c.systemExpected || 0);
 
-const effectiveVariance =
-  effectiveDeclared - Number(c.expectedCash || 0);
+    const declared =
+      c.status === "resolved"
+        ? Number(c.resolvedAmount || 0)
+        : Number(c.staffDeclared || 0);
 
-acc.declared += effectiveDeclared;
-acc.variance += effectiveVariance;
+    acc.expected += expected;
+    acc.declared += declared;
+    acc.variance += declared - expected;
+
     return acc;
   },
   { expected: 0, declared: 0, variance: 0 }
@@ -3274,31 +3275,31 @@ const systemInfo = todaysCOD.reduce(
 // =========================
 // 🔑 SYSTEM SUMMARY CARD
 // =========================
-let summaryHTML = "";
+summaryHTML = `
+  <div
+    class="card system-cod"
+    style="margin-bottom:16px;border-left:4px solid #1976d2"
+  >
+    <h4>
+      System Close of Day Summary
+      <span class="small muted">(system reference)</span>
+    </h4>
 
-if (currentStaff()?.role === "manager" || currentStaff()?.role === "ceo") {
-  summaryHTML = `
-    <div class="card system-cod">
-  <h4>System Close of Day Summary <span class="small muted">(system reference)</span></h4>
-  ...
-</div>
-
-      <div class="small">
-        Expected Cash: <b>${fmt(systemTotals.expected)}</b><br/>
-        Declared Cash: <b>${fmt(systemTotals.declared)}</b><br/>
-        Net Variance:
-        <b style="color:${systemTotals.variance === 0 ? "green" : "red"}">
-          ${fmt(systemTotals.variance)}
-        </b>
-      </div>
-
-      <div class="small muted" style="margin-top:6px">
-        Withdrawals (info): ${fmt(systemInfo.withdrawals)}<br/>
-        Empowerments (info): ${fmt(systemInfo.empowerments)}
-      </div>
+    <div class="small">
+      Expected Cash: <b>${fmt(systemTotals.expected)}</b><br/>
+      Declared Cash: <b>${fmt(systemTotals.declared)}</b><br/>
+      Net Variance:
+      <b style="color:${systemTotals.variance === 0 ? "green" : "red"}">
+        ${fmt(systemTotals.variance)}
+      </b>
     </div>
-  `;
-}
+
+    <div class="small muted" style="margin-top:6px">
+      Withdrawals (info): ${fmt(systemInfo.withdrawals)}<br/>
+      Empowerments (info): ${fmt(systemInfo.empowerments)}
+    </div>
+  </div>
+`;
 
   let html = "";
 
@@ -3332,17 +3333,18 @@ state.staff.forEach(staff => {
       <b>${staff.name}</b> (${staff.role})<br/>
 
       <div class="small">
-        Expected: <b>${fmt(rec.expectedCash)}</b><br/>
-        Declared: <b>${fmt(rec.declared)}</b><br/>
-        Variance:
-        <b style="color:${rec.variance === 0 ? "green" : "red"}">
-          ${fmt(rec.variance)}
-        </b>
-      </div>
-
-      <div class="small" style="margin-top:4px">
-        Status: ${statusLabel}
-      </div>
+  Expected: <b>${fmt(rec.systemExpected)}</b><br/>
+  Declared:
+  <b>${
+    rec.status === "resolved"
+      ? fmt(rec.resolvedAmount)
+      : fmt(rec.staffDeclared)
+  }</b><br/>
+  Variance:
+  <b style="color:${rec.variance === 0 ? "green" : "red"}">
+    ${fmt(rec.variance)}
+  </b>
+</div>
 
       ${
         isManager() && isFlagged
