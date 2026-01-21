@@ -3348,33 +3348,23 @@ function renderManagerCODSummary(dateStr) {
 
   const records = (state.cod || []).filter(c => c.date === date);
 
-  const totals = records.reduce(
-    (acc, r) => {
-      acc.expected += r.expectedCash || 0;
-      const effectiveDeclared =
-  r.status === "resolved"
-    ? r.resolution?.resolvedDeclared || 0
-    : r.declared || 0;
+ const totals = records.reduce(
+  (acc, r) => {
+    const expected = Number(r.systemExpected || 0);
 
-const effectiveVariance =
-  effectiveDeclared - (r.expectedCash || 0);
+    const declared =
+      r.status === "resolved"
+        ? Number(r.resolvedAmount || 0)
+        : Number(r.staffDeclared || 0);
 
-acc.declared += effectiveDeclared;
-acc.variance += effectiveVariance;
-      acc.accepted += r.decision === "accepted" ? 1 : 0;
-      acc.flagged += r.decision === "flagged" ? 1 : 0;
-      acc.pending += !r.decision ? 1 : 0;
-      return acc;
-    },
-    {
-      expected: 0,
-      declared: 0,
-      variance: 0,
-      accepted: 0,
-      flagged: 0,
-      pending: 0
-    }
-  );
+    acc.expected += expected;
+    acc.declared += declared;
+    acc.variance += declared - expected;
+
+    return acc;
+  },
+  { expected: 0, declared: 0, variance: 0 }
+);
 
   const submittedCount = records.length;
   const notSubmitted = state.staff.length - submittedCount;
