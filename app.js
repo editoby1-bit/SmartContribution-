@@ -830,7 +830,7 @@ const empowerments = txs
     const submittedLate = selectedDate !== new Date().toISOString().slice(0, 10);
     const draftKey = `${staff.id}|${selectedDate}`;
 
-   state.cod.push({
+  state.cod.push({
   id: uid("cod"),
   staffId: staff.id,
   staffName: staff.name,
@@ -839,26 +839,24 @@ const empowerments = txs
 
   submittedLate,
 
-  systemExpected: expectedCash,
-
-  // 🔑 PHASE A (original declaration)
+  // 🔑 REQUIRED FOR DASHBOARD DISPLAY
   initialDeclared: initialDeclared,
 
-  // 🔑 PHASE B (staff adjustment)
+  systemExpected: expectedCash,
   staffDeclared: finalDeclared,
-
   variance,
 
   staffNote: noteBox.value || "",
 
   status: variance === 0 ? "balanced" : "flagged",
 
-  // 🔑 manager resolution
+  // 🔑 manager resolution (initially empty)
   resolvedAmount: null,
   resolutionNote: "",
   resolvedBy: null,
   resolvedAt: null
 });
+
 
 
     pushAudit(
