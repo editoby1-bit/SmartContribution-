@@ -537,30 +537,14 @@ function openMyCOD() {
           </span>
         </div>
 
-        <div class="small" style="margin-top:6px">
-          Status:
-          <b>
-            ${
-              rec.decision === "accepted"
-                ? "✅ Accepted"
-                : rec.decision === "flagged"
-                ? "🚩 Flagged"
-                : "⏳ Pending Review"
-            }
-          </b>
-        </div>
-
+        
         ${rec.managerNote ? `
           <div class="small warning" style="margin-top:6px">
             Manager note: ${rec.managerNote}
           </div>
         ` : ""}
 
-        ${rec.decisionAt ? `
-          <div class="small muted" style="margin-top:4px">
-            Reviewed on ${new Date(rec.decisionAt).toLocaleString()}
-          </div>
-        ` : ""}
+        
       </div>
     `).join("");
   }
@@ -3393,62 +3377,7 @@ function renderManagerCODSummary(dateStr) {
 }
 
 
-async function decideCOD(id, decision) {
-  const staff = currentStaff();
-  if (!staff || !["manager", "ceo"].includes(staff.role)) return;
 
-  const rec = state.cod.find(c => c.id === id);
-  if (!rec) return;
-
-  let note = "";
-
-  // 🔑 NOTE REQUIRED ONLY WHEN FLAGGING
-  if (decision === "flagged") {
-    const box = document.createElement("div");
-    box.innerHTML = `
-      <div class="small">Explain why this Close of Day is flagged</div>
-      <textarea
-        id="mgrNote"
-        class="input"
-        placeholder="Manager note (required)"
-        style="margin-top:8px"
-      ></textarea>
-    `;
-
-    const ok = await openModalGeneric(
-      "Flag Close of Day",
-      box,
-      "Submit Note"
-    );
-
-    if (!ok) return;
-
-    note = box.querySelector("#mgrNote").value.trim();
-    if (!note) {
-      showToast("Manager note is required");
-      return;
-    }
-  }
-
-  // ===== APPLY DECISION =====
-  rec.decision = decision;
-  rec.decisionBy = staff.name;
-  rec.decisionAt = new Date().toISOString();
-  rec.managerNote = note;
-
-  save();
-
-  // 🔑 RE-RENDER EXACT DATE (NO DEFAULTS)
-  renderCODForDate(rec.date);
-
-  showToast(
-    decision === "accepted"
-      ? "Close of Day accepted"
-      : "Close of Day flagged"
-  );
-}
-
-window.decideCOD = decideCOD;
 
 function openCODDrillDown(staffId, date) {
   const s = currentStaff();
