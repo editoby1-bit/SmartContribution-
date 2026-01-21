@@ -847,19 +847,29 @@ const empowerments = txs
     const draftKey = `${staff.id}|${selectedDate}`;
 
     state.cod.push({
-      id: uid("cod"),
-      staffId: staff.id,
-      staffName: staff.name,
-      role: staff.role,
-      date: selectedDate,
-      submittedLate,
-      initialDeclared,
-      declared: finalDeclared,
-      expectedCash,
-      variance,
-      note: noteBox.value || "",
-      status: variance === 0 ? "balanced" : "flagged"
-    });
+  id: uid("cod"),
+  staffId: staff.id,
+  staffName: staff.name,
+  role: staff.role,
+  date: selectedDate,
+
+  submittedLate,
+
+  systemExpected: expectedCash,
+  staffDeclared: finalDeclared,
+  variance,
+
+  staffNote: noteBox.value || "",
+
+  status: variance === 0 ? "balanced" : "flagged",
+
+  // 🔑 manager resolution (initially empty)
+  resolvedAmount: null,
+  resolutionNote: "",
+  resolvedBy: null,
+  resolvedAt: null
+});
+
 
     pushAudit(
       staff.name,
@@ -1428,30 +1438,46 @@ function reject(id) {
       row.style.borderBottom = "1px solid rgba(11,27,43,0.06)";
 
       let detail = "";
+      const details =
+        typeof a.details === "object" && a.details !== null
+          ? a.details
+          : null;
 
       // ✅ TRANSACTION SUBMITTED (TELLER)
-      if (a.action === "tx_sent_for_approval" && a.details) {
+      if (a.action === "tx_sent_for_approval" && details) {
         detail = `
           <div style="font-size:13px">
             <b>Sent for approval</b><br/>
-            ${a.details.txType.toUpperCase()} — ${fmt(a.details.amount)}<br/>
-            Customer: <b>${a.details.customerName}</b>
+            ${(details.txType || "").toUpperCase()} — ${fmt(details.amount)}<br/>
+            Customer: <b>${details.customerName || "Unknown"}</b>
           </div>
         `;
       }
 
       // ✅ APPROVAL / REJECTION (MANAGER / CEO)
-      else if (a.action?.startsWith("approval_") && a.details) {
+      else if (a.action?.startsWith("approval_") && details) {
         detail = `
           <div style="font-size:13px">
-            <b>${a.details.decision.toUpperCase()}</b><br/>
-            ${a.details.txType.toUpperCase()} — ${fmt(a.details.amount)}<br/>
-            Customer: <b>${a.details.customerName}</b>
+            <b>${(details.decision || "").toUpperCase()}</b><br/>
+            ${(details.txType || "").toUpperCase()} — ${fmt(details.amount)}<br/>
+            Customer: <b>${details.customerName || "Unknown"}</b>
           </div>
         `;
       }
 
-      // 🔁 Fallback
+      // ✅ CLOSE OF DAY
+      else if (a.action === "close_day" && details) {
+        detail = `
+          <div style="font-size:13px">
+            <b>Close of Day</b><br/>
+            Expected: ${fmt(details.expectedCash)}<br/>
+            Declared: ${fmt(details.finalDeclared)}<br/>
+            Variance: ${fmt(details.variance)}
+          </div>
+        `;
+      }
+
+      // 🔁 Fallback (never crash)
       else {
         detail = `<div style="font-size:13px">${a.action}</div>`;
       }
@@ -1459,8 +1485,8 @@ function reject(id) {
       row.innerHTML = `
         <div class="small">
           ${new Date(a.time).toLocaleString()}
-          • ${a.actor}
-          • ${a.role}
+          • ${a.actor || "System"}
+          • ${a.role || "system"}
         </div>
         ${detail}
       `;
