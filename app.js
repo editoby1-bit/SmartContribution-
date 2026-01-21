@@ -830,7 +830,7 @@ const empowerments = txs
     const submittedLate = selectedDate !== new Date().toISOString().slice(0, 10);
     const draftKey = `${staff.id}|${selectedDate}`;
 
-    state.cod.push({
+   state.cod.push({
   id: uid("cod"),
   staffId: staff.id,
   staffName: staff.name,
@@ -840,14 +840,20 @@ const empowerments = txs
   submittedLate,
 
   systemExpected: expectedCash,
+
+  // 🔑 PHASE A (original declaration)
+  initialDeclared: initialDeclared,
+
+  // 🔑 PHASE B (staff adjustment)
   staffDeclared: finalDeclared,
+
   variance,
 
   staffNote: noteBox.value || "",
 
   status: variance === 0 ? "balanced" : "flagged",
 
-  // 🔑 manager resolution (initially empty)
+  // 🔑 manager resolution
   resolvedAmount: null,
   resolutionNote: "",
   resolvedBy: null,
@@ -959,7 +965,6 @@ function openCODResolutionModal(cod) {
   modal.querySelector(".modal-actions").appendChild(btn);
   modal.style.display = "flex";
 }
-
 window.openCODResolutionModal = openCODResolutionModal;
 
 function renderApprovals() {
@@ -3293,11 +3298,20 @@ state.staff.forEach(staff => {
         : rec.staffDeclared
     )}
   </b><br/>
+
   Variance:
   <b style="color:${rec.variance === 0 ? "green" : "red"}">
     ${fmt(rec.variance)}
   </b>
 </div>
+${
+  rec.initialDeclared !== undefined &&
+  rec.initialDeclared !== rec.staffDeclared
+    ? `<div class="small muted">
+         Initial declared: ${fmt(rec.initialDeclared)}
+       </div>`
+    : ""
+}
 
       ${
         isManager() && isFlagged
