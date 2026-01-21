@@ -899,6 +899,123 @@ back.onclick = null; // 🔑 release modal capture
   };
 }
 
+function openCODResolutionModal(cod) {
+  const staff = currentStaff();
+  if (!staff || !isManager()) {
+    showToast("Not authorized");
+    return;
+  }
+
+  if (cod.status !== "flagged") {
+    showToast("Only flagged COD can be resolved");
+    return;
+  }
+
+  const modal = document.getElementById("txModal");
+  const back = document.getElementById("txModalBack");
+
+  document.getElementById("txTitle").textContent = "Resolve Flagged COD";
+  document.getElementById("txBody").innerHTML = "";
+
+  const box = document.createElement("div");
+  box.innerHTML = `
+    <div class="small"><b>Staff:</b> ${cod.staffName}</div>
+    <div class="small"><b>Date:</b> ${cod.date}</div>
+
+    <div class="card" style="margin-top:10px">
+      <div class="small">Expected Cash: <b>${fmt(cod.expectedCash)}</b></div>
+      <div class="small">Declared Cash: <b>${fmt(cod.declared)}</b></div>
+      <div class="small danger">Variance: ${fmt(cod.variance)}</div>
+    </div>
+
+    <input
+      id="resolvedDeclared"
+      class="input"
+      placeholder="Enter resolved cash amount"
+      style="margin-top:10px"
+    />
+
+    <textarea
+      id="resolutionNote"
+      class="input"
+      placeholder="Resolution note (required)"
+      style="margin-top:10px"
+    ></textarea>
+
+    <div id="resolveErr" class="small danger" style="display:none;margin-top:6px"></div>
+  `;
+
+  document.getElementById("txBody").appendChild(box);
+
+  modal.querySelectorAll(".tx-ok").forEach(b => b.remove());
+
+  const resolveBtn = document.createElement("button");
+  resolveBtn.className = "btn tx-ok";
+  resolveBtn.textContent = "Resolve COD";
+
+  modal.querySelector(".modal-actions").appendChild(resolveBtn);
+
+  back.style.display = "flex";
+
+  resolveBtn.onclick = () => {
+    const resolvedDeclared = Number(
+      box.querySelector("#resolvedDeclared").value || 0
+    );
+    const note = box.querySelector("#resolutionNote").value.trim();
+    const err = box.querySelector("#resolveErr");
+
+    err.style.display = "none";
+
+    if (resolvedDeclared <= 0) {
+      err.textContent = "Enter a valid resolved amount";
+      err.style.display = "block";
+      return;
+    }
+
+    if (!note) {
+      err.textContent = "Resolution note is required";
+      err.style.display = "block";
+      return;
+    }
+
+    // 🔑 STORE RESOLUTION (DO NOT TOUCH ORIGINAL VALUES)
+    cod.resolution = {
+      resolvedDeclared,
+      resolvedBy: staff.id,
+      resolvedByName: staff.name,
+      resolvedAt: new Date().toISOString(),
+      note
+    };
+
+    cod.status = "resolved";
+
+    pushAudit(
+      staff.name,
+      staff.role,
+      "cod_resolved",
+      {
+        staffName: cod.staffName,
+        date: cod.date,
+        expectedCash: cod.expectedCash,
+        originalDeclared: cod.declared,
+        resolvedDeclared,
+        note
+      }
+    );
+
+    save();
+
+    // refresh views safely
+    renderManagerCODSummary?.();
+    renderCODForDate?.(cod.date);
+
+    back.style.display = "none";
+    resolveBtn.onclick = null;
+
+    showToast("COD resolved successfully");
+  };
+}
+
 function renderApprovals() {
   const el = document.getElementById("approvals");
   if (!el) return;
@@ -3129,8 +3246,16 @@ function renderCODForDate(dateStr) {
 const systemTotals = todaysCOD.reduce(
   (acc, c) => {
     acc.expected += Number(c.expectedCash || 0);
-    acc.declared += Number(c.declared || 0);
-    acc.variance += Number(c.variance || 0);
+    const effectiveDeclared =
+  c.status === "resolved"
+    ? c.resolution?.resolvedDeclared || 0
+    : c.declared || 0;
+
+const effectiveVariance =
+  effectiveDeclared - Number(c.expectedCash || 0);
+
+acc.declared += effectiveDeclared;
+acc.variance += effectiveVariance;
     return acc;
   },
   { expected: 0, declared: 0, variance: 0 }
@@ -3177,25 +3302,65 @@ if (currentStaff()?.role === "manager" || currentStaff()?.role === "ceo") {
 
   let html = "";
 
-  state.staff.forEach(staff => {
-    const rec = todaysCOD.find(
-  c => c.staffId === staff.id
-);
-    if (!rec) {
-      html += `
-        <div class="card warning" style="margin-bottom:8px">
-          <b>${staff.name}</b> (${staff.role})<br/>
-          <span class="danger">❌ Not submitted</span>
-        </div>
-      `;
-      return;
-      // 🔑 Detect correction
-      
-    }
-    const wasCorrected =
-  rec.initialDeclared !== undefined &&
-  rec.initialDeclared !== rec.declared &&
-  rec.variance === 0;
+state.staff.forEach(staff => {
+  const rec = todaysCOD.find(c => c.staffId === staff.id);
+
+  // ❌ NOT SUBMITTED
+  if (!rec) {
+    html += `
+      <div class="card warning" style="margin-bottom:8px">
+        <b>${staff.name}</b> (${staff.role})<br/>
+        <span class="danger">❌ Not submitted</span>
+      </div>
+    `;
+    return;
+  }
+
+  // 🔎 STATUS
+  const isResolved = rec.status === "resolved";
+  const isFlagged = rec.status === "flagged";
+  const isBalanced = rec.status === "balanced";
+
+  const statusLabel = isBalanced
+    ? `<span style="color:green">✔ Balanced</span>`
+    : isResolved
+      ? `<span style="color:#1976d2">✔ Resolved</span>`
+      : `<span style="color:red">⚠ Flagged</span>`;
+
+  html += `
+    <div class="card" style="margin-bottom:8px">
+      <b>${staff.name}</b> (${staff.role})<br/>
+
+      <div class="small">
+        Expected: <b>${fmt(rec.expectedCash)}</b><br/>
+        Declared: <b>${fmt(rec.declared)}</b><br/>
+        Variance:
+        <b style="color:${rec.variance === 0 ? "green" : "red"}">
+          ${fmt(rec.variance)}
+        </b>
+      </div>
+
+      <div class="small" style="margin-top:4px">
+        Status: ${statusLabel}
+      </div>
+
+      ${
+        isManager() && isFlagged
+          ? `
+            <div style="margin-top:8px">
+              <button
+                class="btn small danger"
+                onclick="openCODResolutionModal(${JSON.stringify(rec).replace(/"/g, '&quot;')})"
+              >
+                Resolve
+              </button>
+            </div>
+          `
+          : ""
+      }
+    </div>
+  `;
+});
     
 
     let statusLabel = "";
@@ -3308,8 +3473,16 @@ function renderManagerCODSummary(dateStr) {
   const totals = records.reduce(
     (acc, r) => {
       acc.expected += r.expectedCash || 0;
-      acc.declared += r.declared || 0;
-      acc.variance += r.variance || 0;
+      const effectiveDeclared =
+  r.status === "resolved"
+    ? r.resolution?.resolvedDeclared || 0
+    : r.declared || 0;
+
+const effectiveVariance =
+  effectiveDeclared - (r.expectedCash || 0);
+
+acc.declared += effectiveDeclared;
+acc.variance += effectiveVariance;
       acc.accepted += r.decision === "accepted" ? 1 : 0;
       acc.flagged += r.decision === "flagged" ? 1 : 0;
       acc.pending += !r.decision ? 1 : 0;
