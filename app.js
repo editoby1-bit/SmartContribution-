@@ -3220,6 +3220,7 @@ function initCODDatePicker() {
   const picker = document.getElementById("codDatePicker");
   if (!picker) return;
 
+  // 🔑 single source of truth
   if (!window.activeCODDate) {
     window.activeCODDate = new Date().toISOString().slice(0, 10);
   }
@@ -3228,10 +3229,15 @@ function initCODDatePicker() {
 
   picker.onchange = () => {
     window.activeCODDate = picker.value;
+
+    // 🔥 THIS IS WHAT WAS MISSING
     renderCODForDate(window.activeCODDate);
-    renderManagerCODSummary?.(window.activeCODDate);
   };
+
+  // 🔥 INITIAL RENDER (CRITICAL)
+  renderCODForDate(window.activeCODDate);
 }
+
 
 
 function renderCODForDate(dateStr) {
@@ -3687,6 +3693,7 @@ function renderDashboard() {
   initCODDatePicker();
   bindCODButtons();
   renderManagerCODSummary(window.activeCODDate);
+  renderCODForDate(window.activeCODDate);
 
 }
 
