@@ -3386,10 +3386,7 @@ function renderManagerCODSummary(dateStr) {
 
       <div class="small">
         Submitted: <b>${submittedCount}</b><br/>
-        Not Submitted: <b>${notSubmitted}</b><br/>
-        Accepted: <b>${totals.accepted}</b><br/>
-        Flagged: <b>${totals.flagged}</b><br/>
-        Pending Review: <b>${totals.pending}</b>
+        Not Submitted: <b>${notSubmitted}</b><br/>        
       </div>
     </div>
   `;
