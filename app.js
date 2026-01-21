@@ -900,121 +900,82 @@ back.onclick = null; // 🔑 release modal capture
 }
 
 function openCODResolutionModal(cod) {
-  const staff = currentStaff();
-  if (!staff || !isManager()) {
-    showToast("Not authorized");
-    return;
-  }
-
-  if (cod.status !== "flagged") {
-    showToast("Only flagged COD can be resolved");
+  if (!isManager()) {
+    showToast("Only managers can resolve COD");
     return;
   }
 
   const modal = document.getElementById("txModal");
-  const back = document.getElementById("txModalBack");
+  const body = document.getElementById("txBody");
+  const title = document.getElementById("txTitle");
 
-  document.getElementById("txTitle").textContent = "Resolve Flagged COD";
-  document.getElementById("txBody").innerHTML = "";
+  title.textContent = "Resolve Close of Day Variance";
 
-  const box = document.createElement("div");
-  box.innerHTML = `
-    <div class="small"><b>Staff:</b> ${cod.staffName}</div>
-    <div class="small"><b>Date:</b> ${cod.date}</div>
+  body.innerHTML = `
+    <div class="small">
+      <b>Staff:</b> ${cod.staffName}<br/>
+      <b>Date:</b> ${cod.date}
+    </div>
 
     <div class="card" style="margin-top:10px">
-      <div class="small">Expected Cash: <b>${fmt(cod.expectedCash)}</b></div>
-      <div class="small">Declared Cash: <b>${fmt(cod.declared)}</b></div>
+      <div class="small">System Expected: ${fmt(cod.systemExpected)}</div>
+      <div class="small">Staff Declared: ${fmt(cod.staffDeclared)}</div>
       <div class="small danger">Variance: ${fmt(cod.variance)}</div>
     </div>
 
     <input
-      id="resolvedDeclared"
+      id="resolvedAmount"
       class="input"
-      placeholder="Enter resolved cash amount"
       style="margin-top:10px"
+      placeholder="Final accepted cash amount"
+      value="${cod.systemExpected}"
     />
 
     <textarea
       id="resolutionNote"
       class="input"
       placeholder="Resolution note (required)"
-      style="margin-top:10px"
+      style="margin-top:8px"
     ></textarea>
-
-    <div id="resolveErr" class="small danger" style="display:none;margin-top:6px"></div>
   `;
-
-  document.getElementById("txBody").appendChild(box);
 
   modal.querySelectorAll(".tx-ok").forEach(b => b.remove());
 
-  const resolveBtn = document.createElement("button");
-  resolveBtn.className = "btn tx-ok";
-  resolveBtn.textContent = "Resolve COD";
+  const btn = document.createElement("button");
+  btn.className = "btn success tx-ok";
+  btn.textContent = "Resolve COD";
 
-  modal.querySelector(".modal-actions").appendChild(resolveBtn);
-
-  back.style.display = "flex";
-
-  resolveBtn.onclick = () => {
-    const resolvedDeclared = Number(
-      box.querySelector("#resolvedDeclared").value || 0
+  btn.onclick = () => {
+    const resolvedAmount = Number(
+      document.getElementById("resolvedAmount").value
     );
-    const note = box.querySelector("#resolutionNote").value.trim();
-    const err = box.querySelector("#resolveErr");
-
-    err.style.display = "none";
-
-    if (resolvedDeclared <= 0) {
-      err.textContent = "Enter a valid resolved amount";
-      err.style.display = "block";
-      return;
-    }
+    const note = document.getElementById("resolutionNote").value.trim();
 
     if (!note) {
-      err.textContent = "Resolution note is required";
-      err.style.display = "block";
+      showToast("Resolution note is required");
       return;
     }
 
-    // 🔑 STORE RESOLUTION (DO NOT TOUCH ORIGINAL VALUES)
-    cod.resolution = {
-      resolvedDeclared,
-      resolvedBy: staff.id,
-      resolvedByName: staff.name,
-      resolvedAt: new Date().toISOString(),
-      note
-    };
-
+    cod.resolvedAmount = resolvedAmount;
+    cod.resolutionNote = note;
+    cod.resolvedBy = currentStaff().name;
+    cod.resolvedAt = new Date().toISOString();
     cod.status = "resolved";
-
-    pushAudit(
-      staff.name,
-      staff.role,
-      "cod_resolved",
-      {
-        staffName: cod.staffName,
-        date: cod.date,
-        expectedCash: cod.expectedCash,
-        originalDeclared: cod.declared,
-        resolvedDeclared,
-        note
-      }
-    );
+    cod.variance = resolvedAmount - cod.systemExpected;
 
     save();
 
-    // refresh views safely
-    renderManagerCODSummary?.();
-    renderCODForDate?.(cod.date);
+    renderCODForDate(window.activeCODDate);
+    renderManagerCODSummary(window.activeCODDate);
 
-    back.style.display = "none";
-    resolveBtn.onclick = null;
-
-    showToast("COD resolved successfully");
+    modal.style.display = "none";
+    showToast("COD resolved");
   };
+
+  modal.querySelector(".modal-actions").appendChild(btn);
+  modal.style.display = "flex";
 }
+
 window.openCODResolutionModal = openCODResolutionModal;
 
 function renderApprovals() {
@@ -3341,11 +3302,13 @@ state.staff.forEach(staff => {
       <div class="small">
   Expected: <b>${fmt(rec.systemExpected)}</b><br/>
   Declared:
-  <b>${
-    rec.status === "resolved"
-      ? fmt(rec.resolvedAmount)
-      : fmt(rec.staffDeclared)
-  }</b><br/>
+  <b>
+    ${fmt(
+      rec.status === "resolved"
+        ? rec.resolvedAmount
+        : rec.staffDeclared
+    )}
+  </b><br/>
   Variance:
   <b style="color:${rec.variance === 0 ? "green" : "red"}">
     ${fmt(rec.variance)}
