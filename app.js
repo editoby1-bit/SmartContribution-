@@ -965,6 +965,17 @@ function openCODResolutionModal(cod) {
 }
 window.openCODResolutionModal = openCODResolutionModal;
 
+function openCODResolutionModalById(codId) {
+  const cod = state.cod.find(c => c.id === codId);
+  if (!cod) {
+    showToast("COD record not found");
+    return;
+  }
+  openCODResolutionModal(cod);
+}
+
+window.openCODResolutionModalById = openCODResolutionModalById;
+
 function renderApprovals() {
   const el = document.getElementById("approvals");
   if (!el) return;
@@ -3316,11 +3327,11 @@ ${
           ? `
             <div style="margin-top:8px">
               <button
-                class="btn small danger"
-                onclick="openCODResolutionModal(${JSON.stringify(rec).replace(/"/g, '&quot;')})"
-              >
-                Resolve
-              </button>
+  class="btn small danger"
+  onclick="openCODResolutionModalById('${rec.id}')"
+>
+  Resolve
+</button>
             </div>
           `
           : ""
