@@ -3302,7 +3302,24 @@ state.staff.forEach(staff => {
       : `<span style="color:red">⚠ Flagged</span>`;
 
   html += `
-    <div class="card" style="margin-bottom:8px">
+    <div
+  class="card cod-card"
+  style="
+    margin-bottom:8px;
+    cursor:pointer;
+    border-left:4px solid ${
+      rec.status === 'balanced'
+        ? '#2e7d32'
+        : rec.status === 'resolved'
+        ? '#1976d2'
+        : rec.status === 'flagged'
+        ? '#ed6c02'
+        : '#d32f2f'
+    };
+    padding-left:8px;
+  "
+  onclick="openCODDrillDown('${rec.staffId}', '${rec.date}')"
+>
       <b>${staff.name}</b> (${staff.role})<br/>
 
      <div class="small">
@@ -3426,185 +3443,65 @@ function renderManagerCODSummary(dateStr) {
 
 
 function openCODDrillDown(staffId, date) {
-  const s = currentStaff();
-if (!s || (s.role !== "manager" && s.role !== "ceo")) return;
-  const staff = state.staff.find(s => s.id === staffId);
-  if (!staff) return;
+  const modal = document.getElementById("txModal");
+  const body = document.getElementById("txBody");
+  const title = document.getElementById("txTitle");
+  const back = document.getElementById("txModalBack");
 
-  // 🔑 Filter approvals for that staff + date
-  const txs = state.approvals.filter(a =>
+  const cod = state.cod.find(
+    c => c.staffId === staffId && c.date === date
+  );
+
+  if (!cod) {
+    showToast("COD record not found");
+    return;
+  }
+
+  // transactions contributing to expected cash
+  const txs = (state.approvals || []).filter(a =>
+    a.status === "approved" &&
     a.requestedBy === staffId &&
     a.requestedAt?.startsWith(date)
   );
 
-  const credits = txs.filter(t => t.type === "credit");
-  const withdrawals = txs.filter(t => t.type === "withdraw");
-  const empowerments = txs.filter(t => t.type === "empowerment");
+  title.textContent = "Close of Day — Breakdown (Read-only)";
 
-  const creditTotal = credits.reduce((s, t) => s + t.amount, 0);
-  const withdrawTotal = withdrawals.reduce((s, t) => s + t.amount, 0);
-  const empTotal = empowerments.reduce((s, t) => s + t.amount, 0);
-
-  const box = document.createElement("div");
-
-  box.innerHTML = `
-
-  <div style="max-height:70vh;overflow:auto;padding-right:6px">
-
-
-
-    <div class="small"><b>Staff:</b> ${staff.name}</div>
-
-    <div class="small"><b>Date:</b> ${date}</div>
-
-
-
-    <!-- ===== CREDITS ===== -->
-
-    <div class="card" style="margin-top:10px;max-height:220px;overflow:auto">
-
-      <h4 style="margin-bottom:6px;font-size:15px">Credits</h4>
-
-      ${
-
-        credits.length
-
-          ? credits.map(t => {
-
-              const cust = state.customers.find(c => c.id === t.customerId);
-
-              const when = new Date(t.requestedAt).toLocaleString();
-
-              return `
-
-                <div style="display:flex;justify-content:space-between" class="small">
-
-                  <span>${cust ? cust.name : "Unknown customer"}</span>
-
-                  <span>${fmt(t.amount)}</span>
-
-                </div>
-
-                <div class="small muted" style="margin-bottom:8px;font-size:12px">
-
-                  ${when}${t.desc ? " — " + t.desc : ""}
-
-                </div>
-
-              `;
-
-            }).join("")
-
-          : `<div class="small muted">No credits</div>`
-
-      }
-
-      <div class="small"><b>Total:</b> ${fmt(creditTotal)}</div>
-
+  body.innerHTML = `
+    <div class="small">
+      <b>Staff:</b> ${cod.staffName}<br/>
+      <b>Date:</b> ${cod.date}
     </div>
 
-
-
-    <!-- ===== WITHDRAWALS ===== -->
-
-    <div class="card" style="margin-top:10px;max-height:220px;overflow:auto">
-
-      <h4 style="margin-bottom:6px;font-size:15px">Withdrawals (info)</h4>
-
+    <div class="card" style="margin-top:10px">
+      <div class="small">System Expected: ${fmt(cod.systemExpected)}</div>
+      <div class="small">Staff Declared: ${fmt(cod.staffDeclared)}</div>
       ${
-
-        withdrawals.length
-
-          ? withdrawals.map(t => {
-
-              const cust = state.customers.find(c => c.id === t.customerId);
-
-              const when = new Date(t.requestedAt).toLocaleString();
-
-              return `
-
-                <div style="display:flex;justify-content:space-between" class="small">
-
-                  <span>${cust ? cust.name : "Unknown customer"}</span>
-
-                  <span>${fmt(t.amount)}</span>
-
-                </div>
-
-                <div class="small muted" style="margin-bottom:8px;font-size:12px">
-
-                  ${when}${t.desc ? " — " + t.desc : ""}
-
-                </div>
-
-              `;
-
-            }).join("")
-
-          : `<div class="small muted">No withdrawals</div>`
-
+        cod.status === "resolved"
+          ? `<div class="small success">
+               Resolved Amount: ${fmt(cod.resolvedAmount)}
+             </div>`
+          : ""
       }
-
-      <div class="small"><b>Total:</b> ${fmt(withdrawTotal)}</div>
-
     </div>
 
+    <h4 style="margin-top:12px">Transactions</h4>
 
+    ${
+      txs.length
+        ? txs.map(t => `
+            <div class="small" style="border-bottom:1px solid #eee;padding:6px 0">
+              ${t.type.toUpperCase()} — ${fmt(t.amount)}<br/>
+              <span class="muted">
+                ${new Date(t.requestedAt).toLocaleString()}
+              </span>
+            </div>
+          `).join("")
+        : `<div class="small muted">No transactions</div>`
+    }
+  `;
 
-    <!-- ===== EMPOWERMENTS ===== -->
-
-    <div class="card" style="margin-top:10px;max-height:220px;overflow:auto">
-
-      <h4 style="margin-bottom:6px;font-size:15px">Empowerments (info)</h4>
-
-      ${
-
-        empowerments.length
-
-          ? empowerments.map(t => {
-
-              const cust = state.customers.find(c => c.id === t.customerId);
-
-              const when = new Date(t.requestedAt).toLocaleString();
-
-              return `
-
-                <div style="display:flex;justify-content:space-between" class="small">
-
-                  <span>${cust ? cust.name : "Unknown customer"}</span>
-
-                  <span>${fmt(t.amount)}</span>
-
-                </div>
-
-                <div class="small muted" style="margin-bottom:8px;font-size:12px">
-
-                  ${when}${t.desc ? " — " + t.desc : ""}
-
-                </div>
-
-              `;
-
-            }).join("")
-
-          : `<div class="small muted">No empowerments</div>`
-
-      }
-
-      <div class="small"><b>Total:</b> ${fmt(empTotal)}</div>
-
-    </div>
-
-
-
-  </div>
-
-`;
-  openModalGeneric(
-    "Close of Day — Breakdown",
-    box,
-    "Close"
-  );
+  modal.querySelectorAll(".tx-ok").forEach(b => b.remove());
+  back.style.display = "flex";
 }
 window.openCODDrillDown = openCODDrillDown;
 
