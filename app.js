@@ -904,6 +904,7 @@ function openCODResolutionModal(codId) {
   }
 
   const modal = document.getElementById("txModal");
+  console.log("MODAL DISPLAY =", modal.style.display);
   const body = document.getElementById("txBody");
   const title = document.getElementById("txTitle");
 
