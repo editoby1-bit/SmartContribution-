@@ -3357,9 +3357,10 @@ ${
   isManager() && isFlagged
     ? `
       <div style="margin-top:8px">
-        <button
+       <button
   class="btn small danger cod-resolve-btn"
   data-cod-id="${rec.id}"
+  onclick="event.stopPropagation()"
 >
   Resolve
 </button>
@@ -3459,10 +3460,14 @@ function openCODDrillDown(staffId, date) {
 
   // transactions contributing to expected cash
   const txs = (state.approvals || []).filter(a =>
-    a.status === "approved" &&
-    a.requestedBy === staffId &&
-    a.requestedAt?.startsWith(date)
-  );
+  a.status === "approved" &&
+  a.requestedAt?.startsWith(cod.date) &&
+  (
+    currentStaff().role === "vault"
+      ? true
+      : a.requestedBy === cod.staffId
+  )
+);
 
   title.textContent = "Close of Day — Breakdown (Read-only)";
 
