@@ -3298,24 +3298,20 @@ state.staff.forEach(staff => {
       <b>${staff.name}</b> (${staff.role})<br/>
 
       <div class="small">
- Expected: <b>${fmt(rec.systemExpected)}</b><br/>
-Declared: <b>${
-  rec.status === "resolved"
-    ? fmt(rec.resolvedAmount)
-    : fmt(rec.staffDeclared)
-}</b><br/>
-Variance:
-<b style="color:${rec.variance === 0 ? "green" : "red"}">
-  ${fmt(rec.variance)}
-</b>
+  Expected: <b>${fmt(rec.systemExpected)}</b><br/>
+  Declared: <b>${fmt(rec.staffDeclared)}</b><br/>
+  Variance:
+  <b style="color:${rec.variance === 0 ? "green" : "red"}">
+    ${fmt(rec.variance)}
+  </b>
 </div>
+
 ${
-  rec.staffDeclared !== undefined &&
-rec.staffDeclared !== rec.systemExpected
-  ? `<div class="small muted" style="margin-top:4px">
-       Initial declared: ${fmt(rec.staffDeclared)}
-     </div>`
-  : ""
+  rec.initialDeclared !== undefined
+    ? `<div class="small muted" style="margin-top:4px">
+         Initial declared: ${fmt(rec.initialDeclared)}
+       </div>`
+    : ""
 }
 
       ${
@@ -3323,11 +3319,11 @@ rec.staffDeclared !== rec.systemExpected
     ? `
       <div style="margin-top:8px">
         <button
-          class="btn small danger"
-          onclick="openCODResolutionModal('${rec.id}')"
-        >
-          Resolve
-        </button>
+  class="btn small danger cod-resolve-btn"
+  data-cod-id="${rec.id}"
+>
+  Resolve
+</button>
       </div>
     `
     : ""
@@ -3335,6 +3331,15 @@ rec.staffDeclared !== rec.systemExpected
     </div>
   `;
 });
+setTimeout(() => {
+  document.querySelectorAll(".cod-resolve-btn").forEach(btn => {
+    btn.onclick = (e) => {
+      const codId = e.currentTarget.dataset.codId;
+      console.log("🔥 RESOLVE CLICKED", codId);
+      openCODResolutionModal(codId);
+    };
+  });
+}, 0);
        
   el.innerHTML =
   summaryHTML +
