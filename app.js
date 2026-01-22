@@ -887,10 +887,12 @@ back.onclick = null; // 🔑 release modal capture
   };
 }
 
-function openCODResolutionModal(cod) {
-  console.log("STEP 3: openCODResolutionModal ENTERED", cod);
-  if (!isManager()) {
-    showToast("Only managers can resolve COD");
+function openCODResolutionModal(codId) {
+  console.log("STEP 3: openCODResolutionModal ENTERED", codId);
+
+  const cod = state.cod.find(c => c.id === codId);
+  if (!cod) {
+    showToast("COD record not found");
     return;
   }
 
@@ -3329,7 +3331,10 @@ ${
             <div style="margin-top:8px">
              <button
   class="btn small danger"
-  onclick="console.log('🔥 RESOLVE CLICKED', '${rec.id}')"
+  onclick="
+    console.log('🔥 RESOLVE CLICKED', '${rec.id}');
+    openCODResolutionModal(${JSON.stringify(rec).replace(/"/g, '&quot;')});
+  "
 >
   Resolve
 </button>
