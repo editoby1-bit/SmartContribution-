@@ -976,17 +976,6 @@ function openCODResolutionModal(codId) {
 }
 window.openCODResolutionModal = openCODResolutionModal;
 
-function openCODResolutionModalById(codId) {
-  const cod = state.cod.find(c => c.id === codId);
-  if (!cod) {
-    showToast("COD record not found");
-    return;
-  }
-  openCODResolutionModal(cod);
-}
-
-window.openCODResolutionModalById = openCODResolutionModalById;
-
 function renderApprovals() {
   const el = document.getElementById("approvals");
   if (!el) return;
@@ -3309,30 +3298,24 @@ state.staff.forEach(staff => {
       <b>${staff.name}</b> (${staff.role})<br/>
 
       <div class="small">
-  Expected: <b>${fmt(rec.systemExpected)}</b><br/>
-  Declared:
-  <b>
-    ${fmt(
-      rec.status === "resolved"
-        ? rec.resolvedAmount
-        : rec.staffDeclared
-    )}
-  </b><br/>
-
-  Variance:
-  <b style="color:${rec.variance === 0 ? "green" : "red"}">
-    ${fmt(rec.variance)}
-  </b>
+ Expected: <b>${fmt(rec.systemExpected)}</b><br/>
+Declared: <b>${
+  rec.status === "resolved"
+    ? fmt(rec.resolvedAmount)
+    : fmt(rec.staffDeclared)
+}</b><br/>
+Variance:
+<b style="color:${rec.variance === 0 ? "green" : "red"}">
+  ${fmt(rec.variance)}
+</b>
 </div>
 ${
-  rec.initialDeclared !== undefined &&
-  rec.initialDeclared !== rec.staffDeclared
-    ? `
-      <div class="small muted" style="margin-top:4px">
-        Initial declared: ${fmt(rec.initialDeclared)}
-      </div>
-    `
-    : ""
+  rec.staffDeclared !== undefined &&
+rec.staffDeclared !== rec.systemExpected
+  ? `<div class="small muted" style="margin-top:4px">
+       Initial declared: ${fmt(rec.staffDeclared)}
+     </div>`
+  : ""
 }
 
       ${
