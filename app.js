@@ -3357,13 +3357,10 @@ ${
   isManager() && isFlagged
     ? `
       <div style="margin-top:8px">
-       <button
+      <button
   class="btn small danger cod-resolve-btn"
   data-cod-id="${rec.id}"
-  onclick="event.stopPropagation()"
 >
-  Resolve
-</button>
       </div>
     `
     : ""
@@ -3373,12 +3370,13 @@ ${
 });
 setTimeout(() => {
   document.querySelectorAll(".cod-resolve-btn").forEach(btn => {
-    btn.onclick = (e) => {
-      const codId = e.currentTarget.dataset.codId;
-      console.log("🔥 RESOLVE CLICKED", codId);
-      openCODResolutionModal(codId);
-    };
-  });
+  btn.onclick = (e) => {
+    e.stopPropagation(); // 🔴 THIS IS THE FIX
+    const codId = e.currentTarget.dataset.codId;
+    console.log("🔥 RESOLVE CLICKED", codId);
+    openCODResolutionModal(codId);
+  };
+});
 }, 0);
        
   el.innerHTML =
@@ -3459,9 +3457,9 @@ function openCODDrillDown(staffId, date) {
   }
 
   // transactions contributing to expected cash. 
-  const txs = (state.approvals || []).filter(a =>
-  a.status === "approved" &&
-  a.requestedAt?.startsWith(cod.date) &&
+ const txs = (state.approvals || []).filter(a =>
+  a.requestedBy === staffId &&
+  a.requestedAt?.startsWith(date) &&
   (
     currentStaff().role === "vault"
       ? true
