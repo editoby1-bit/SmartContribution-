@@ -3458,7 +3458,7 @@ function openCODDrillDown(staffId, date) {
     return;
   }
 
-  // transactions contributing to expected cash
+  // transactions contributing to expected cash. 
   const txs = (state.approvals || []).filter(a =>
   a.status === "approved" &&
   a.requestedAt?.startsWith(cod.date) &&
