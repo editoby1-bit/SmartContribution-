@@ -3326,9 +3326,9 @@ ${
         isManager() && isFlagged
           ? `
             <div style="margin-top:8px">
-              <button
+             <button
   class="btn small danger"
-  onclick="openCODResolutionModalById('${rec.id}')"
+  onclick="console.log('🔥 RESOLVE CLICKED', '${rec.id}')"
 >
   Resolve
 </button>
