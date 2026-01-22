@@ -888,6 +888,7 @@ back.onclick = null; // 🔑 release modal capture
 }
 
 function openCODResolutionModal(cod) {
+  console.log("STEP 3: openCODResolutionModal ENTERED", cod);
   if (!isManager()) {
     showToast("Only managers can resolve COD");
     return;
