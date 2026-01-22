@@ -970,8 +970,8 @@ console.log("MODAL BACK FOUND?", back);
     renderCODForDate(window.activeCODDate);
     renderManagerCODSummary(window.activeCODDate);
 
-    modal.style.display = "none";
-    showToast("COD resolved");
+    document.getElementById("txModalBack").style.display = "none";
+showToast("COD resolved");
   };
 
   modal.querySelector(".modal-actions").appendChild(btn);
@@ -3305,13 +3305,27 @@ state.staff.forEach(staff => {
     <div class="card" style="margin-bottom:8px">
       <b>${staff.name}</b> (${staff.role})<br/>
 
-      <div class="small">
+     <div class="small">
   Expected: <b>${fmt(rec.systemExpected)}</b><br/>
-  Declared: <b>${fmt(rec.staffDeclared)}</b><br/>
-  Variance:
-  <b style="color:${rec.variance === 0 ? "green" : "red"}">
-    ${fmt(rec.variance)}
-  </b>
+  Staff Declared: <b>${fmt(rec.staffDeclared)}</b><br/>
+
+  ${
+    rec.status === "resolved"
+      ? `
+        <div class="small success" style="margin-top:4px">
+          <b>Resolved Amount:</b> ${fmt(rec.resolvedAmount)}
+        </div>
+        <div class="small muted">
+          Final Variance: ${fmt(rec.resolvedAmount - rec.systemExpected)}
+        </div>
+      `
+      : `
+        Variance:
+        <b style="color:${rec.variance === 0 ? "green" : "red"}">
+          ${fmt(rec.variance)}
+        </b>
+      `
+  }
 </div>
 
 ${
