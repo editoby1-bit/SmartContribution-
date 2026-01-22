@@ -890,9 +890,16 @@ back.onclick = null; // 🔑 release modal capture
 function openCODResolutionModal(codId) {
   console.log("STEP 3: openCODResolutionModal ENTERED", codId);
 
+  if (!isManager()) {
+    showToast("Only managers can resolve COD");
+    return;
+  }
+
+  // 🔑 FETCH REAL RECORD FROM STATE
   const cod = state.cod.find(c => c.id === codId);
   if (!cod) {
     showToast("COD record not found");
+    console.error("COD not found in state:", codId, state.cod);
     return;
   }
 
@@ -918,8 +925,8 @@ function openCODResolutionModal(codId) {
       id="resolvedAmount"
       class="input"
       style="margin-top:10px"
-      placeholder="Final accepted cash amount"
       value="${cod.systemExpected}"
+      placeholder="Final accepted cash amount"
     />
 
     <textarea
@@ -947,6 +954,7 @@ function openCODResolutionModal(codId) {
       return;
     }
 
+    // 🔑 UPDATE REAL RECORD
     cod.resolvedAmount = resolvedAmount;
     cod.resolutionNote = note;
     cod.resolvedBy = currentStaff().name;
@@ -3319,29 +3327,28 @@ state.staff.forEach(staff => {
 ${
   rec.initialDeclared !== undefined &&
   rec.initialDeclared !== rec.staffDeclared
-    ? `<div class="small muted">
-         Initial declared: ${fmt(rec.initialDeclared)}
-       </div>`
+    ? `
+      <div class="small muted" style="margin-top:4px">
+        Initial declared: ${fmt(rec.initialDeclared)}
+      </div>
+    `
     : ""
 }
 
       ${
-        isManager() && isFlagged
-          ? `
-            <div style="margin-top:8px">
-             <button
-  class="btn small danger"
-  onclick="
-    console.log('🔥 RESOLVE CLICKED', '${rec.id}');
-    openCODResolutionModal(${JSON.stringify(rec).replace(/"/g, '&quot;')});
-  "
->
-  Resolve
-</button>
-            </div>
-          `
-          : ""
-      }
+  isManager() && isFlagged
+    ? `
+      <div style="margin-top:8px">
+        <button
+          class="btn small danger"
+          onclick="openCODResolutionModal('${rec.id}')"
+        >
+          Resolve
+        </button>
+      </div>
+    `
+    : ""
+}
     </div>
   `;
 });
