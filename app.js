@@ -903,10 +903,12 @@ function openCODResolutionModal(codId) {
     return;
   }
 
-  const modal = document.getElementById("txModal");
-  console.log("MODAL DISPLAY =", modal.style.display);
-  const body = document.getElementById("txBody");
-  const title = document.getElementById("txTitle");
+  const back = document.getElementById("txModalBack");
+const modal = document.getElementById("txModal");
+const body = document.getElementById("txBody");
+const title = document.getElementById("txTitle");
+
+console.log("MODAL BACK FOUND?", back);
 
   title.textContent = "Resolve Close of Day Variance";
 
@@ -973,7 +975,9 @@ function openCODResolutionModal(codId) {
   };
 
   modal.querySelector(".modal-actions").appendChild(btn);
-  modal.style.display = "flex";
+
+// 🔑 SHOW MODAL (THIS WAS MISSING)
+back.style.display = "flex";
 }
 window.openCODResolutionModal = openCODResolutionModal;
 
@@ -1647,6 +1651,9 @@ function openCustomerModal(id) {
   mMeta.textContent = `ID: ${c.id}` + (c.frozen ? " • Frozen" : "");
 
   modalBack.style.display = "flex";
+  document.getElementById("txCancel").onclick = () => {
+  back.style.display = "none";
+};
 
   // 🔑 SINGLE SOURCE OF TRUTH FOR TAB SELECTION (EDGE SAFE)
   const tab = window.forceModalTab || "profile";
