@@ -3444,7 +3444,7 @@ const systemDeclared = records.reduce((sum, r) => {
   );
 }, 0);
 
-const variance = approvedTotal - systemDeclared;
+const variance = systemDeclared - approvedTotal;
 
   const submittedCount = records.length;
   const notSubmitted = state.staff.length - submittedCount;
@@ -3503,14 +3503,9 @@ function openCODDrillDown(staffId, date) {
   }
 
   // transactions contributing to expected cash. 
- const txs = (state.approvals || []).filter(a =>
+const txs = (state.approvals || []).filter(a =>
   a.requestedBy === staffId &&
-  a.requestedAt?.startsWith(date) &&
-  (
-    currentStaff().role === "vault"
-      ? true
-      : a.requestedBy === cod.staffId
-  )
+  a.requestedAt?.startsWith(date)
 );
 
   title.textContent = "Close of Day — Breakdown (Read-only)";
