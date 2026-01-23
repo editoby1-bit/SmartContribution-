@@ -3354,16 +3354,27 @@ ${
 }
 
       ${
-  isManager() && isFlagged
-    ? `
-      <div style="margin-top:8px">
-      <button
-  class="btn small danger cod-resolve-btn"
-  data-cod-id="${rec.id}"
->
-      </div>
-    `
-    : ""
+ isManager() && isFlagged
+   ? `
+     <div style="margin-top:8px">
+       <button
+         type="button"
+         class="btn danger cod-resolve-btn"
+         data-cod-id="${rec.id}"
+         style="
+           display:inline-block;
+           padding:6px 12px;
+           font-size:12px;
+           font-weight:600;
+           min-width:72px;
+           text-align:center;
+         "
+       >
+         Resolve
+       </button>
+     </div>
+   `
+   : ""
 }
     </div>
   `;
@@ -3487,7 +3498,19 @@ function openCODDrillDown(staffId, date) {
       }
     </div>
 
-    <h4 style="margin-top:12px">Transactions</h4>
+    <h4>Transactions</h4>
+
+<div
+  style="
+    max-height:60vh;
+    overflow-y:auto;
+    margin-top:8px;
+    padding-right:6px;
+  "
+>
+  ${txHtml}
+</div>
+
 
     ${
       txs.length
