@@ -3302,23 +3302,33 @@ state.staff.forEach(staff => {
       : `<span style="color:red">⚠ Flagged</span>`;
 
   html += `
-    <div
-  class="card cod-card"
-  style="
-    margin-bottom:8px;
-    cursor:pointer;
-    border-left:4px solid ${
-      rec.status === 'balanced'
-        ? '#2e7d32'
-        : rec.status === 'resolved'
-        ? '#1976d2'
-        : rec.status === 'flagged'
-        ? '#ed6c02'
-        : '#d32f2f'
-    };
-    padding-left:8px;
-  "
-  onclick="openCODDrillDown('${rec.staffId}', '${rec.date}')"
+   <div
+ class="card cod-card"
+ data-staff-id="${rec.staffId}"
+ data-date="${rec.date}"
+ style="
+  margin-bottom:8px;
+  cursor:pointer;
+  border-left:4px solid ${
+    rec.status === 'balanced'
+      ? '#2e7d32'
+      : rec.status === 'resolved'
+      ? '#1976d2'
+      : rec.status === 'flagged'
+      ? '#ed6c02'
+      : '#d32f2f'
+  };
+  background:${
+    rec.status === 'balanced'
+      ? '#e8f5e9'
+      : rec.status === 'resolved'
+      ? '#e3f2fd'
+      : rec.status === 'flagged'
+      ? '#fff3e0'
+      : '#ffebee'
+  };
+  padding-left:8px;
+"
 >
       <b>${staff.name}</b> (${staff.role})<br/>
 
@@ -3389,6 +3399,15 @@ setTimeout(() => {
   };
 });
 }, 0);
+setTimeout(() => {
+  document.querySelectorAll(".cod-card").forEach(card => {
+    card.onclick = () => {
+      const staffId = card.dataset.staffId;
+      const date = card.dataset.date;
+      openCODDrillDown(staffId, date);
+    };
+  });
+}, 0);
        
   el.innerHTML =
   summaryHTML +
@@ -3405,23 +3424,27 @@ function renderManagerCODSummary(dateStr) {
 
   const records = (state.cod || []).filter(c => c.date === date);
 
- const totals = records.reduce(
-  (acc, r) => {
-    const expected = Number(r.systemExpected || 0);
+ // ✅ MANAGER VIEW: APPROVED TRANSACTIONS VS SYSTEM DECLARED
 
-    const declared =
-      r.status === "resolved"
-        ? Number(r.resolvedAmount || 0)
-        : Number(r.staffDeclared || 0);
-
-    acc.expected += expected;
-    acc.declared += declared;
-    acc.variance += declared - expected;
-
-    return acc;
-  },
-  { expected: 0, declared: 0, variance: 0 }
+const approvedTxs = (state.approvals || []).filter(a =>
+  a.status === "approved" &&
+  a.requestedAt?.startsWith(date)
 );
+
+const approvedTotal = approvedTxs.reduce(
+  (sum, a) => sum + Number(a.amount || 0),
+  0
+);
+
+const systemDeclared = records.reduce((sum, r) => {
+  return sum + (
+    r.status === "resolved"
+      ? Number(r.resolvedAmount || 0)
+      : Number(r.staffDeclared || 0)
+  );
+}, 0);
+
+const variance = approvedTotal - systemDeclared;
 
   const submittedCount = records.length;
   const notSubmitted = state.staff.length - submittedCount;
@@ -3433,11 +3456,23 @@ function renderManagerCODSummary(dateStr) {
     <div class="card" style="margin-bottom:12px">
       <h4>Manager Close of Day Summary</h4>
 
-      <div class="small"><b>Date:</b> ${date}</div>
+      <div class="kv">
+  <div class="kv-label">Approved Cash</div>
+  <div>${fmt(approvedTotal)}</div>
+</div>
 
-      <div class="kv"><div class="kv-label">Total Expected Cash</div><div>${fmt(totals.expected)}</div></div>
-      <div class="kv"><div class="kv-label">Total Declared Cash</div><div>${fmt(totals.declared)}</div></div>
-      <div class="kv"><div class="kv-label">System Variance</div><div style="color:${totals.variance === 0 ? "green" : "red"}">${fmt(totals.variance)}</div></div>
+<div class="kv">
+  <div class="kv-label">System Declared Cash</div>
+  <div>${fmt(systemDeclared)}</div>
+</div>
+
+<div class="kv">
+  <div class="kv-label">Approval Variance</div>
+  <div style="color:${variance === 0 ? "green" : "red"}">
+    ${fmt(variance)}
+  </div>
+</div>
+
 
       <hr/>
 
