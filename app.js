@@ -725,9 +725,10 @@ function renderPhaseB({
 }) {
   const txs = (state.approvals || []).filter(a =>
   a &&
-  a.status !== "rejected" && // include pending + approved
-  a.requestedAt &&
-  a.requestedAt.startsWith(selectedDate)
+  a.status !== "rejected" &&
+  a.type === "credit" &&
+  a.requestedBy === staff.id &&
+  a.requestedAt?.startsWith(selectedDate)
 );
 const isVault = staff.role === "vault";
 
@@ -3428,7 +3429,8 @@ function renderManagerCODSummary(dateStr) {
 
 const approvedTxs = (state.approvals || []).filter(a =>
   a.status === "approved" &&
-  a.requestedAt?.startsWith(date)
+  (a.processedAt || a.requestedAt)?.startsWith(date) &&
+  a.type === "credit"
 );
 
 const approvedTotal = approvedTxs.reduce(
@@ -3531,13 +3533,13 @@ const txs = (state.approvals || []).filter(a =>
     <h4>Transactions</h4>
 
 
-    <div
- style="
-   max-height:60vh;
-   overflow-y:auto;
-   margin-top:8px;
-   padding-right:6px;
- "
+   <div
+  style="
+    max-height: calc(100vh - 220px);
+    overflow-y: auto;
+    margin-top: 8px;
+    padding-right: 6px;
+  "
 >
  ${
    txs.length
