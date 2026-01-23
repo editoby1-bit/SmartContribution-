@@ -938,3 +938,8 @@ body {
 #custList {
   margin-bottom: 16px;
 }
+.modal-back {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}

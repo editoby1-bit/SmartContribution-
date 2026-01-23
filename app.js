@@ -745,7 +745,10 @@ const empowerments = txs
   .filter(t => t.type === "empowerment")
   .reduce((s, t) => s + t.amount, 0);
 
-  const expectedCash = credits;
+  const expectedCash =
+  Number(credits || 0)
+  - Number(withdrawals || 0)
+  - Number(empowerments || 0);
 
   // ===== PHASE B UI =====
   box.innerHTML = `
@@ -3338,15 +3341,22 @@ state.staff.forEach(staff => {
   Staff Declared: <b>${fmt(rec.staffDeclared)}</b><br/>
 
   ${
-    rec.status === "resolved"
-      ? `
-        <div class="small success" style="margin-top:4px">
-          <b>Resolved Amount:</b> ${fmt(rec.resolvedAmount)}
-        </div>
-        <div class="small muted">
-          Final Variance: ${fmt(rec.resolvedAmount - rec.systemExpected)}
-        </div>
-      `
+  rec.status === "resolved"
+    ? `
+      <div class="small success" style="margin-top:4px">
+        <b>Resolved Amount:</b> ${fmt(rec.resolvedAmount)}
+      </div>
+      <div class="small muted">
+        Final Variance: ${fmt(rec.resolvedAmount - rec.systemExpected)}
+      </div>
+      ${
+        rec.resolutionNote
+          ? `<div class="small muted" style="margin-top:4px">
+               🧾 ${rec.resolutionNote}
+             </div>`
+          : ""
+      }
+    `
       : `
         Variance:
         <b style="color:${rec.variance === 0 ? "green" : "red"}">
@@ -3354,6 +3364,22 @@ state.staff.forEach(staff => {
         </b>
       `
   }
+  ${
+  rec.status !== "resolved" && rec.staffNote
+    ? `<div class="small muted" style="margin-top:4px">
+         📝 ${rec.staffNote}
+       </div>`
+    : ""
+}
+
+${
+  rec.status === "balanced" && rec.managerNote
+    ? `<div class="small warning" style="margin-top:4px">
+         ⚠ Manager note: ${rec.managerNote}
+       </div>`
+    : ""
+}
+
 </div>
 
 ${
@@ -3535,10 +3561,11 @@ const txs = (state.approvals || []).filter(a =>
 
    <div
   style="
-    max-height: calc(100vh - 220px);
-    overflow-y: auto;
-    margin-top: 8px;
-    padding-right: 6px;
+    max-height:60vh;
+    overflow-y:auto;
+    margin-top:8px;
+    padding-right:6px;
+    overscroll-behavior: contain;
   "
 >
  ${
