@@ -3535,30 +3535,28 @@ function openCODDrillDown(staffId, date) {
 
     <h4>Transactions</h4>
 
-<div
-  style="
-    max-height:60vh;
-    overflow-y:auto;
-    margin-top:8px;
-    padding-right:6px;
-  "
+
+    <div
+ style="
+   max-height:60vh;
+   overflow-y:auto;
+   margin-top:8px;
+   padding-right:6px;
+ "
 >
-  ${txHtml}
+ ${
+   txs.length
+     ? txs.map(t => `
+         <div class="small" style="border-bottom:1px solid #eee;padding:6px 0">
+           ${t.type.toUpperCase()} — ${fmt(t.amount)}<br/>
+           <span class="muted">
+             ${new Date(t.requestedAt).toLocaleString()}
+           </span>
+         </div>
+       `).join("")
+     : `<div class="small muted">No transactions</div>`
+ }
 </div>
-
-
-    ${
-      txs.length
-        ? txs.map(t => `
-            <div class="small" style="border-bottom:1px solid #eee;padding:6px 0">
-              ${t.type.toUpperCase()} — ${fmt(t.amount)}<br/>
-              <span class="muted">
-                ${new Date(t.requestedAt).toLocaleString()}
-              </span>
-            </div>
-          `).join("")
-        : `<div class="small muted">No transactions</div>`
-    }
   `;
 
   modal.querySelectorAll(".tx-ok").forEach(b => b.remove());
