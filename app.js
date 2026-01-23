@@ -836,6 +836,7 @@ const empowerments = txs
 
   state.cod.push({
   id: uid("cod"),
+
   staffId: staff.id,
   staffName: staff.name,
   role: staff.role,
@@ -843,22 +844,30 @@ const empowerments = txs
 
   submittedLate,
 
-  // 🔑 REQUIRED FOR DASHBOARD DISPLAY
-  initialDeclared: initialDeclared,
+  // 🔒 SNAPSHOT (SOURCE OF TRUTH)
+  snapshot: {
+    credits: Number(credits || 0),
+    withdrawals: Number(withdrawals || 0),
+    empowerments: Number(empowerments || 0),
+  },
 
+  // 🔑 SYSTEM VALUES (LOCKED)
   systemExpected: expectedCash,
   staffDeclared: finalDeclared,
   variance,
 
+  // 🔎 STAFF CONTEXT
+  initialDeclared,
   staffNote: noteBox.value || "",
 
+  // 🔎 MANAGER RESOLUTION
   status: variance === 0 ? "balanced" : "flagged",
-
-  // 🔑 manager resolution (initially empty)
   resolvedAmount: null,
   resolutionNote: "",
   resolvedBy: null,
-  resolvedAt: null
+  resolvedAt: null,
+
+  createdAt: new Date().toISOString()
 });
 
 
