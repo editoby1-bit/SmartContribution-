@@ -724,10 +724,9 @@ function renderPhaseB({
   initialDeclared
 }) {
   const txs = (state.approvals || []).filter(a =>
- a &&
- a.status !== "rejected" &&        // pending + approved allowed
- a.requestedBy === staff.id &&
- a.requestedAt?.startsWith(selectedDate)
+  a.type === "credit" &&
+  a.requestedBy === staff.id &&
+  a.requestedAt?.startsWith(selectedDate)
 );
 
 const credits = txs
@@ -3311,6 +3310,17 @@ state.staff.forEach(staff => {
       ? `<span style="color:#1976d2">✔ Resolved</span>`
       : `<span style="color:red">⚠ Flagged</span>`;
 
+      ${
+  rec.status === "balanced" && rec.staffNote
+    ? `
+      <div class="small muted" style="margin-top:4px">
+        📝 ${rec.staffNote}
+      </div>
+    `
+    : ""
+}
+
+
   html += `
    <div
  class="card cod-card"
@@ -3622,9 +3632,13 @@ function openCODDrillDown(staffId, date) {
               >
                 <b>${t.type.toUpperCase()}</b> — ${fmt(t.amount)}<br/>
                 <span class="muted">
-                  ${new Date(t.requestedAt).toLocaleString()}
-                  • ${t.status.toUpperCase()}
-                </span>
+${new Date(t.requestedAt).toLocaleString()} —
+${t.status === "approved"
+  ? "APPROVED"
+  : t.status === "rejected"
+  ? "REJECTED"
+  : "SENT FOR APPROVAL"}
+</span>
               </div>
             `).join("")
           : `<div class="small muted">No transactions</div>`
