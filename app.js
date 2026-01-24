@@ -3310,18 +3310,7 @@ state.staff.forEach(staff => {
       ? `<span style="color:#1976d2">✔ Resolved</span>`
       : `<span style="color:red">⚠ Flagged</span>`;
 
-      ${
-  rec.status === "balanced" && rec.staffNote
-    ? `
-      <div class="small muted" style="margin-top:4px">
-        📝 ${rec.staffNote}
-      </div>
-    `
-    : ""
-}
-
-
-  html += `
+       html += `
    <div
  class="card cod-card"
  data-staff-id="${rec.staffId}"
@@ -3356,35 +3345,36 @@ state.staff.forEach(staff => {
   Expected: <b>${fmt(rec.systemExpected)}</b><br/>
   Staff Declared: <b>${fmt(rec.staffDeclared)}</b><br/>
 
-  ${
+ ${
   rec.status === "resolved"
     ? `
       <div class="small success" style="margin-top:4px">
         <b>Resolved Amount:</b> ${fmt(rec.resolvedAmount)}
       </div>
+
       <div class="small muted">
         Final Variance: ${fmt(rec.resolvedAmount - rec.systemExpected)}
       </div>
-      ${
- rec.status === "resolved" && rec.resolutionNote
-   ? `<div class="small muted" style="margin-top:4px">🧾 ${rec.resolutionNote}</div>`
-   : rec.staffNote
-     ? `<div class="small muted" style="margin-top:4px">🧾 ${rec.staffNote}</div>`
-     : ""
-}
     `
-      : `
-        Variance:
-        <b style="color:${rec.variance === 0 ? "green" : "red"}">
-          ${fmt(rec.variance)}
-        </b>
-      `
-  }
-  ${
+    : `
+      Variance:
+      <b style="color:${rec.variance === 0 ? "green" : "red"}">
+        ${fmt(rec.variance)}
+      </b>
+    `
+}
+
+${
   rec.status === "resolved" && rec.resolutionNote
     ? `
       <div class="small muted" style="margin-top:4px">
         🧾 ${rec.resolutionNote}
+      </div>
+    `
+    : rec.status === "balanced" && rec.managerNote
+    ? `
+      <div class="small warning" style="margin-top:4px">
+        ⚠ Manager note: ${rec.managerNote}
       </div>
     `
     : rec.staffNote
