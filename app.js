@@ -724,25 +724,26 @@ function renderPhaseB({
   initialDeclared
 }) {
   const txs = (state.approvals || []).filter(a =>
-  a &&
-  a.status !== "rejected" &&
-  a.requestedBy === staff.id &&
-  a.requestedAt?.startsWith(selectedDate)
+ a &&
+ a.status !== "rejected" &&        // pending + approved allowed
+ a.requestedBy === staff.id &&
+ a.requestedAt?.startsWith(selectedDate)
 );
 
 const credits = txs
-  .filter(t => t.type === "credit")
-  .reduce((s, t) => s + Number(t.amount || 0), 0);
+ .filter(t => t.type === "credit")
+ .reduce((s, t) => s + Number(t.amount || 0), 0);
 
 const withdrawals = txs
-  .filter(t => t.type === "withdraw")
-  .reduce((s, t) => s + Number(t.amount || 0), 0);
+ .filter(t => t.type === "withdraw")
+ .reduce((s, t) => s + Number(t.amount || 0), 0);
 
 const empowerments = txs
-  .filter(t => t.type === "empowerment")
-  .reduce((s, t) => s + Number(t.amount || 0), 0);
+ .filter(t => t.type === "empowerment")
+ .reduce((s, t) => s + Number(t.amount || 0), 0);
 
-  const expectedCash = Number(credits || 0);
+// ✅ LOCKED LOGIC
+const expectedCash = credits;
 
   // ===== PHASE B UI =====
   box.innerHTML = `
@@ -3354,12 +3355,12 @@ state.staff.forEach(staff => {
         Final Variance: ${fmt(rec.resolvedAmount - rec.systemExpected)}
       </div>
       ${
-        rec.resolutionNote
-          ? `<div class="small muted" style="margin-top:4px">
-               🧾 ${rec.resolutionNote}
-             </div>`
-          : ""
-      }
+ rec.status === "resolved" && rec.resolutionNote
+   ? `<div class="small muted" style="margin-top:4px">🧾 ${rec.resolutionNote}</div>`
+   : rec.staffNote
+     ? `<div class="small muted" style="margin-top:4px">🧾 ${rec.staffNote}</div>`
+     : ""
+}
     `
       : `
         Variance:
@@ -3473,7 +3474,7 @@ const approvedCredits = (state.approvals || [])
   .reduce((sum, a) => sum + Number(a.amount || 0), 0);
 
 // Variance = teller declared vs manager-approved truth
-const variance = tellerCredits - approvedCredits;
+const variance = approvedTotal - systemDeclared;
 
   const submittedCount = records.length;
   const notSubmitted = state.staff.length - submittedCount;
@@ -3538,6 +3539,7 @@ function openCODDrillDown(staffId, date) {
     withdrawals: 0,
     empowerments: 0
   };
+  
 
   title.textContent = "Close of Day — Breakdown (Read-only)";
 
@@ -3579,6 +3581,34 @@ function openCODDrillDown(staffId, date) {
         Empowerments (info): ${fmt(snap.empowerments)}
       </div>
     </div>
+    <h4 style="margin-top:12px">Transactions Sent for Approval</h4>
+
+<div style="
+ max-height:40vh;
+ overflow-y:auto;
+ border-top:1px solid #eee;
+ margin-top:6px;
+ padding-top:6px;
+">
+ ${
+   (state.approvals || [])
+     .filter(a =>
+       a.requestedBy === staffId &&
+       a.requestedAt?.startsWith(date)
+     )
+     .map(t => `
+       <div class="small" style="border-bottom:1px solid #eee;padding:6px 0">
+         ${t.type.toUpperCase()} — ${fmt(t.amount)}
+         <span class="muted">(${t.status})</span><br/>
+         <span class="muted">
+           ${new Date(t.requestedAt).toLocaleString()}
+         </span>
+       </div>
+     `)
+     .join("") || `<div class="small muted">No transactions</div>`
+ }
+</div>
+
   `;
 
   // 🔑 FIX SCROLL & TOOLBAR OVERFLOW
