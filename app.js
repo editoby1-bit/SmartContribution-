@@ -726,29 +726,23 @@ function renderPhaseB({
   const txs = (state.approvals || []).filter(a =>
   a &&
   a.status !== "rejected" &&
-  a.type === "credit" &&
   a.requestedBy === staff.id &&
   a.requestedAt?.startsWith(selectedDate)
 );
-const isVault = staff.role === "vault";
 
-  const credits = isVault
-  ? txs.filter(t => t.type === "credit").reduce((s, t) => s + t.amount, 0)
-  : txs.filter(t => t.type === "credit" && t.requestedBy === staff.id)
-        .reduce((s, t) => s + t.amount, 0);
+const credits = txs
+  .filter(t => t.type === "credit")
+  .reduce((s, t) => s + Number(t.amount || 0), 0);
 
 const withdrawals = txs
   .filter(t => t.type === "withdraw")
-  .reduce((s, t) => s + t.amount, 0);
+  .reduce((s, t) => s + Number(t.amount || 0), 0);
 
 const empowerments = txs
   .filter(t => t.type === "empowerment")
-  .reduce((s, t) => s + t.amount, 0);
+  .reduce((s, t) => s + Number(t.amount || 0), 0);
 
-  const expectedCash =
-  Number(credits || 0)
-  - Number(withdrawals || 0)
-  - Number(empowerments || 0);
+  const expectedCash = Number(credits || 0);
 
   // ===== PHASE B UI =====
   box.innerHTML = `
@@ -779,6 +773,7 @@ const empowerments = txs
 
     <div id="finalErr" class="small danger" style="margin-top:8px;display:none"></div>
   `;
+  
 
   submitBtn.textContent = "Submit";
 
@@ -833,7 +828,7 @@ const empowerments = txs
 
     const submittedLate = selectedDate !== new Date().toISOString().slice(0, 10);
     const draftKey = `${staff.id}|${selectedDate}`;
-
+     
   state.cod.push({
   id: uid("cod"),
 
@@ -3460,28 +3455,25 @@ function renderManagerCODSummary(dateStr) {
 
   const records = (state.cod || []).filter(c => c.date === date);
 
- // ✅ MANAGER VIEW: APPROVED TRANSACTIONS VS SYSTEM DECLARED
+ // ✅ MANAGER VIEW
+// Teller COD = credits sent for approval (systemExpected)
+// Manager COD = approved credits
 
-const approvedTxs = (state.approvals || []).filter(a =>
-  a.status === "approved" &&
-  (a.processedAt || a.requestedAt)?.startsWith(date) &&
-  a.type === "credit"
-);
-
-const approvedTotal = approvedTxs.reduce(
-  (sum, a) => sum + Number(a.amount || 0),
+const tellerCredits = records.reduce(
+  (sum, r) => sum + Number(r.systemExpected || 0),
   0
 );
 
-const systemDeclared = records.reduce((sum, r) => {
-  return sum + (
-    r.status === "resolved"
-      ? Number(r.resolvedAmount || 0)
-      : Number(r.staffDeclared || 0)
-  );
-}, 0);
+const approvedCredits = (state.approvals || [])
+  .filter(a =>
+    a.type === "credit" &&
+    a.status === "approved" &&
+    (a.processedAt || a.requestedAt)?.startsWith(date)
+  )
+  .reduce((sum, a) => sum + Number(a.amount || 0), 0);
 
-const variance = systemDeclared - approvedTotal;
+// Variance = teller declared vs manager-approved truth
+const variance = tellerCredits - approvedCredits;
 
   const submittedCount = records.length;
   const notSubmitted = state.staff.length - submittedCount;
@@ -3494,13 +3486,14 @@ const variance = systemDeclared - approvedTotal;
       <h4>Manager Close of Day Summary</h4>
 
       <div class="kv">
+  <div class="kv">
   <div class="kv-label">Approved Cash</div>
-  <div>${fmt(approvedTotal)}</div>
+  <div>${fmt(approvedCredits)}</div>
 </div>
 
 <div class="kv">
-  <div class="kv-label">System Declared Cash</div>
-  <div>${fmt(systemDeclared)}</div>
+  <div class="kv-label">Teller Declared Cash</div>
+  <div>${fmt(tellerCredits)}</div>
 </div>
 
 <div class="kv">
@@ -3539,11 +3532,12 @@ function openCODDrillDown(staffId, date) {
     return;
   }
 
-  // transactions contributing to expected cash. 
-const txs = (state.approvals || []).filter(a =>
-  a.requestedBy === staffId &&
-  a.requestedAt?.startsWith(date)
-);
+  // 🔒 USE SNAPSHOT (LOCKED AT SUBMISSION TIME)
+  const snap = cod.snapshot || {
+    credits: 0,
+    withdrawals: 0,
+    empowerments: 0
+  };
 
   title.textContent = "Close of Day — Breakdown (Read-only)";
 
@@ -3565,36 +3559,36 @@ const txs = (state.approvals || []).filter(a =>
       }
     </div>
 
-    <h4>Transactions</h4>
+    <h4>COD Breakdown</h4>
 
-
-   <div
-  style="
-    max-height:60vh;
-    overflow-y:auto;
-    margin-top:8px;
-    padding-right:6px;
-    overscroll-behavior: contain;
-  "
->
- ${
-   txs.length
-     ? txs.map(t => `
-         <div class="small" style="border-bottom:1px solid #eee;padding:6px 0">
-           ${t.type.toUpperCase()} — ${fmt(t.amount)}<br/>
-           <span class="muted">
-             ${new Date(t.requestedAt).toLocaleString()}
-           </span>
-         </div>
-       `).join("")
-     : `<div class="small muted">No transactions</div>`
- }
-</div>
+    <div
+      style="
+        max-height:55vh;
+        overflow-y:auto;
+        margin-top:8px;
+        padding-right:6px;
+      "
+    >
+      <div class="small">
+        Credits Sent: <b>${fmt(snap.credits)}</b>
+      </div>
+      <div class="small">
+        Withdrawals (info): ${fmt(snap.withdrawals)}
+      </div>
+      <div class="small">
+        Empowerments (info): ${fmt(snap.empowerments)}
+      </div>
+    </div>
   `;
+
+  // 🔑 FIX SCROLL & TOOLBAR OVERFLOW
+  body.style.maxHeight = "70vh";
+  body.style.overflow = "hidden";
 
   modal.querySelectorAll(".tx-ok").forEach(b => b.remove());
   back.style.display = "flex";
 }
+
 window.openCODDrillDown = openCODDrillDown;
 
 function renderDashboard() {
