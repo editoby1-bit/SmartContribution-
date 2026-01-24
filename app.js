@@ -3543,6 +3543,12 @@ function openCODDrillDown(staffId, date) {
     showToast("COD record not found");
     return;
   }
+  // 🔒 USE SNAPSHOT TAKEN AT COD SUBMISSION (SOURCE OF TRUTH)
+const snap = cod.snapshot || {
+  credits: 0,
+  withdrawals: 0,
+  empowerments: 0
+};
 
   // 🔑 TRANSACTIONS SENT FOR APPROVAL (READ-ONLY VIEW)
   const txs = (state.approvals || [])
@@ -3589,37 +3595,31 @@ function openCODDrillDown(staffId, date) {
       }
     </div>
 
-    <h4 style="margin-top:12px">Transactions Sent for Approval</h4>
+    <h4 style="margin-top:12px">COD Breakdown (Locked)</h4>
 
-    <div
-      style="
-        max-height:45vh;
-        overflow-y:auto;
-        margin-top:8px;
-        padding-right:6px;
-      "
-    >
-      ${
-        txs.length
-          ? txs.map(t => `
-              <div
-                class="small"
-                style="border-bottom:1px solid #eee;padding:6px 0"
-              >
-                <b>${t.type.toUpperCase()}</b> — ${fmt(t.amount)}<br/>
-                <span class="muted">
-${new Date(t.requestedAt).toLocaleString()} —
-${t.status === "approved"
-  ? "APPROVED"
-  : t.status === "rejected"
-  ? "REJECTED"
-  : "SENT FOR APPROVAL"}
-</span>
-              </div>
-            `).join("")
-          : `<div class="small muted">No transactions</div>`
-      }
-    </div>
+<div
+  style="
+    max-height:45vh;
+    overflow-y:auto;
+    margin-top:8px;
+    padding-right:6px;
+  "
+>
+  <div class="small">
+    Credits Sent for Approval:
+    <b>${fmt(snap.credits)}</b>
+  </div>
+
+  <div class="small">
+    Withdrawals (info):
+    ${fmt(snap.withdrawals)}
+  </div>
+
+  <div class="small">
+    Empowerments (info):
+    ${fmt(snap.empowerments)}
+  </div>
+</div>
   `;
 
   modal.querySelectorAll(".tx-ok").forEach(b => b.remove());
