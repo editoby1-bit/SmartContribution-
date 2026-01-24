@@ -3452,29 +3452,45 @@ function renderManagerCODSummary(dateStr) {
   const staff = currentStaff();
   if (!staff || !["manager", "ceo"].includes(staff.role)) return;
 
-  const date = dateStr || window.activeCODDate || new Date().toISOString().slice(0,10);
+  const date =
+    dateStr ||
+    window.activeCODDate ||
+    new Date().toISOString().slice(0, 10);
 
   const records = (state.cod || []).filter(c => c.date === date);
 
- // ✅ MANAGER VIEW
-// Teller COD = credits sent for approval (systemExpected)
-// Manager COD = approved credits
-
-const tellerCredits = records.reduce(
-  (sum, r) => sum + Number(r.systemExpected || 0),
-  0
-);
-
-const approvedCredits = (state.approvals || [])
-  .filter(a =>
+  // =========================
+  // 🔑 APPROVED CREDITS (MANAGER VIEW)
+  // =========================
+  const approvedTxs = (state.approvals || []).filter(a =>
     a.type === "credit" &&
     a.status === "approved" &&
     (a.processedAt || a.requestedAt)?.startsWith(date)
-  )
-  .reduce((sum, a) => sum + Number(a.amount || 0), 0);
+  );
 
-// Variance = teller declared vs manager-approved truth
-const variance = approvedTotal - systemDeclared;
+  const approvedTotal = approvedTxs.reduce(
+    (sum, a) => sum + Number(a.amount || 0),
+    0
+  );
+
+  // =========================
+  // 🔑 SYSTEM DECLARED (FROM COD)
+  // =========================
+  const systemDeclared = records.reduce((sum, r) => {
+    return (
+      sum +
+      (
+        r.status === "resolved"
+          ? Number(r.resolvedAmount || 0)
+          : Number(r.staffDeclared || 0)
+      )
+    );
+  }, 0);
+
+  // =========================
+  // 🔑 MANAGER VARIANCE
+  // =========================
+  const variance = approvedTotal - systemDeclared;
 
   const submittedCount = records.length;
   const notSubmitted = state.staff.length - submittedCount;
@@ -3486,36 +3502,36 @@ const variance = approvedTotal - systemDeclared;
     <div class="card" style="margin-bottom:12px">
       <h4>Manager Close of Day Summary</h4>
 
+      <div class="small"><b>Date:</b> ${date}</div>
+
       <div class="kv">
-  <div class="kv">
-  <div class="kv-label">Approved Cash</div>
-  <div>${fmt(approvedCredits)}</div>
-</div>
+        <div class="kv-label">Approved Cash</div>
+        <div>${fmt(approvedTotal)}</div>
+      </div>
 
-<div class="kv">
-  <div class="kv-label">Teller Declared Cash</div>
-  <div>${fmt(tellerCredits)}</div>
-</div>
+      <div class="kv">
+        <div class="kv-label">System Declared Cash</div>
+        <div>${fmt(systemDeclared)}</div>
+      </div>
 
-<div class="kv">
-  <div class="kv-label">Approval Variance</div>
-  <div style="color:${variance === 0 ? "green" : "red"}">
-    ${fmt(variance)}
-  </div>
-</div>
-
+      <div class="kv">
+        <div class="kv-label">Approval Variance</div>
+        <div style="color:${variance === 0 ? "green" : "red"}">
+          ${fmt(variance)}
+        </div>
+      </div>
 
       <hr/>
 
       <div class="small">
         Submitted: <b>${submittedCount}</b><br/>
-        Not Submitted: <b>${notSubmitted}</b><br/>        
+        Not Submitted: <b>${notSubmitted}</b>
       </div>
     </div>
   `;
 }
 
-
+window.renderManagerCODSummary = renderManagerCODSummary;
 
 
 function openCODDrillDown(staffId, date) {
