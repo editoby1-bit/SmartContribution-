@@ -1362,7 +1362,8 @@ function handleApprovalAction(id, action) {
   const approval = state.approvals.find(a => a.id === id);
   if (!approval) return;
 
-  approval.status = action;
+  approval.status = action === "approve" ? "approved" : "rejected";
+approval.processedAt = new Date().toISOString();
   approval.resolvedBy = currentStaff().id;
   approval.resolvedAt = new Date().toISOString();
 
@@ -3370,10 +3371,18 @@ state.staff.forEach(staff => {
       `
   }
   ${
-  rec.status !== "resolved" && rec.staffNote
-    ? `<div class="small muted" style="margin-top:4px">
-         📝 ${rec.staffNote}
-       </div>`
+  rec.status === "resolved" && rec.resolutionNote
+    ? `
+      <div class="small muted" style="margin-top:4px">
+        🧾 ${rec.resolutionNote}
+      </div>
+    `
+    : rec.staffNote
+    ? `
+      <div class="small muted" style="margin-top:4px">
+        📝 ${rec.staffNote}
+      </div>
+    `
     : ""
 }
 
@@ -3549,15 +3558,21 @@ function openCODDrillDown(staffId, date) {
     return;
   }
 
-  // 🔒 USE SNAPSHOT (LOCKED AT SUBMISSION TIME)
-  const snap = cod.snapshot || {
-    credits: 0,
-    withdrawals: 0,
-    empowerments: 0
-  };
-  
+  // 🔑 TRANSACTIONS SENT FOR APPROVAL (READ-ONLY VIEW)
+  const txs = (state.approvals || [])
+    .filter(a =>
+      a.requestedBy === staffId &&
+      a.requestedAt?.startsWith(date)
+    )
+    .sort((a, b) =>
+      new Date(b.requestedAt) - new Date(a.requestedAt)
+    );
 
   title.textContent = "Close of Day — Breakdown (Read-only)";
+
+  // 🔒 CONTROL MODAL BODY HEIGHT (FIX SCROLL ISSUE)
+  body.style.maxHeight = "70vh";
+  body.style.overflow = "hidden";
 
   body.innerHTML = `
     <div class="small">
@@ -3570,66 +3585,52 @@ function openCODDrillDown(staffId, date) {
       <div class="small">Staff Declared: ${fmt(cod.staffDeclared)}</div>
       ${
         cod.status === "resolved"
-          ? `<div class="small success">
-               Resolved Amount: ${fmt(cod.resolvedAmount)}
-             </div>`
+          ? `
+            <div class="small success">
+              Resolved Amount: ${fmt(cod.resolvedAmount)}
+            </div>
+            <div class="small muted">
+              Resolution Note: ${cod.resolutionNote || "—"}
+            </div>
+          `
+          : cod.staffNote
+          ? `
+            <div class="small muted">
+              Staff Note: ${cod.staffNote}
+            </div>
+          `
           : ""
       }
     </div>
 
-    <h4>COD Breakdown</h4>
+    <h4 style="margin-top:12px">Transactions Sent for Approval</h4>
 
     <div
       style="
-        max-height:55vh;
+        max-height:45vh;
         overflow-y:auto;
         margin-top:8px;
         padding-right:6px;
       "
     >
-      <div class="small">
-        Credits Sent: <b>${fmt(snap.credits)}</b>
-      </div>
-      <div class="small">
-        Withdrawals (info): ${fmt(snap.withdrawals)}
-      </div>
-      <div class="small">
-        Empowerments (info): ${fmt(snap.empowerments)}
-      </div>
+      ${
+        txs.length
+          ? txs.map(t => `
+              <div
+                class="small"
+                style="border-bottom:1px solid #eee;padding:6px 0"
+              >
+                <b>${t.type.toUpperCase()}</b> — ${fmt(t.amount)}<br/>
+                <span class="muted">
+                  ${new Date(t.requestedAt).toLocaleString()}
+                  • ${t.status.toUpperCase()}
+                </span>
+              </div>
+            `).join("")
+          : `<div class="small muted">No transactions</div>`
+      }
     </div>
-    <h4 style="margin-top:12px">Transactions Sent for Approval</h4>
-
-<div style="
- max-height:40vh;
- overflow-y:auto;
- border-top:1px solid #eee;
- margin-top:6px;
- padding-top:6px;
-">
- ${
-   (state.approvals || [])
-     .filter(a =>
-       a.requestedBy === staffId &&
-       a.requestedAt?.startsWith(date)
-     )
-     .map(t => `
-       <div class="small" style="border-bottom:1px solid #eee;padding:6px 0">
-         ${t.type.toUpperCase()} — ${fmt(t.amount)}
-         <span class="muted">(${t.status})</span><br/>
-         <span class="muted">
-           ${new Date(t.requestedAt).toLocaleString()}
-         </span>
-       </div>
-     `)
-     .join("") || `<div class="small muted">No transactions</div>`
- }
-</div>
-
   `;
-
-  // 🔑 FIX SCROLL & TOOLBAR OVERFLOW
-  body.style.maxHeight = "70vh";
-  body.style.overflow = "hidden";
 
   modal.querySelectorAll(".tx-ok").forEach(b => b.remove());
   back.style.display = "flex";
