@@ -1366,21 +1366,7 @@ approval.processedAt = new Date().toISOString();
   approval.resolvedBy = currentStaff().id;
   approval.resolvedAt = new Date().toISOString();
 
-  // Apply transaction effect
-  const cust = state.customers.find(c => c.id === approval.customerId);
-  if (cust && action === "approved") {
-    cust.balance -= approval.amount;
-
-    cust.transactions.push({
-      id: crypto.randomUUID(),
-      type: "withdraw",
-      amount: approval.amount,
-      date: approval.resolvedAt,
-      note: "Approved withdrawal"
-    });
-  }
-
-  // Audit log
+    // Audit log
   state.audit.unshift({
     id: crypto.randomUUID(),
     actor: currentStaff().name,
@@ -2991,9 +2977,9 @@ await pushAudit(
   }
 );
 
- // 🔑 remove processed approvals from pending list
-state.approvals = state.approvals.filter(a => a.status === "pending");
-
+// NOTE:
+// approvals are never deleted.
+// status alone determines visibility in UI and COD logic. 
 // persist
 save();
 
