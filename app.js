@@ -3332,16 +3332,13 @@ state.staff.forEach(staff => {
     ? `<div class="small muted" style="margin-top:4px">
          🧾 ${rec.resolutionNote}
        </div>`
-    : isBalanced && rec.managerNote
-    ? `<div class="small warning" style="margin-top:4px">
-         ⚠ Manager note: ${rec.managerNote}
-       </div>`
     : rec.staffNote
     ? `<div class="small muted" style="margin-top:4px">
          📝 ${rec.staffNote}
        </div>`
     : ""
 }
+
       </div>
 
       ${
@@ -3560,7 +3557,8 @@ const snap = cod.snapshot || {
 
 <h4 style="margin-top:12px">Transactions</h4>
 
-<div style="max-height:40vh; overflow-y:auto; margin-top:8px; padding-right:6px;">
+<div style="max-height:55vh;
+ overflow-y:auto; margin-top:8px; padding-right:6px;">
   ${
     txs.length
       ? txs.map(t => `
