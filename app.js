@@ -829,6 +829,9 @@ const expectedCash = credits;
     const submittedLate = selectedDate !== new Date().toISOString().slice(0, 10);
     const draftKey = `${staff.id}|${selectedDate}`;
      
+  if (!Array.isArray(state.cod)) {
+  state.cod = [];
+}
   state.cod.push({
   id: uid("cod"),
 
@@ -3269,153 +3272,104 @@ summaryHTML = `
   </div>
 `;
 
-  let html = "";
+  html += `
+  <div
+    class="card cod-card"
+    data-staff-id="${rec.staffId}"
+    data-date="${rec.date}"
+    style="
+      margin-bottom:8px;
+      cursor:pointer;
+      border-left:4px solid ${
+        rec.status === 'balanced'
+          ? '#2e7d32'
+          : rec.status === 'resolved'
+          ? '#1976d2'
+          : rec.status === 'flagged'
+          ? '#ed6c02'
+          : '#d32f2f'
+      };
+      background:${
+        rec.status === 'balanced'
+          ? '#e8f5e9'
+          : rec.status === 'resolved'
+          ? '#e3f2fd'
+          : rec.status === 'flagged'
+          ? '#fff3e0'
+          : '#ffebee'
+      };
+      padding-left:8px;
+    "
+  >
+    <b>${staff.name}</b> (${staff.role})
+    <div class="small">${statusLabel}</div>
 
-state.staff.forEach(staff => {
-  const rec = todaysCOD.find(c => c.staffId === staff.id);
-
-  // ❌ NOT SUBMITTED
-  if (!rec) {
-    html += `
-      <div class="card warning" style="margin-bottom:8px">
-        <b>${staff.name}</b> (${staff.role})<br/>
-        <span class="danger">❌ Not submitted</span>
-      </div>
-    `;
-    return;
-  }
-
-  // 🔎 STATUS
-  const isResolved = rec.status === "resolved";
-  const isFlagged = rec.status === "flagged";
-  const isBalanced = rec.status === "balanced";
-
-  const statusLabel = isBalanced
-    ? `<span style="color:green">✔ Balanced</span>`
-    : isResolved
-      ? `<span style="color:#1976d2">✔ Resolved</span>`
-      : `<span style="color:red">⚠ Flagged</span>`;
-
-       html += `
-   <div
- class="card cod-card"
- data-staff-id="${rec.staffId}"
- data-date="${rec.date}"
- style="
-  margin-bottom:8px;
-  cursor:pointer;
-  border-left:4px solid ${
-    rec.status === 'balanced'
-      ? '#2e7d32'
-      : rec.status === 'resolved'
-      ? '#1976d2'
-      : rec.status === 'flagged'
-      ? '#ed6c02'
-      : '#d32f2f'
-  };
-  background:${
-    rec.status === 'balanced'
-      ? '#e8f5e9'
-      : rec.status === 'resolved'
-      ? '#e3f2fd'
-      : rec.status === 'flagged'
-      ? '#fff3e0'
-      : '#ffebee'
-  };
-  padding-left:8px;
-"
->
-      <b>${staff.name}</b> (${staff.role})<br/>
-
-     <div class="small">
-  Expected: <b>${fmt(rec.systemExpected)}</b><br/>
-  Staff Declared: <b>${fmt(rec.staffDeclared)}</b><br/>
-
- ${
-  rec.status === "resolved"
-    ? `
-      <div class="small success" style="margin-top:4px">
-        <b>Resolved Amount:</b> ${fmt(rec.resolvedAmount)}
-      </div>
-
-      <div class="small muted">
-        Final Variance: ${fmt(rec.resolvedAmount - rec.systemExpected)}
-      </div>
-    `
-    : `
-      Variance:
-      <b style="color:${rec.variance === 0 ? "green" : "red"}">
-        ${fmt(rec.variance)}
-      </b>
-    `
-}
-
-${
-  rec.status === "resolved" && rec.resolutionNote
-    ? `
-      <div class="small muted" style="margin-top:4px">
-        🧾 ${rec.resolutionNote}
-      </div>
-    `
-    : rec.status === "balanced" && rec.managerNote
-    ? `
-      <div class="small warning" style="margin-top:4px">
-        ⚠ Manager note: ${rec.managerNote}
-      </div>
-    `
-    : rec.staffNote
-    ? `
-      <div class="small muted" style="margin-top:4px">
-        📝 ${rec.staffNote}
-      </div>
-    `
-    : ""
-}
-
-${
-  rec.status === "balanced" && rec.managerNote
-    ? `<div class="small warning" style="margin-top:4px">
-         ⚠ Manager note: ${rec.managerNote}
-       </div>`
-    : ""
-}
-
-</div>
-
-${
-  rec.initialDeclared !== undefined
-    ? `<div class="small muted" style="margin-top:4px">
-         Initial declared: ${fmt(rec.initialDeclared)}
-       </div>`
-    : ""
-}
+    <div class="small" style="margin-top:4px">
+      Expected: <b>${fmt(rec.systemExpected)}</b><br/>
+      Staff Declared: <b>${fmt(rec.staffDeclared)}</b><br/>
 
       ${
- isManager() && isFlagged
-   ? `
-     <div style="margin-top:8px">
-       <button
-         type="button"
-         class="btn danger cod-resolve-btn"
-         data-cod-id="${rec.id}"
-         style="
-           display:inline-block;
-           padding:6px 12px;
-           font-size:12px;
-           font-weight:600;
-           min-width:72px;
-           text-align:center;
-         "
-       >
-         Resolve
-       </button>
-     </div>
-   `
-   : ""
-}
+        rec.status === "resolved"
+          ? `
+            <div class="small success" style="margin-top:4px">
+              <b>Resolved Amount:</b> ${fmt(rec.resolvedAmount)}
+            </div>
+            <div class="small muted">
+              Final Variance: ${fmt(rec.resolvedAmount - rec.systemExpected)}
+            </div>
+          `
+          : `
+            Variance:
+            <b style="color:${rec.variance === 0 ? "green" : "red"}">
+              ${fmt(rec.variance)}
+            </b>
+          `
+      }
+
+      ${
+        rec.status === "resolved" && rec.resolutionNote
+          ? `<div class="small muted" style="margin-top:4px">🧾 ${rec.resolutionNote}</div>`
+          : rec.status === "balanced" && rec.managerNote
+          ? `<div class="small warning" style="margin-top:4px">⚠ Manager note: ${rec.managerNote}</div>`
+          : rec.staffNote
+          ? `<div class="small muted" style="margin-top:4px">📝 ${rec.staffNote}</div>`
+          : ""
+      }
     </div>
-  `;
-});
+
+    ${
+      rec.initialDeclared !== undefined
+        ? `<div class="small muted" style="margin-top:4px">
+             Initial declared: ${fmt(rec.initialDeclared)}
+           </div>`
+        : ""
+    }
+
+    ${
+      isManager() && isFlagged
+        ? `
+          <div style="margin-top:8px">
+            <button
+              type="button"
+              class="btn danger cod-resolve-btn"
+              data-cod-id="${rec.id}"
+              style="
+                display:inline-block;
+                padding:6px 12px;
+                font-size:12px;
+                font-weight:600;
+                min-width:72px;
+                text-align:center;
+              "
+            >
+              Resolve
+            </button>
+          </div>
+        `
+        : ""
+    }
+  </div>
+`;
 setTimeout(() => {
   document.querySelectorAll(".cod-resolve-btn").forEach(btn => {
   btn.onclick = (e) => {
@@ -3551,14 +3505,15 @@ const snap = cod.snapshot || {
 };
 
   // 🔑 TRANSACTIONS SENT FOR APPROVAL (READ-ONLY VIEW)
-  const txs = (state.approvals || [])
-    .filter(a =>
-      a.requestedBy === staffId &&
-      a.requestedAt?.startsWith(date)
-    )
-    .sort((a, b) =>
-      new Date(b.requestedAt) - new Date(a.requestedAt)
-    );
+ const txs = (state.approvals || [])
+  .filter(a =>
+    a.requestedBy === staffId &&
+    (a.requestedAt || a.processedAt)?.startsWith(date)
+  )
+  .sort((a, b) =>
+    new Date(b.processedAt || b.requestedAt) -
+    new Date(a.processedAt || a.requestedAt)
+  );
 
   title.textContent = "Close of Day — Breakdown (Read-only)";
 
@@ -3597,28 +3552,28 @@ const snap = cod.snapshot || {
 
     <h4 style="margin-top:12px">COD Breakdown (Locked)</h4>
 
-<div
-  style="
-    max-height:45vh;
-    overflow-y:auto;
-    margin-top:8px;
-    padding-right:6px;
-  "
->
-  <div class="small">
-    Credits Sent for Approval:
-    <b>${fmt(snap.credits)}</b>
-  </div>
+<div class="small">
+  Credits Sent for Approval: <b>${fmt(snap.credits)}</b><br/>
+  Withdrawals (info): ${fmt(snap.withdrawals)}<br/>
+  Empowerments (info): ${fmt(snap.empowerments)}
+</div>
 
-  <div class="small">
-    Withdrawals (info):
-    ${fmt(snap.withdrawals)}
-  </div>
+<h4 style="margin-top:12px">Transactions</h4>
 
-  <div class="small">
-    Empowerments (info):
-    ${fmt(snap.empowerments)}
-  </div>
+<div style="max-height:40vh; overflow-y:auto; margin-top:8px; padding-right:6px;">
+  ${
+    txs.length
+      ? txs.map(t => `
+        <div class="small" style="border-bottom:1px solid #eee;padding:6px 0">
+          <b>${t.type.toUpperCase()}</b> — ${fmt(t.amount)}<br/>
+          <span class="muted">
+            ${new Date(t.processedAt || t.requestedAt).toLocaleString()}
+            — ${t.status.toUpperCase()}
+          </span>
+        </div>
+      `).join("")
+      : `<div class="small muted">No transactions</div>`
+  }
 </div>
   `;
 
