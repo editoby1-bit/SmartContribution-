@@ -3273,123 +3273,116 @@ summaryHTML = `
 `;
 let html = "";
 
-  html += `
-  <div
-    class="card cod-card"
-    data-staff-id="${rec.staffId}"
-    data-date="${rec.date}"
-    style="
-      margin-bottom:8px;
-      cursor:pointer;
-      border-left:4px solid ${
-        rec.status === 'balanced'
-          ? '#2e7d32'
-          : rec.status === 'resolved'
-          ? '#1976d2'
-          : rec.status === 'flagged'
-          ? '#ed6c02'
-          : '#d32f2f'
-      };
-      background:${
-        rec.status === 'balanced'
-          ? '#e8f5e9'
-          : rec.status === 'resolved'
-          ? '#e3f2fd'
-          : rec.status === 'flagged'
-          ? '#fff3e0'
-          : '#ffebee'
-      };
-      padding-left:8px;
-    "
-  >
-    <b>${staff.name}</b> (${staff.role})
-    <div class="small">${statusLabel}</div>
+state.staff.forEach(staff => {
+  const rec = todaysCOD.find(c => c.staffId === staff.id);
 
-    <div class="small" style="margin-top:4px">
-      Expected: <b>${fmt(rec.systemExpected)}</b><br/>
-      Staff Declared: <b>${fmt(rec.staffDeclared)}</b><br/>
+  // ❌ NOT SUBMITTED
+  if (!rec) {
+    html += `
+      <div class="card warning" style="margin-bottom:8px">
+        <b>${staff.name}</b> (${staff.role})<br/>
+        <span class="danger">❌ Not submitted</span>
+      </div>
+    `;
+    return;
+  }
+
+  // 🔎 STATUS FLAGS
+  const isResolved = rec.status === "resolved";
+  const isFlagged = rec.status === "flagged";
+  const isBalanced = rec.status === "balanced";
+
+  const statusLabel = isBalanced
+    ? `<span style="color:green">✔ Balanced</span>`
+    : isResolved
+      ? `<span style="color:#1976d2">✔ Resolved</span>`
+      : `<span style="color:red">⚠ Flagged</span>`;
+
+  html += `
+    <div
+      class="card cod-card"
+      data-staff-id="${rec.staffId}"
+      data-date="${rec.date}"
+      style="
+        margin-bottom:8px;
+        cursor:pointer;
+        border-left:4px solid ${
+          isBalanced ? '#2e7d32'
+          : isResolved ? '#1976d2'
+          : isFlagged ? '#ed6c02'
+          : '#d32f2f'
+        };
+        background:${
+          isBalanced ? '#e8f5e9'
+          : isResolved ? '#e3f2fd'
+          : isFlagged ? '#fff3e0'
+          : '#ffebee'
+        };
+        padding-left:8px;
+      "
+    >
+      <b>${staff.name}</b> (${staff.role})<br/>
+      <div class="small">${statusLabel}</div>
+
+      <div class="small" style="margin-top:4px">
+        Expected: <b>${fmt(rec.systemExpected)}</b><br/>
+        Staff Declared: <b>${fmt(rec.staffDeclared)}</b><br/>
+
+        ${
+          isResolved
+            ? `
+              <div class="small success" style="margin-top:4px">
+                <b>Resolved Amount:</b> ${fmt(rec.resolvedAmount)}
+              </div>
+              <div class="small muted">
+                Final Variance: ${fmt(rec.resolvedAmount - rec.systemExpected)}
+              </div>
+            `
+            : `
+              Variance:
+              <b style="color:${rec.variance === 0 ? "green" : "red"}">
+                ${fmt(rec.variance)}
+              </b>
+            `
+        }
+
+        ${
+          isResolved && rec.resolutionNote
+            ? `<div class="small muted" style="margin-top:4px">🧾 ${rec.resolutionNote}</div>`
+            : isBalanced && rec.managerNote
+            ? `<div class="small warning" style="margin-top:4px">⚠ Manager note: ${rec.managerNote}</div>`
+            : rec.staffNote
+            ? `<div class="small muted" style="margin-top:4px">📝 ${rec.staffNote}</div>`
+            : ""
+        }
+      </div>
 
       ${
-        rec.status === "resolved"
-          ? `
-            <div class="small success" style="margin-top:4px">
-              <b>Resolved Amount:</b> ${fmt(rec.resolvedAmount)}
-            </div>
-            <div class="small muted">
-              Final Variance: ${fmt(rec.resolvedAmount - rec.systemExpected)}
-            </div>
-          `
-          : `
-            Variance:
-            <b style="color:${rec.variance === 0 ? "green" : "red"}">
-              ${fmt(rec.variance)}
-            </b>
-          `
+        rec.initialDeclared !== undefined
+          ? `<div class="small muted" style="margin-top:4px">
+               Initial declared: ${fmt(rec.initialDeclared)}
+             </div>`
+          : ""
       }
 
       ${
-        rec.status === "resolved" && rec.resolutionNote
-          ? `<div class="small muted" style="margin-top:4px">🧾 ${rec.resolutionNote}</div>`
-          : rec.status === "balanced" && rec.managerNote
-          ? `<div class="small warning" style="margin-top:4px">⚠ Manager note: ${rec.managerNote}</div>`
-          : rec.staffNote
-          ? `<div class="small muted" style="margin-top:4px">📝 ${rec.staffNote}</div>`
+        isManager() && isFlagged
+          ? `
+            <div style="margin-top:8px">
+              <button
+                type="button"
+                class="btn danger cod-resolve-btn"
+                data-cod-id="${rec.id}"
+              >
+                Resolve
+              </button>
+            </div>
+          `
           : ""
       }
     </div>
-
-    ${
-      rec.initialDeclared !== undefined
-        ? `<div class="small muted" style="margin-top:4px">
-             Initial declared: ${fmt(rec.initialDeclared)}
-           </div>`
-        : ""
-    }
-
-    ${
-      isManager() && isFlagged
-        ? `
-          <div style="margin-top:8px">
-            <button
-              type="button"
-              class="btn danger cod-resolve-btn"
-              data-cod-id="${rec.id}"
-              style="
-                display:inline-block;
-                padding:6px 12px;
-                font-size:12px;
-                font-weight:600;
-                min-width:72px;
-                text-align:center;
-              "
-            >
-              Resolve
-            </button>
-          </div>
-        `
-        : ""
-    }
-  </div>
-`;
-setTimeout(() => {
-  document.querySelectorAll(".cod-resolve-btn").forEach(btn => {
-  btn.onclick = (e) => {
-    e.stopPropagation(); // 🔴 THIS IS THE FIX
-    const codId = e.currentTarget.dataset.codId;
-    console.log("🔥 RESOLVE CLICKED", codId);
-    openCODResolutionModal(codId);
-  };
+  `;
 });
-}, 0);
-setTimeout(() => {
-  document.querySelectorAll(".cod-card").forEach(card => {
-    card.onclick = () => {
-      const staffId = card.dataset.staffId;
-      const date = card.dataset.date;
-      openCODDrillDown(staffId, date);
-    };
-  });
-}, 0);
        
   el.innerHTML =
   summaryHTML +
