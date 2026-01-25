@@ -3346,6 +3346,10 @@ state.staff.forEach(staff => {
     ? `<div class="small muted" style="margin-top:4px">
          🧾 ${rec.resolutionNote}
        </div>`
+    : isBalanced && rec.managerNote
+    ? `<div class="small warning" style="margin-top:4px">
+         ⚠ Manager note: ${rec.managerNote}
+       </div>`
     : rec.staffNote
     ? `<div class="small muted" style="margin-top:4px">
          📝 ${rec.staffNote}
