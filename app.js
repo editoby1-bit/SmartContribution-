@@ -3508,115 +3508,141 @@ function openCODDrillDown(staffId, date) {
     showToast("COD record not found");
     return;
   }
-  // 🔒 USE SNAPSHOT TAKEN AT COD SUBMISSION (SOURCE OF TRUTH)
-const snap = cod.snapshot || {
-  credits: 0,
-  withdrawals: 0,
-  empowerments: 0
-};
 
-  // 🔑 TRANSACTIONS SENT FOR APPROVAL (READ-ONLY VIEW)
- const txs = (state.approvals || [])
-  .filter(a =>
-    a.requestedBy === staffId &&
-    (a.requestedAt || a.processedAt)?.startsWith(date)
-  )
-  .sort((a, b) =>
-    new Date(b.processedAt || b.requestedAt) -
-    new Date(a.processedAt || a.requestedAt)
-  );
+  // 🔒 SNAPSHOT (SOURCE OF TRUTH)
+  const snap = cod.snapshot || {
+    credits: 0,
+    withdrawals: 0,
+    empowerments: 0
+  };
+
+  // 🔑 ALL TRANSACTIONS BY STAFF FOR DATE (APPROVED + PENDING)
+  const txs = (state.approvals || [])
+    .filter(a =>
+      a.requestedBy === staffId &&
+      (a.processedAt || a.requestedAt)?.startsWith(date)
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.processedAt || b.requestedAt) -
+        new Date(a.processedAt || a.requestedAt)
+    );
 
   title.textContent = "Close of Day — Breakdown (Read-only)";
 
- 
+  // 🔒 LOCK MODAL HEIGHT (SCROLL FIX)
+  body.style.height = "70vh";
+  body.style.overflow = "hidden";
+  body.style.display = "flex";
+  body.style.flexDirection = "column";
+
   body.innerHTML = `
-  <!-- HEADER (COMPACT) -->
-  <div class="small" style="display:flex;gap:12px;flex-wrap:wrap">
-    <div><b>Staff:</b> ${cod.staffName}</div>
-    <div><b>Date:</b> ${cod.date}</div>
-    <div><b>Expected:</b> ${fmt(cod.systemExpected)}</div>
-    <div><b>Declared:</b> ${fmt(cod.staffDeclared)}</div>
-  </div>
+    <!-- HEADER -->
+    <div class="small" style="display:flex;gap:12px;flex-wrap:wrap">
+      <div><b>Staff:</b> ${cod.staffName}</div>
+      <div><b>Date:</b> ${cod.date}</div>
+      <div><b>Expected:</b> ${fmt(cod.systemExpected)}</div>
+      <div><b>Declared:</b> ${fmt(cod.staffDeclared)}</div>
+    </div>
 
-  ${
-    cod.status === "resolved"
-      ? `
-        <div class="small muted" style="margin-top:4px">
-          <b>Resolved:</b> ${fmt(cod.resolvedAmount)} —
-          🧾 ${cod.resolutionNote || "—"}
-        </div>
-      `
-      : cod.staffNote
-      ? `
-        <div class="small muted" style="margin-top:4px">
-          📝 ${cod.staffNote}
-        </div>
-      `
-      : ""
-  }
-
-  <!-- SNAPSHOT SUMMARY -->
-  <div class="small" style="margin-top:8px">
-    Credits: <b>${fmt(snap.credits)}</b><br/>
-    Withdrawals (info): ${fmt(snap.withdrawals)}<br/>
-    Empowerments (info): ${fmt(snap.empowerments)}
-  </div>
-
-  <h4 style="margin:8px 0 4px">Transactions</h4>
-
-  <!-- TRANSACTION LIST (ONLY SCROLL AREA) -->
-  <div
-    style="
-      max-height:60vh;
-      overflow-y:auto;
-      padding-right:10px;
-    "
-  >
     ${
-      txs.length
-        ? txs.map(t => `
-          <div class="small" style="border-bottom:1px solid #eee;padding:6px 0">
-            <b>${t.type.toUpperCase()}</b> — ${fmt(t.amount)}<br/>
-            <span class="muted">
-              ${new Date(t.processedAt || t.requestedAt).toLocaleString()}
-              — ${t.status.toUpperCase()}
-            </span>
+      cod.status === "resolved"
+        ? `
+          <div class="small muted" style="margin-top:4px">
+            <b>Resolved:</b> ${fmt(cod.resolvedAmount)}
+            — 🧾 ${cod.resolutionNote || "—"}
           </div>
-        `).join("")
-        : `<div class="small muted">No transactions</div>`
+        `
+        : cod.staffNote
+        ? `
+          <div class="small muted" style="margin-top:4px">
+            📝 ${cod.staffNote}
+          </div>
+        `
+        : ""
     }
-  </div>
 
-  <!-- MANAGER NOTE (OPTIONAL, BALANCED INCLUDED) -->
-  ${
-    isManager()
-      ? `
-        <div style="margin-top:10px">
-          <textarea
-            id="managerNoteBox"
-            class="input"
-            placeholder="Manager note (optional)"
-            style="min-height:60px"
-          >${cod.managerNote || ""}</textarea>
+    <!-- SNAPSHOT SUMMARY -->
+    <div class="small" style="margin-top:8px">
+      Credits: <b>${fmt(snap.credits)}</b><br/>
+      Withdrawals (info): ${fmt(snap.withdrawals)}<br/>
+      Empowerments (info): ${fmt(snap.empowerments)}
+    </div>
 
-          <button
-            class="btn small"
-            style="margin-top:6px"
-            onclick="saveManagerCODNote('${cod.id}')"
-          >
-            Save Note
-          </button>
-        </div>
-      `
-      : ""
-  }
-`;
+    <h4 style="margin:8px 0 4px">Transactions</h4>
+
+    <!-- SCROLL AREA -->
+    <div
+      style="
+        flex:1;
+        overflow-y:auto;
+        padding-right:10px;
+      "
+    >
+      ${
+        txs.length
+          ? txs.map(t => `
+            <div class="small" style="border-bottom:1px solid #eee;padding:6px 0">
+              <b>${t.type.toUpperCase()}</b> — ${fmt(t.amount)}<br/>
+              <span class="muted">
+                ${new Date(t.processedAt || t.requestedAt).toLocaleString()}
+                — ${t.status.toUpperCase()}
+              </span>
+            </div>
+          `).join("")
+          : `<div class="small muted">No transactions</div>`
+      }
+    </div>
+
+    ${
+      isManager()
+        ? `
+          <div style="margin-top:10px">
+            <label class="small muted">Manager note (optional)</label>
+
+            <textarea
+              id="managerNoteInput"
+              class="input"
+              style="margin-top:4px;min-height:60px"
+              placeholder="Internal note (visible to staff)"
+            >${cod.managerNote || ""}</textarea>
+
+            <button
+              id="saveManagerNoteBtn"
+              class="btn"
+              style="margin-top:6px"
+            >
+              Save Note
+            </button>
+          </div>
+        `
+        : ""
+    }
+  `;
 
   modal.querySelectorAll(".tx-ok").forEach(b => b.remove());
   back.style.display = "flex";
+
+  // 💾 SAVE MANAGER NOTE
+  const saveBtn = document.getElementById("saveManagerNoteBtn");
+  if (saveBtn) {
+    saveBtn.onclick = () => {
+      const input = document.getElementById("managerNoteInput");
+      if (!input) return;
+
+      cod.managerNote = input.value.trim();
+      cod.managerNoteAt = new Date().toISOString();
+      cod.managerNoteBy = currentStaff()?.name || "";
+
+      save();
+      showToast("Manager note saved");
+      renderCODForDate(cod.date);
+    };
+  }
 }
 
 window.openCODDrillDown = openCODDrillDown;
+
 
 function renderDashboard() {
   if (!canViewDashboard()) return;
