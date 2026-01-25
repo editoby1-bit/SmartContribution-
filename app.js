@@ -3236,8 +3236,8 @@ const systemTotals = todaysCOD.reduce(
 // informational totals (not used for balancing)
 const systemInfo = todaysCOD.reduce(
   (acc, c) => {
-    acc.withdrawals += Number(c.withdrawals || 0);
-    acc.empowerments += Number(c.empowerments || 0);
+    acc.withdrawals += Number(c.snapshot?.withdrawals || 0);
+    acc.empowerments += Number(c.snapshot?.empowerments || 0);
     return acc;
   },
   { withdrawals: 0, empowerments: 0 }
@@ -3347,14 +3347,29 @@ state.staff.forEach(staff => {
         }
 
         ${
-          isResolved && rec.resolutionNote
-            ? `<div class="small muted" style="margin-top:4px">🧾 ${rec.resolutionNote}</div>`
-            : isBalanced && rec.managerNote
-            ? `<div class="small warning" style="margin-top:4px">⚠ Manager note: ${rec.managerNote}</div>`
-            : rec.staffNote
-            ? `<div class="small muted" style="margin-top:4px">📝 ${rec.staffNote}</div>`
-            : ""
+  isResolved
+    ? (
+        rec.resolutionNote
+          ? `<div class="small muted" style="margin-top:4px">
+               🧾 ${rec.resolutionNote}
+             </div>`
+          : ""
+      )
+    : `
+        ${rec.staffNote
+          ? `<div class="small muted" style="margin-top:4px">
+               📝 ${rec.staffNote}
+             </div>`
+          : ""
         }
+        ${isBalanced && rec.managerNote
+          ? `<div class="small warning" style="margin-top:4px">
+               ⚠ Manager note: ${rec.managerNote}
+             </div>`
+          : ""
+        }
+      `
+}
       </div>
 
       ${
