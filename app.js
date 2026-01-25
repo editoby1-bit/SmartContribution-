@@ -3202,6 +3202,20 @@ function initCODDatePicker() {
   renderCODForDate(window.activeCODDate);
 }
 
+function saveManagerCODNote(codId) {
+  const note = document.getElementById("managerNoteBox")?.value || "";
+
+  const cod = state.cod.find(c => c.id === codId);
+  if (!cod) return;
+
+  cod.managerNote = note.trim();
+  cod.managerNotedAt = new Date().toISOString();
+  cod.managerNotedBy = currentStaff().name;
+
+  save();
+  showToast("Manager note saved");
+  renderCODForDate(cod.date);
+}
 
 
 function renderCODForDate(dateStr) {
@@ -3514,66 +3528,89 @@ const snap = cod.snapshot || {
 
   title.textContent = "Close of Day — Breakdown (Read-only)";
 
-  // 🔒 CONTROL MODAL BODY HEIGHT (FIX SCROLL ISSUE)
-  body.style.maxHeight = "70vh";
-  body.style.overflow = "hidden";
-
+ 
   body.innerHTML = `
-    <div class="small">
-      <b>Staff:</b> ${cod.staffName}<br/>
-      <b>Date:</b> ${cod.date}
-    </div>
+  <!-- HEADER (COMPACT) -->
+  <div class="small" style="display:flex;gap:12px;flex-wrap:wrap">
+    <div><b>Staff:</b> ${cod.staffName}</div>
+    <div><b>Date:</b> ${cod.date}</div>
+    <div><b>Expected:</b> ${fmt(cod.systemExpected)}</div>
+    <div><b>Declared:</b> ${fmt(cod.staffDeclared)}</div>
+  </div>
 
-    <div class="card" style="margin-top:10px">
-      <div class="small">System Expected: ${fmt(cod.systemExpected)}</div>
-      <div class="small">Staff Declared: ${fmt(cod.staffDeclared)}</div>
-      ${
-        cod.status === "resolved"
-          ? `
-            <div class="small success">
-              Resolved Amount: ${fmt(cod.resolvedAmount)}
-            </div>
-            <div class="small muted">
-              Resolution Note: ${cod.resolutionNote || "—"}
-            </div>
-          `
-          : cod.staffNote
-          ? `
-            <div class="small muted">
-              Staff Note: ${cod.staffNote}
-            </div>
-          `
-          : ""
-      }
-    </div>
-
-    <h4 style="margin-top:12px">COD Breakdown (Locked)</h4>
-
-<div class="small">
-  Credits Sent for Approval: <b>${fmt(snap.credits)}</b><br/>
-  Withdrawals (info): ${fmt(snap.withdrawals)}<br/>
-  Empowerments (info): ${fmt(snap.empowerments)}
-</div>
-
-<h4 style="margin-top:12px">Transactions</h4>
-
-<div style="max-height:55vh;
- overflow-y:auto; margin-top:8px; padding-right:6px;">
   ${
-    txs.length
-      ? txs.map(t => `
-        <div class="small" style="border-bottom:1px solid #eee;padding:6px 0">
-          <b>${t.type.toUpperCase()}</b> — ${fmt(t.amount)}<br/>
-          <span class="muted">
-            ${new Date(t.processedAt || t.requestedAt).toLocaleString()}
-            — ${t.status.toUpperCase()}
-          </span>
+    cod.status === "resolved"
+      ? `
+        <div class="small muted" style="margin-top:4px">
+          <b>Resolved:</b> ${fmt(cod.resolvedAmount)} —
+          🧾 ${cod.resolutionNote || "—"}
         </div>
-      `).join("")
-      : `<div class="small muted">No transactions</div>`
+      `
+      : cod.staffNote
+      ? `
+        <div class="small muted" style="margin-top:4px">
+          📝 ${cod.staffNote}
+        </div>
+      `
+      : ""
   }
-</div>
-  `;
+
+  <!-- SNAPSHOT SUMMARY -->
+  <div class="small" style="margin-top:8px">
+    Credits: <b>${fmt(snap.credits)}</b><br/>
+    Withdrawals (info): ${fmt(snap.withdrawals)}<br/>
+    Empowerments (info): ${fmt(snap.empowerments)}
+  </div>
+
+  <h4 style="margin:8px 0 4px">Transactions</h4>
+
+  <!-- TRANSACTION LIST (ONLY SCROLL AREA) -->
+  <div
+    style="
+      max-height:60vh;
+      overflow-y:auto;
+      padding-right:10px;
+    "
+  >
+    ${
+      txs.length
+        ? txs.map(t => `
+          <div class="small" style="border-bottom:1px solid #eee;padding:6px 0">
+            <b>${t.type.toUpperCase()}</b> — ${fmt(t.amount)}<br/>
+            <span class="muted">
+              ${new Date(t.processedAt || t.requestedAt).toLocaleString()}
+              — ${t.status.toUpperCase()}
+            </span>
+          </div>
+        `).join("")
+        : `<div class="small muted">No transactions</div>`
+    }
+  </div>
+
+  <!-- MANAGER NOTE (OPTIONAL, BALANCED INCLUDED) -->
+  ${
+    isManager()
+      ? `
+        <div style="margin-top:10px">
+          <textarea
+            id="managerNoteBox"
+            class="input"
+            placeholder="Manager note (optional)"
+            style="min-height:60px"
+          >${cod.managerNote || ""}</textarea>
+
+          <button
+            class="btn small"
+            style="margin-top:6px"
+            onclick="saveManagerCODNote('${cod.id}')"
+          >
+            Save Note
+          </button>
+        </div>
+      `
+      : ""
+  }
+`;
 
   modal.querySelectorAll(".tx-ok").forEach(b => b.remove());
   back.style.display = "flex";
