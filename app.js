@@ -3627,17 +3627,20 @@ function openCODDrillDown(staffId, date) {
   const saveBtn = document.getElementById("saveManagerNoteBtn");
   if (saveBtn) {
     saveBtn.onclick = () => {
-      const input = document.getElementById("managerNoteInput");
-      if (!input) return;
+  const input = document.getElementById("managerNoteInput");
+  if (!input) return;
 
-      cod.managerNote = input.value.trim();
-      cod.managerNoteAt = new Date().toISOString();
-      cod.managerNoteBy = currentStaff()?.name || "";
+  cod.managerNote = input.value.trim();
+  cod.managerNoteAt = new Date().toISOString();
+  cod.managerNoteBy = currentStaff()?.name || "";
 
-      save();
-      showToast("Manager note saved");
-      renderCODForDate(cod.date);
-    };
+  save();
+
+  input.value = ""; // ✅ CLEAR FIELD AFTER SAVE
+
+  showToast("Manager note saved");
+  renderCODForDate(cod.date);
+};
   }
 }
 
