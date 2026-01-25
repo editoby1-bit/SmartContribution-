@@ -724,7 +724,6 @@ function renderPhaseB({
   initialDeclared
 }) {
   const txs = (state.approvals || []).filter(a =>
-  a.type === "credit" &&
   a.requestedBy === staff.id &&
   a.requestedAt?.startsWith(selectedDate)
 );
@@ -3329,46 +3328,19 @@ state.staff.forEach(staff => {
         Staff Declared: <b>${fmt(rec.staffDeclared)}</b><br/>
 
         ${
-          isResolved
-            ? `
-              <div class="small success" style="margin-top:4px">
-                <b>Resolved Amount:</b> ${fmt(rec.resolvedAmount)}
-              </div>
-              <div class="small muted">
-                Final Variance: ${fmt(rec.resolvedAmount - rec.systemExpected)}
-              </div>
-            `
-            : `
-              Variance:
-              <b style="color:${rec.variance === 0 ? "green" : "red"}">
-                ${fmt(rec.variance)}
-              </b>
-            `
-        }
-
-        ${
-  isResolved
-    ? (
-        rec.resolutionNote
-          ? `<div class="small muted" style="margin-top:4px">
-               🧾 ${rec.resolutionNote}
-             </div>`
-          : ""
-      )
-    : `
-        ${rec.staffNote
-          ? `<div class="small muted" style="margin-top:4px">
-               📝 ${rec.staffNote}
-             </div>`
-          : ""
-        }
-        ${isBalanced && rec.managerNote
-          ? `<div class="small warning" style="margin-top:4px">
-               ⚠ Manager note: ${rec.managerNote}
-             </div>`
-          : ""
-        }
-      `
+  isResolved && rec.resolutionNote
+    ? `<div class="small muted" style="margin-top:4px">
+         🧾 ${rec.resolutionNote}
+       </div>`
+    : isBalanced && rec.managerNote
+    ? `<div class="small warning" style="margin-top:4px">
+         ⚠ Manager note: ${rec.managerNote}
+       </div>`
+    : rec.staffNote
+    ? `<div class="small muted" style="margin-top:4px">
+         📝 ${rec.staffNote}
+       </div>`
+    : ""
 }
       </div>
 
@@ -3399,9 +3371,28 @@ state.staff.forEach(staff => {
   `;
 });
        
-  el.innerHTML =
+ // 1️⃣ Render HTML FIRST
+el.innerHTML =
   summaryHTML +
   (html || `<div class="small muted">No records</div>`);
+
+// 2️⃣ Bind COD card click (drilldown)
+document.querySelectorAll(".cod-card").forEach(card => {
+  card.onclick = () => {
+    const staffId = card.dataset.staffId;
+    const date = card.dataset.date;
+    openCODDrillDown(staffId, date);
+  };
+});
+
+// 3️⃣ Bind Resolve button (STOP propagation)
+document.querySelectorAll(".cod-resolve-btn").forEach(btn => {
+  btn.onclick = (e) => {
+    e.stopPropagation(); // 🔴 CRITICAL
+    const codId = btn.dataset.codId;
+    openCODResolutionModal(codId);
+  };
+});
 }
 window.renderCODForDate = renderCODForDate;
 
