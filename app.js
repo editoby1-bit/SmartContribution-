@@ -3271,6 +3271,7 @@ summaryHTML = `
     </div>
   </div>
 `;
+let html = "";
 
   html += `
   <div
