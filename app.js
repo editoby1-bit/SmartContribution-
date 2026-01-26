@@ -3818,6 +3818,20 @@ if (["manager", "ceo"].includes(currentStaff()?.role)) {
 }
 
 function renderAccounts() {
+
+  // 🔒 HARD GUARD — accounts must always exist
+  if (!state.accounts) {
+    state.accounts = {
+      income: [],
+      expense: []
+    };
+    save();
+  }
+
+  // 🔒 DOUBLE GUARD — legacy safety
+  if (!Array.isArray(state.accounts.income)) state.accounts.income = [];
+  if (!Array.isArray(state.accounts.expense)) state.accounts.expense = [];
+  
   const el = document.getElementById("accountsPanel");
   if (!el) return;
 
