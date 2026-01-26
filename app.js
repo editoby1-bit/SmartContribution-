@@ -3224,6 +3224,7 @@ function canViewDashboard() {
 
 
 function hideDashboard() {
+  document.body.classList.add("dashboard-active");
   document.getElementById("dashboardView").style.display = "none";
   document.getElementById("app").style.display = "flex";
 
