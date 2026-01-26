@@ -561,10 +561,6 @@ h3 {
   cursor: pointer;
 }
 
-.approval-actions {
-  display: flex;
-  gap: 8px;
-}
 
 .btn.small {
   padding: 6px 10px;
@@ -1053,7 +1049,8 @@ body {
 .approval-actions {
   display: flex;
   gap: 10px;
-  margin-top: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;   /* allows buttons to wrap instead of overflowing */
 }
 
 /* ===== MAIN APP 3-COLUMN LAYOUT LOCK ===== */
@@ -1106,5 +1103,26 @@ body.dashboard-active .app-body,
 body.dashboard-active #appView,
 body.dashboard-active .main-content {
   display: block;
+}
+/* ===== PREVENT DASHBOARD VIEW FROM AFFECTING HOME LAYOUT ===== */
+#dashboardView {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  background: #f5f7fa;
+}
+/* ===== LOCK MAIN 3-PANEL LAYOUT (LEFT / CENTER / RIGHT) ===== */
+#app.container {
+  display: grid;
+  grid-template-columns: 320px 1fr 320px; /* LEFT | CENTER | RIGHT */
+  gap: 24px;
+  max-width: 1500px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+/* Prevent panels from shrinking weirdly */
+#app.container > * {
+  min-width: 0;
 }
 
