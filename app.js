@@ -3705,6 +3705,10 @@ window.openCODDrillDown = openCODDrillDown;
 function renderDashboard() {
   if (!canViewDashboard()) return;
 
+  // 🔥 FORCE DASHBOARD VISIBLE FIRST
+  const dash = document.getElementById("dashboardView");
+  if (dash) dash.style.display = "block";
+
   renderDashboardKPIs();
   renderAttentionRequired();
   renderDashboardApprovals();
@@ -3713,7 +3717,6 @@ function renderDashboard() {
   bindCODButtons();
   renderManagerCODSummary(window.activeCODDate);
   renderCODForDate(window.activeCODDate);
-
 }
 
 function renderDashboardApprovals() {
@@ -3743,7 +3746,7 @@ function renderDashboardApprovals() {
 
     row.innerHTML = `
       <div class="approval-info">
-        <strong>WITHDRAW — ₦${Number(a.amount).toLocaleString()}</strong> ${risk}
+        <strong>${a.type.toUpperCase()} — ₦${Number(a.amount).toLocaleString()}</strong> ${risk}
         <div class="small">
   <b>Customer:</b> ${cust?.name || a.customerId}
 </div>

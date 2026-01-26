@@ -958,3 +958,16 @@ body {
 .accounts-btn:hover {
   opacity: 0.9;
 }
+/* ===== DASHBOARD LAYOUT FIX ===== */
+.dashboard-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px 40px 24px;
+  box-sizing: border-box;
+}
+
+/* Give cards breathing room */
+.card,
+.dash-card {
+  padding: 16px 18px;
+}

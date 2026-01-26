@@ -12,7 +12,7 @@
 
 <body>
 
-<!-- ================= HEADER ======INCOME55=========== -->
+<!-- ================= HEADER ======INCOME77=========== -->
 <header class="header">
   <div class="logo">SC</div>
   <div class="brand">SmartContribution — Professional</div>
@@ -143,51 +143,58 @@
   <!-- DASHBOARD VIEW (ISOLATED – NOT GRID) -->
   <!-- ================================================= -->
   <div id="dashboardView" style="display:none">
-    <div class="dashboard-inner">
+  <div class="dashboard-inner">
 
-      <div class="card">
-        <h3>Manager Dashboard</h3>
-        <div class="small">Operational overview & approvals</div>
-      </div>
-
-      <div id="dashboardKPIs" class="dash-grid"></div>
-      <!-- ACCOUNTS PANEL (MANAGER / CEO) -->
-<div id="accountsPanel" style="margin-top:20px"></div>
-
-      <div class="card">
-        <h4>Attention Required</h4>
-        <div id="attentionGrid" class="dash-grid"></div>
-
-        <div id="managerCODSummary"></div>
-        
-      </div>
-
-      <div class="card">
-  <h4>Close of Day — Today</h4>
-   <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-  <label class="small">Date:</label>
-  <input type="date" id="codDatePicker" class="input" />
-</div>
-
-<div id="codTodayList"></div>
-
-</div>
-
-
-      <div class="card">
-        <h4>Approvals Requiring Action</h4>
-        <div id="dashboardApprovals"></div>
-      </div>
-
-      <div class="card">
-        <h4>Recent Activity</h4>
-        <div id="dashboardActivity"></div>
-      </div>
-
+    <!-- DASHBOARD HEADER -->
+    <div class="card">
+      <h3>Manager Dashboard</h3>
+      <div class="small">Operational overview & approvals</div>
     </div>
-  </div>
-  <!-- ============== END DASHBOARD VIEW ================= -->
 
+    <!-- KPI TILES -->
+    <div id="dashboardKPIs" class="dash-grid"></div>
+
+    <!-- INCOME / EXPENSE ACCOUNTS (NOW HIGHER UP) -->
+    <div id="accountsPanel" style="margin-top:20px"></div>
+
+    <!-- ATTENTION (NOW SMALLER & CLEANER) -->
+    <div class="card">
+      <h4>Attention Overview</h4>
+      <div id="attentionGrid" class="dash-grid"></div>
+    </div>
+
+    <!-- MANAGER COD SUMMARY -->
+    <div class="card">
+      <div id="managerCODSummary"></div>
+    </div>
+
+    <!-- CLOSE OF DAY TODAY -->
+    <div class="card">
+      <h4>Close of Day — Today</h4>
+
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <label class="small">Date:</label>
+        <input type="date" id="codDatePicker" class="input" />
+      </div>
+
+      <div id="codTodayList"></div>
+    </div>
+
+    <!-- APPROVALS -->
+    <div class="card">
+      <h4>Approvals Requiring Action</h4>
+      <div id="dashboardApprovals"></div>
+    </div>
+
+    <!-- ACTIVITY -->
+    <div class="card">
+      <h4>Recent Activity</h4>
+      <div id="dashboardActivity"></div>
+    </div>
+
+  </div>
+</div>
+<!-- ============== END DASHBOARD VIEW ================= -->
 </main>
 
 <!-- ================= MODALS ================= -->
