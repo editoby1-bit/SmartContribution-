@@ -460,8 +460,7 @@ h3 {
 .dash-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-  margin-top: 16px;
+  gap: 18px;
 }
 
 .kpi-card {
@@ -562,6 +561,8 @@ h3 {
 }
 
 .approval-row.large {
+  min-height: auto;
+  height: auto;
   padding: 16px;
 }
 
@@ -695,6 +696,12 @@ html, body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 2.2fr 1.2fr; /* Customers gets more space */
+  gap: 20px;
 }
 
 /* Prevent giant vertical gaps */
@@ -960,9 +967,9 @@ body {
 }
 /* ===== DASHBOARD LAYOUT FIX ===== */
 .dashboard-inner {
-  max-width: 1200px;
+  max-width: 1400px;   /* was too narrow */
   margin: 0 auto;
-  padding: 0 24px 40px 24px;
+  padding: 20px 28px 40px 28px;  /* more side breathing room */
   box-sizing: border-box;
 }
 
@@ -970,4 +977,15 @@ body {
 .card,
 .dash-card {
   padding: 16px 18px;
+}
+.card .small,
+.card h3,
+.card h4 {
+  padding-right: 6px;
+}
+/* ===== CARD POLISH (layout refinement) ===== */
+.card {
+  border-radius: 10px;
+  padding: 18px 20px;   /* gives breathing space */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
