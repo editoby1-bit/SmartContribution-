@@ -1061,10 +1061,6 @@ body {
   flex-shrink: 0;
 }
 
-
-.approval-actions .btn {
-  min-width: 90px;
-}
 /* ===== MAIN APP 3-COLUMN LAYOUT LOCK ===== */
 .main-layout {
   display: grid;

@@ -1672,6 +1672,7 @@ document.getElementById("mCancel").onclick = () => {
  window.forceModalTab = null;
 
 function showDashboard() {
+  document.body.classList.add("dashboard-active");
   const dash = document.getElementById("dashboardView");
   const app = document.getElementById("app");
 
