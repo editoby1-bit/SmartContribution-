@@ -1007,6 +1007,34 @@ body {
   max-width: 1400px;
   margin: 0 auto;
 }
+/* ===== DASHBOARD WIDTH & CENTERING FIX ===== */
+#dashboardView {
+  width: 100%;
+}
+
+.dashboard-inner {
+  max-width: 1400px;   /* makes dashboard wider */
+  margin: 0 auto;      /* centers it */
+  padding: 0 24px;     /* prevents edge trimming */
+}
+
+/* ===== CUSTOMERS PANEL BREATHING SPACE ===== */
+#customersPanel,
+.customers-card {
+  padding: 18px;
+}
+/* ===== DASHBOARD WIDTH & CENTERING FIX ===== */
+#dashboardView {
+  width: 100%;
+}
+
+.dashboard-inner {
+  max-width: 1400px;   /* makes dashboard wider */
+  margin: 0 auto;      /* centers it */
+  padding: 0 24px;     /* prevents edge trimming */
+}
+
+/* ===== CUSTOMERS PANEL BREATHING SPACE ===== */
 #customersPanel,
 .customers-card {
   padding: 18px;
