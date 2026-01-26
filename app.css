@@ -1030,12 +1030,11 @@ body {
   padding: 18px;
 }
 /* ===== DASHBOARD APPROVAL ROW FIX ===== */
-/* ===== APPROVAL CARD LAYOUT (FIXED) ===== */
+/* ===== APPROVAL CARD SAFE LAYOUT ===== */
 .approval-row {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start; /* TOP ALIGN so text doesn't collide with buttons */
-  gap: 18px;
+  flex-direction: column; /* STACK EVERYTHING */
+  gap: 10px;
   padding: 16px;
   border-radius: 12px;
   background: #ffffff;
@@ -1043,22 +1042,18 @@ body {
   border: 1px solid rgba(0,0,0,0.06);
 }
 
-.approval-info {
-  flex: 1;
-  min-width: 0;
-}
-
+/* Top line: Title + Amount */
 .approval-info strong {
   display: block;
-  margin-bottom: 6px;
   font-size: 16px;
+  margin-bottom: 6px;
 }
 
+/* Buttons now live BELOW the text */
 .approval-actions {
   display: flex;
-  flex-direction: column; /* STACK buttons vertically */
-  gap: 8px;
-  flex-shrink: 0;
+  gap: 10px;
+  margin-top: 6px;
 }
 
 /* ===== MAIN APP 3-COLUMN LAYOUT LOCK ===== */

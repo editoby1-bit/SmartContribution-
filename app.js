@@ -3747,27 +3747,19 @@ function renderDashboardApprovals() {
       a.amount >= 500000 ? `<span class="badge danger">HIGH RISK</span>` : "";
 
     row.innerHTML = `
-      <div class="approval-info">
-        <strong>${a.type.toUpperCase()} — ₦${Number(a.amount).toLocaleString()}</strong> ${risk}
-        <div class="small">
-  <b>Customer:</b> ${cust?.name || a.customerId}
-</div>
+  <div class="approval-info">
+    <strong>${a.type.toUpperCase()} — ₦${Number(a.amount).toLocaleString()}</strong> ${risk}
 
-<div class="small">
-  <b>Requested by:</b> ${a.requestedByName || a.requestedBy}
-</div>
+    <div class="small"><b>Customer:</b> ${cust?.name || a.customerId}</div>
+    <div class="small"><b>Requested by:</b> ${a.requestedByName || a.requestedBy}</div>
+    <div class="small muted">${date}</div>
+  </div>
 
-<div class="small muted">
-  ${date}
-</div>
-        <div class="small">${date}</div>
-      </div>
-
-      <div class="approval-actions">
-        <button class="btn approve">Approve</button>
-        <button class="btn danger reject">Reject</button>
-      </div>
-    `;
+  <div class="approval-actions">
+    <button class="btn approve">Approve</button>
+    <button class="btn danger reject">Reject</button>
+  </div>
+`;
 
     row.querySelector(".approve").onclick = () =>
       confirmApproval(a, "approved");
