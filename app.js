@@ -305,6 +305,13 @@ window.currentStaff = currentStaff;
     save();
   }
 
+  if (!state.accounts) {
+  state.accounts = {
+    income: [],
+    expense: []
+  };
+}
+
   async function pushAudit(actor, role, action, details) {
   const staff = currentStaff();
   const time = new Date().toISOString();
@@ -339,6 +346,7 @@ window.currentStaff = currentStaff;
     renderAudit();
     return entry;
   }
+
   async function verifyAudit() {
     const issues = [];
     for (let i = 0; i < state.audit.length; i++) {
@@ -359,6 +367,13 @@ window.currentStaff = currentStaff;
     }
     return issues;
   }
+
+  function nextAccountNumber(type) {
+  const base = type === "income" ? 2000 : 3000;
+  const list = state.accounts[type] || [];
+  const num = base + list.length;
+  return `${type === "income" ? "INC" : "EXP"}-${num}`;
+}
 
   function can(role, action) {
     const map = {
@@ -470,6 +485,44 @@ function computeTodayStaffTotals(staffId) {
   };
 }
 
+function createAccount(type, name) {
+  const staff = currentStaff();
+  if (!staff || !["manager", "ceo"].includes(staff.role)) {
+    showToast("Not authorized");
+    return;
+  }
+
+  if (!name || !name.trim()) {
+    showToast("Account name required");
+    return;
+  }
+
+  const acc = {
+    id: uid("acc"),
+    category: type, // "income" | "expense"
+    name: name.trim(),
+    accountNumber: nextAccountNumber(type),
+    createdBy: staff.name,
+    createdAt: new Date().toISOString(),
+    archived: false
+  };
+
+  state.accounts[type].push(acc);
+  save();
+  renderAccounts();
+
+  showToast(`${type.toUpperCase()} account created`);
+}
+
+function promptCreateAccount(type) {
+  const name = prompt(
+    `Enter ${type.toUpperCase()} account name`
+  );
+  if (name !== null) {
+    createAccount(type, name);
+  }
+}
+
 function getCODDraft(staffId, date) {
   if (!state.codDrafts) state.codDrafts = {};
   return state.codDrafts[`${staffId}|${date}`] || null;
@@ -560,6 +613,7 @@ function openMyCOD() {
 }
 
 window.openMyCOD = openMyCOD;
+
 
 
 async function openCloseDayModal() {
@@ -3736,6 +3790,10 @@ function renderDashboardActivity() {
 
   if (!logs.length) {
     box.innerHTML = `<div class="small muted">No recent activity</div>`;
+    
+    if (["manager", "ceo"].includes(currentStaff()?.role)) {
+  renderAccounts();
+}
     return;
   }
 
@@ -3746,6 +3804,34 @@ function renderDashboardActivity() {
       ${a.action}
     </div>
   `).join("");
+}
+
+function renderAccounts() {
+  const el = document.getElementById("accountsPanel");
+  if (!el) return;
+
+  const renderList = (type) =>
+    state.accounts[type]
+      .filter(a => !a.archived)
+      .map(a => `
+        <div class="card small">
+          <b>${a.accountNumber}</b> — ${a.name}
+        </div>
+      `).join("");
+
+  el.innerHTML = `
+    <h4>Income Accounts</h4>
+    ${renderList("income")}
+    <button class="btn small" onclick="promptCreateAccount('income')">
+      + Add Income Account
+    </button>
+
+    <h4 style="margin-top:12px">Expense Accounts</h4>
+    ${renderList("expense")}
+    <button class="btn small" onclick="promptCreateAccount('expense')">
+      + Add Expense Account
+    </button>
+  `;
 }
 
   function showToast(msg, ms = 1800) {
