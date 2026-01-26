@@ -1286,26 +1286,16 @@ function renderAttentionRequired() {
 
 
   grid.innerHTML = `
+  <div class="dash-card">
+    <div class="small">Large Withdrawals Today</div>
+    <h3>${largeWithdrawals}</h3>
+  </div>
 
-    <div class="attention-card">
-
-      <div class="label">Large Withdrawals Today</div>
-
-      <div class="value">${largeWithdrawals}</div>
-
-    </div>
-
-
-
-    <div class="attention-card">
-
-      <div class="label">Frozen Accounts</div>
-
-      <div class="value">${frozen}</div>
-
-    </div>
-
-  `;
+  <div class="dash-card">
+    <div class="small">Frozen Accounts</div>
+    <h3>${frozen}</h3>
+  </div>
+`;
 
 }
 
@@ -3847,15 +3837,15 @@ function renderAccounts() {
   el.innerHTML = `
     <h4>Income Accounts</h4>
     ${renderList("income")}
-    <button class="btn small" onclick="promptCreateAccount('income')">
-      + Add Income Account
-    </button>
+   <button class="accounts-btn" onclick="promptCreateAccount('income')">
+  + Add Income Account
+</button>
 
     <h4 style="margin-top:12px">Expense Accounts</h4>
     ${renderList("expense")}
-    <button class="btn small" onclick="promptCreateAccount('expense')">
-      + Add Expense Account
-    </button>
+    <button class="accounts-btn" onclick="promptCreateAccount('expense')">
+  + Add Expense Account
+</button>
   `;
 }
 

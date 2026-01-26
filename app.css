@@ -943,3 +943,18 @@ body {
   inset: 0;
   overflow: hidden;
 }
+/* ===== ACCOUNTS PANEL BUTTONS ===== */
+.accounts-btn {
+  background: #0ea5a4;      /* same teal as main buttons */
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 1;
+}
+
+.accounts-btn:hover {
+  opacity: 0.9;
+}
