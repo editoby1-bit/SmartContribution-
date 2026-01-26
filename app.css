@@ -700,7 +700,7 @@ html, body {
 
 .main-grid {
   display: grid;
-  grid-template-columns: 1.1fr 2.2fr 1.2fr; /* Customers gets more space */
+ grid-template-columns: 28% 44% 28%;
   gap: 20px;
 }
 
@@ -988,4 +988,26 @@ body {
   border-radius: 10px;
   padding: 18px 20px;   /* gives breathing space */
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+/* ===== DASHBOARD & HOME COLUMN STABILITY ===== */
+.main-grid > div {
+  min-width: 0; /* prevents overflow pushing columns */
+}
+
+.approvals-card,
+.customers-card,
+.audit-card {
+  height: fit-content;
+}
+#dashboardView {
+  width: 100%;
+}
+
+.dashboard-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+#customersPanel,
+.customers-card {
+  padding: 18px;
 }
