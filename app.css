@@ -701,13 +701,6 @@ html, body {
   margin-bottom: 8px;
 }
 
-
-.container {
-  display: grid;
-  grid-template-columns: 300px 1fr 320px; /* LEFT | MIDDLE | RIGHT */
-  gap: 20px;
-  align-items: start;
-}
 .left-panel {
   min-width: 0;
 }
@@ -884,14 +877,6 @@ html, body {
   max-width: 1400px;
   margin: 0 auto;
 }
-#dashboardView {
-  display: none;
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 16px 8px 40px;
-  box-sizing: border-box;
-}
 
 .dashboard-inner {
   max-width: 1400px;
@@ -1001,19 +986,12 @@ body {
 .audit-card {
   height: fit-content;
 }
-#dashboardView {
-  width: 100%;
-}
 
 .dashboard-inner {
   max-width: 1400px;
   margin: 0 auto;
 }
 /* ===== DASHBOARD WIDTH & CENTERING FIX ===== */
-#dashboardView {
-  width: 100%;
-}
-
 .dashboard-inner {
   max-width: 1400px;   /* makes dashboard wider */
   margin: 0 auto;      /* centers it */
@@ -1026,9 +1004,6 @@ body {
   padding: 18px;
 }
 /* ===== DASHBOARD WIDTH & CENTERING FIX ===== */
-#dashboardView {
-  width: 100%;
-}
 
 .dashboard-inner {
   max-width: 1400px;   /* makes dashboard wider */
@@ -1069,14 +1044,6 @@ body {
   flex-wrap: wrap;   /* allows buttons to wrap instead of overflowing */
 }
 
-/* ===== MAIN APP 3-COLUMN LAYOUT LOCK ===== */
-.main-layout {
-  display: grid;
-  grid-template-columns: 1fr 1.6fr 1fr; /* Overview | Customers | Audit */
-  gap: 20px;
-  align-items: start;
-}
-
 /* Prevent cards from stretching weirdly */
 .main-layout .card {
   height: fit-content;
@@ -1085,15 +1052,6 @@ body {
 /* Customers column should feel wider but stable */
 #customersPanel {
   min-width: 0;
-}
-/* ===== LOCK MAIN SCREEN 3-COLUMN LAYOUT ===== */
-body:not(.dashboard-active) .app-body,
-body:not(.dashboard-active) #appView,
-body:not(.dashboard-active) .main-content {
-  display: grid;
-  grid-template-columns: 1fr 1.6fr 1fr; /* Overview | Customers | Audit */
-  gap: 20px;
-  align-items: start;
 }
 
 /* Prevent cards from stretching weirdly */
@@ -1107,26 +1065,16 @@ body:not(.dashboard-active) .card {
 }
 /* ===== DASHBOARD SHOULD NOT AFFECT MAIN LAYOUT ===== */
 #dashboardView {
-  width: 100%;
+ width: 100%;
+ display: none; /* JS will show/hide */
 }
 
 .dashboard-inner {
-  max-width: 1400px;
-  margin: 0 auto;
+ max-width: 1400px;
+ margin: 0 auto;
+ padding: 20px 28px 40px;
 }
 
-body.dashboard-active .app-body,
-body.dashboard-active #appView,
-body.dashboard-active .main-content {
-  display: block;
-}
-/* ===== PREVENT DASHBOARD VIEW FROM AFFECTING HOME LAYOUT ===== */
-#dashboardView {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  background: #f5f7fa;
-}
 /* ===== LOCK MAIN 3-PANEL LAYOUT (LEFT / CENTER / RIGHT) ===== */
 #app.container {
   display: grid;
