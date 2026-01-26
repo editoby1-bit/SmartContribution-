@@ -3804,6 +3804,10 @@ function renderDashboardActivity() {
       ${a.action}
     </div>
   `).join("");
+  // 🔑 Always render accounts for manager/CEO
+if (["manager", "ceo"].includes(currentStaff()?.role)) {
+  renderAccounts();
+}
 }
 
 function renderAccounts() {
