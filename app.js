@@ -93,6 +93,13 @@ window.currentStaff = currentStaff;
       console.warn("load fail", e);
     }
   }
+  // 🔑 ENSURE ACCOUNTS STATE EXISTS (REQUIRED FOR DASHBOARD)
+if (!state.accounts) {
+  state.accounts = {
+    income: [],
+    expense: []
+  };
+}
 
   function seed() {
     state.staff = [
