@@ -548,17 +548,7 @@ h3 {
 .card.pulse {
   animation: pulseGlow 1.6s ease-out;
 }
-.approval-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 10px;
-  background: #fff;
-  margin-bottom: 10px;
-  border: 1px solid rgba(0,0,0,0.05);
-}
+
 
 .approval-row.large {
   min-height: auto;
@@ -1039,3 +1029,91 @@ body {
 .customers-card {
   padding: 18px;
 }
+/* ===== DASHBOARD APPROVAL ROW FIX ===== */
+/* ===== APPROVAL CARD LAYOUT (FIXED) ===== */
+.approval-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start; /* TOP ALIGN so text doesn't collide with buttons */
+  gap: 18px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #ffffff;
+  margin-bottom: 14px;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.approval-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.approval-info strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.approval-actions {
+  display: flex;
+  flex-direction: column; /* STACK buttons vertically */
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+
+.approval-actions .btn {
+  min-width: 90px;
+}
+/* ===== MAIN APP 3-COLUMN LAYOUT LOCK ===== */
+.main-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr 1fr; /* Overview | Customers | Audit */
+  gap: 20px;
+  align-items: start;
+}
+
+/* Prevent cards from stretching weirdly */
+.main-layout .card {
+  height: fit-content;
+}
+
+/* Customers column should feel wider but stable */
+#customersPanel {
+  min-width: 0;
+}
+/* ===== LOCK MAIN SCREEN 3-COLUMN LAYOUT ===== */
+body:not(.dashboard-active) .app-body,
+body:not(.dashboard-active) #appView,
+body:not(.dashboard-active) .main-content {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr 1fr; /* Overview | Customers | Audit */
+  gap: 20px;
+  align-items: start;
+}
+
+/* Prevent cards from stretching weirdly */
+body:not(.dashboard-active) .card {
+  height: fit-content;
+}
+
+/* Keep customer column dominant but stable */
+#customersPanel {
+  min-width: 0;
+}
+/* ===== DASHBOARD SHOULD NOT AFFECT MAIN LAYOUT ===== */
+#dashboardView {
+  width: 100%;
+}
+
+.dashboard-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+body.dashboard-active .app-body,
+body.dashboard-active #appView,
+body.dashboard-active .main-content {
+  display: block;
+}
+
