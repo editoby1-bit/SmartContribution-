@@ -18,7 +18,9 @@
 };
 
 
-  
+function dashboardIsOpen() {
+  return state?.ui?.dashboardMode === true;
+}
 
 function currentStaff() {
   const staff = state.staff.find(s => s.id === state.activeStaffId);
@@ -1057,6 +1059,7 @@ back.style.display = "flex";
 window.openCODResolutionModal = openCODResolutionModal;
 
 function renderApprovals() {
+  if (dashboardIsOpen()) return;
   const el = document.getElementById("approvals");
   if (!el) return;
 
@@ -1130,7 +1133,7 @@ function renderApprovals() {
 }
 
   function renderCustomers() {
-
+    if (dashboardIsOpen()) return;
   // =========================
   // 🔑 MANAGER DASHBOARD HOOK
   // =========================
@@ -1552,6 +1555,7 @@ function reject(id) {
 
 
   function renderAudit() {
+    if (dashboardIsOpen()) return;
   const staff = currentStaff();
   const el = document.getElementById("audit");
   if (!el) return;
@@ -3053,6 +3057,7 @@ renderAudit();
 
   let chartWeek = null;
   function buildChart() {
+    if (dashboardIsOpen()) return;
     try {
       const ctx = document.getElementById("chartWeek").getContext("2d");
       chartWeek = new Chart(ctx, {
@@ -3094,6 +3099,7 @@ renderAudit();
     }
   }
   function updateChartData() {
+    if (dashboardIsOpen()) return;
     if (!chartWeek) return;
     const data = [0, 0, 0, 0, 0, 0, 0];
     for (const c of state.customers) {
