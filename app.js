@@ -76,6 +76,9 @@ window.currentStaff = currentStaff;
   state.ui = state.ui || {};
 state.ui.dashboardMode = false;
 
+state.ui = state.ui || {};
+state.ui.dashboardOpen = false;
+
   const dashboardState = {
   filter: null,              // "approvals" | "risk" | null
   selectedApprovalId: null,
@@ -1241,6 +1244,28 @@ if (c.balance < 0) {
     : fmt(0);
 }
 
+function showDashboard() {
+  const dash = document.getElementById("dashboardView");
+  const app = document.getElementById("app");
+
+  if (!dash || !app) return;
+
+  dash.style.display = "block";   // show dashboard
+  app.style.display = "none";     // completely hide main screen
+
+  renderDashboard();              // render dashboard content
+}
+
+function hideDashboard() {
+  const dash = document.getElementById("dashboardView");
+  const app = document.getElementById("app");
+
+  if (!dash || !app) return;
+
+  dash.style.display = "none";    // hide dashboard
+  app.style.display = "grid";     // restore main 3-panel layout
+}
+
 
 function renderAttentionRequired() {
 
@@ -1671,15 +1696,6 @@ document.getElementById("mCancel").onclick = () => {
  let activeCustomerId = null;
  window.forceModalTab = null;
 
-function showDashboard() {
-  const dash = document.getElementById("dashboardView");
-  const app = document.getElementById("app");
-
-  if (dash) dash.style.display = "block";
-  if (app) app.style.display = "none";
-
-  renderDashboard(); // render AFTER visibility switch
-}
 
 
 
@@ -2690,6 +2706,14 @@ document.getElementById("submitTx").onclick = () => {
   console.log("🔥 SUBMIT BUTTON CLICKED");
 };
 
+document.getElementById("btnDashboard").onclick = () => {
+  if (dashboardIsOpen()) {
+    hideDashboard();
+  } else {
+    showDashboard();
+  }
+};
+
   // =========================
 // TRANSACTION PROCESSING
 // =========================
@@ -3218,15 +3242,6 @@ function canApprove() {
 
 function canViewDashboard() {
   return isManager();
-}
-
-
-function hideDashboard() {
-  const dash = document.getElementById("dashboardView");
-  const app = document.getElementById("app");
-
-  if (dash) dash.style.display = "none";
-  if (app) app.style.display = "grid"; // IMPORTANT: restore grid
 }
 
 
@@ -4068,6 +4083,16 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   }
   bindCODButtons();
   bindDashboardButton();
+
+  const dashBtn = document.getElementById("btnDashboard");
+if (dashBtn) {
+  dashBtn.onclick = () => {
+    if (dashboardIsOpen()) {
+      hideDashboard();
+    } else {
+      showDashboard();
+    }
+  };
   
 
 
