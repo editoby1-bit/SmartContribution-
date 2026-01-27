@@ -3950,6 +3950,7 @@ function initDashboardToggle() {
 }
 
 
+
   document.getElementById("btnNew").addEventListener("click", async () => {
     const f = document.createElement("div");
     f.innerHTML = `<div style="display:flex;gap:8px"><input id="nName" class="input" placeholder="Full name"/><input id="nPhone" class="input" placeholder="Phone"/></div><div style="margin-top:8px"><input id="nBal" class="input" placeholder="Opening balance"/></div>`;
