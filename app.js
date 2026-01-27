@@ -3926,29 +3926,6 @@ if (btn) {
 
 window.openCloseDayModal = openCloseDayModal;
 
-function initDashboardToggle() {
-  const btn = document.getElementById("btnDashboard");
-  if (!btn) return;
-
-  btn.onclick = () => {
-    const dash = document.getElementById("dashboardView");
-    const app = document.getElementById("app");
-
-    const dashboardVisible = dash.style.display === "block";
-
-    if (dashboardVisible) {
-      // 🔁 SWITCH BACK TO MAIN
-      dash.style.display = "none";
-      app.style.display = "grid";   // restore grid layout
-    } else {
-      // 📊 SWITCH TO DASHBOARD
-      dash.style.display = "block";
-      app.style.display = "none";   // HIDE MAIN SCREEN COMPLETELY
-      renderDashboard();            // render only when opened
-    }
-  };
-}
-
 
 function bindDashboardButton() {
   const btn = document.getElementById("btnDashboard");
@@ -4082,8 +4059,7 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   buildChart();
   updateChartData();
   bindCODButtons();
-  initDashboardToggle();
-  bindDashboardButton();
+   bindDashboardButton();
 
 
   // ===============================
