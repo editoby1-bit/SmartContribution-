@@ -3931,26 +3931,24 @@ function initDashboardToggle() {
   if (!btn) return;
 
   btn.onclick = () => {
-    if (!canViewDashboard()) {
-      showToast("Access denied");
-      return;
-    }
-
     const dash = document.getElementById("dashboardView");
     const app = document.getElementById("app");
 
-    const open = dash.style.display === "block";
+    const dashboardVisible = dash.style.display === "block";
 
-    if (open) {
+    if (dashboardVisible) {
+      // 🔁 SWITCH BACK TO MAIN
       dash.style.display = "none";
-      app.style.display = "grid";
+      app.style.display = "grid";   // restore grid layout
     } else {
+      // 📊 SWITCH TO DASHBOARD
       dash.style.display = "block";
-      app.style.display = "none";
-      renderDashboard();
+      app.style.display = "none";   // HIDE MAIN SCREEN COMPLETELY
+      renderDashboard();            // render only when opened
     }
   };
 }
+
 
   document.getElementById("btnNew").addEventListener("click", async () => {
     const f = document.createElement("div");
