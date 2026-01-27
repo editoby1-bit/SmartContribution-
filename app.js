@@ -436,7 +436,7 @@ if (!state.accounts) {
     btn.style.display = "inline-block";
   } else {
     btn.style.display = "none";
-    hideDashboard(); // force close
+   
   }
 }
 
@@ -3931,17 +3931,22 @@ function initDashboardToggle() {
   if (!btn) return;
 
   btn.onclick = () => {
+    if (!canViewDashboard()) {
+      showToast("Access denied");
+      return;
+    }
+
     const dash = document.getElementById("dashboardView");
     const app = document.getElementById("app");
 
-    const dashboardVisible = dash.style.display === "block";
+    const open = dash.style.display === "block";
 
-    if (dashboardVisible) {
+    if (open) {
       dash.style.display = "none";
-      if (app) app.style.display = "grid";
+      app.style.display = "grid";
     } else {
       dash.style.display = "block";
-      if (app) app.style.display = "none";
+      app.style.display = "none";
       renderDashboard();
     }
   };
@@ -3978,36 +3983,7 @@ function initDashboardToggle() {
     }
   });
   
-  const dashBtn = document.getElementById("btnDashboard");
 
-if (dashBtn) {
-  dashBtn.onclick = () => {
-    if (!canViewDashboard()) {
-      showToast("Access denied");
-      return;
-    }
-
-    // toggle state
-    state.ui.dashboardOpen = !state.ui.dashboardOpen;
-
-    if (state.ui.dashboardOpen) {
-      showDashboard();
-    } else {
-      hideDashboard();
-    }
-
-    save();
-  };
-}
-document.getElementById("btnDashboard").addEventListener("click", () => {
- const dash = document.getElementById("dashboardView");
-
- if (dash.style.display === "block") {
-   hideDashboard();
- } else {
-   showDashboard();
- }
-});
 document.getElementById("btnVerify").addEventListener("click", async () => {
     const probs = await verifyAudit();
     if (!probs.length) showToast("Audit OK");
