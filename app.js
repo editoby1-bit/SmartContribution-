@@ -1133,15 +1133,7 @@ function renderApprovals() {
 }
 
   function renderCustomers() {
-    if (dashboardIsOpen()) return;
-  // =========================
-  // 🔑 MANAGER DASHBOARD HOOK
-  // =========================
-  if (canViewDashboard()) {
-    renderDashboard();
-  }
-
-  // =========================
+     // =========================
   // EXISTING CUSTOMER LOGIC
   // =========================
   const list = $("#custList");
