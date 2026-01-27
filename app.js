@@ -4117,11 +4117,6 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
     };
   }
 
-<<<<<<< HEAD
-
-=======
-  
->>>>>>> 6611a5ff51c0b2217c19367193a2e1f229fccf36
 function bindCODButtons() {
   const staff = currentStaff();
   if (!staff) return;
