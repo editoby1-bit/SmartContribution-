@@ -17,11 +17,6 @@
   CEO: "ceo"
 };
 
-
-function dashboardIsOpen() {
-  return state?.ui?.dashboardMode === true;
-}
-
 function currentStaff() {
   const staff = state.staff.find(s => s.id === state.activeStaffId);
   if (!staff) return null;
@@ -74,7 +69,6 @@ window.currentStaff = currentStaff;
   window.state = state;
 
   state.ui = state.ui || {};
-state.ui.dashboardMode = false;
 
 state.ui = state.ui || {};
 state.ui.dashboardOpen = false;
@@ -1062,8 +1056,7 @@ back.style.display = "flex";
 window.openCODResolutionModal = openCODResolutionModal;
 
 function renderApprovals() {
-  if (dashboardIsOpen()) return;
-  const el = document.getElementById("approvals");
+   const el = document.getElementById("approvals");
   if (!el) return;
 
   const staff = currentStaff();
@@ -1572,7 +1565,6 @@ function reject(id) {
 
 
   function renderAudit() {
-    if (dashboardIsOpen()) return;
   const staff = currentStaff();
   const el = document.getElementById("audit");
   if (!el) return;
@@ -2704,14 +2696,6 @@ async function confirmDeleteCustomer(id) {
 
 document.getElementById("submitTx").onclick = () => {
   console.log("🔥 SUBMIT BUTTON CLICKED");
-};
-
-document.getElementById("btnDashboard").onclick = () => {
-  if (dashboardIsOpen()) {
-    hideDashboard();
-  } else {
-    showDashboard();
-  }
 };
 
   // =========================
@@ -3951,23 +3935,21 @@ function bindDashboardButton() {
     const dash = document.getElementById("dashboardView");
     const app = document.getElementById("app");
 
-    const openingDashboard = dash.style.display !== "block";
+    const isOpen = dash.style.display === "block";
 
-    // 🔒 LOCK STATE
-    state.ui.dashboardMode = openingDashboard;
-
-    if (openingDashboard) {
-      dash.style.display = "block";
-      app.style.display = "none";   // FULLY hide main app
-      renderDashboard();            // render dashboard only
-    } else {
+    if (isOpen) {
+      // 🔁 CLOSE DASHBOARD
       dash.style.display = "none";
-      app.style.display = "grid";   // restore main layout
+      app.style.display = "grid";
+    } else {
+      // 📊 OPEN DASHBOARD
+      dash.style.display = "block";
+      app.style.display = "none";
+      renderDashboard();
     }
-
-    console.log("Dashboard mode:", state.ui.dashboardMode);
   };
 }
+
 
   document.getElementById("btnNew").addEventListener("click", async () => {
     const f = document.createElement("div");
@@ -4083,18 +4065,9 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   }
   bindCODButtons();
   bindDashboardButton();
+  syncDashboardVisibility();
 
-  const dashBtn = document.getElementById("btnDashboard");
-  if (dashBtn) {
-    dashBtn.onclick = () => {
-      if (dashboardIsOpen()) {
-        hideDashboard();
-      } else {
-        showDashboard();
-      }
-    };
-  }
-
+  
 } catch (e) {
   console.error("INIT ERROR", e);
 }
@@ -4144,7 +4117,11 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
     };
   }
 
+<<<<<<< HEAD
+
+=======
   
+>>>>>>> 6611a5ff51c0b2217c19367193a2e1f229fccf36
 function bindCODButtons() {
   const staff = currentStaff();
   if (!staff) return;
