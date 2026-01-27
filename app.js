@@ -1672,13 +1672,13 @@ document.getElementById("mCancel").onclick = () => {
  window.forceModalTab = null;
 
 function showDashboard() {
- const dash = document.getElementById("dashboardView");
- const app = document.getElementById("app");
+  const dash = document.getElementById("dashboardView");
+  const app = document.getElementById("app");
 
- if (dash) dash.style.display = "block";
- if (app) app.style.display = "none";
+  if (dash) dash.style.display = "block";
+  if (app) app.style.display = "none";
 
- renderDashboard();
+  renderDashboard(); // render AFTER visibility switch
 }
 
 
@@ -3220,11 +3220,11 @@ function canViewDashboard() {
 
 
 function hideDashboard() {
- const dash = document.getElementById("dashboardView");
- const app = document.getElementById("app");
+  const dash = document.getElementById("dashboardView");
+  const app = document.getElementById("app");
 
- if (dash) dash.style.display = "none";
- if (app) app.style.display = "grid"; // restore 3-column layout
+  if (dash) dash.style.display = "none";
+  if (app) app.style.display = "grid"; // IMPORTANT: restore grid
 }
 
 
@@ -3701,11 +3701,6 @@ window.openCODDrillDown = openCODDrillDown;
 
 function renderDashboard() {
   if (!canViewDashboard()) return;
-
-  // 🔥 FORCE DASHBOARD VISIBLE FIRST
-  const dash = document.getElementById("dashboardView");
-  if (dash) dash.style.display = "block";
-
   renderDashboardKPIs();
   renderAttentionRequired();
   renderDashboardApprovals();

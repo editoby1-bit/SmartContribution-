@@ -1114,4 +1114,9 @@ body.dashboard-active #app.container {
 #app {
   display: block;
 }
-
+/* 🔒 HARD LOCK MAIN APP GRID */
+#app.container {
+  display: grid !important;
+  grid-template-columns: 320px 1fr 320px !important;
+  gap: 24px !important;
+}
