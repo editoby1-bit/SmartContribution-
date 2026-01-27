@@ -551,8 +551,6 @@ h3 {
 
 
 .approval-row.large {
-  min-height: auto;
-  height: auto;
   padding: 16px;
 }
 
@@ -677,22 +675,11 @@ html, body {
    DASHBOARD LAYOUT FIX
    ============================ */
 
-/* Dashboard sections spacing */
-#dashboardView .card {
-  margin-bottom: 16px;
-}
-
 /* KPI grid tightening */
 .dash-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
-}
-
-.main-grid {
-  display: grid;
- grid-template-columns: 28% 44% 28%;
-  gap: 20px;
 }
 
 /* Prevent giant vertical gaps */
@@ -872,11 +859,7 @@ html, body {
 .panel.left {
   overflow-x: hidden;
 }
-#layoutRoot {
-  width: 100%;
-  max-width: 1400px;
-  margin: 0 auto;
-}
+
 
 .dashboard-inner {
   max-width: 1400px;
@@ -976,10 +959,6 @@ body {
   padding: 18px 20px;   /* gives breathing space */
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
-/* ===== DASHBOARD & HOME COLUMN STABILITY ===== */
-.main-grid > div {
-  min-width: 0; /* prevents overflow pushing columns */
-}
 
 .approvals-card,
 .customers-card,
@@ -1017,36 +996,29 @@ body {
   padding: 18px;
 }
 /* ===== DASHBOARD APPROVAL ROW FIX ===== */
-/* ===== APPROVAL CARD SAFE LAYOUT ===== */
+/* ===== APPROVAL CARD SAFE STACKED LAYOUT ===== */
 .approval-row {
-  display: flex;
-  flex-direction: column; /* STACK EVERYTHING */
-  gap: 10px;
-  padding: 16px;
-  border-radius: 12px;
-  background: #ffffff;
-  margin-bottom: 14px;
-  border: 1px solid rgba(0,0,0,0.06);
+ display: flex;
+ flex-direction: column;
+ gap: 10px;
+ padding: 16px;
+ border-radius: 12px;
+ background: #ffffff;
+ margin-bottom: 14px;
+ border: 1px solid rgba(0,0,0,0.06);
 }
 
-/* Top line: Title + Amount */
 .approval-info strong {
-  display: block;
-  font-size: 16px;
-  margin-bottom: 6px;
+ display: block;
+ font-size: 16px;
+ margin-bottom: 6px;
 }
 
-/* Buttons now live BELOW the text */
 .approval-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 8px;
-  flex-wrap: wrap;   /* allows buttons to wrap instead of overflowing */
-}
-
-/* Prevent cards from stretching weirdly */
-.main-layout .card {
-  height: fit-content;
+ display: flex;
+ gap: 10px;
+ margin-top: 8px;
+ flex-wrap: wrap; /* prevents overflow */
 }
 
 /* Customers column should feel wider but stable */
@@ -1063,30 +1035,36 @@ body:not(.dashboard-active) .card {
 #customersPanel {
   min-width: 0;
 }
-/* ===== DASHBOARD SHOULD NOT AFFECT MAIN LAYOUT ===== */
+/* ===== DASHBOARD VIEW (SEPARATE PAGE SECTION) ===== */
 #dashboardView {
+ display: none;   /* JS will toggle */
  width: 100%;
- display: none; /* JS will show/hide */
 }
 
 .dashboard-inner {
  max-width: 1400px;
  margin: 0 auto;
  padding: 20px 28px 40px;
+ box-sizing: border-box;
 }
 
-/* ===== LOCK MAIN 3-PANEL LAYOUT (LEFT / CENTER / RIGHT) ===== */
+#dashboardView .card {
+ margin-bottom: 16px;
+}
+
+
+/* ===== MAIN APP 3 COLUMN LAYOUT (HOME ONLY) ===== */
 #app.container {
-  display: grid;
-  grid-template-columns: 320px 1fr 320px; /* LEFT | CENTER | RIGHT */
-  gap: 24px;
-  max-width: 1500px;
-  margin: 0 auto;
-  align-items: start;
+ display: grid;
+ grid-template-columns: 320px 1fr 320px; /* LEFT | CENTER | RIGHT */
+ gap: 24px;
+ align-items: start;
+ max-width: 1500px;
+ margin: 0 auto;
 }
 
-/* Prevent panels from shrinking weirdly */
 #app.container > * {
-  min-width: 0;
+ min-width: 0;
 }
+
 
