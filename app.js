@@ -1672,25 +1672,19 @@ document.getElementById("mCancel").onclick = () => {
  window.forceModalTab = null;
 
 function showDashboard() {
-  document.getElementById("dashboardView").style.display = "block";
+ const dash = document.getElementById("dashboardView");
+ const app = document.getElementById("app");
 
-  const main =
-    document.getElementById("appView") ||
-    document.getElementById("mainView") ||
-    document.getElementById("homeView") ||
-    document.getElementById("app");
+ if (dash) dash.style.display = "block";
+ if (app) app.style.display = "none";
 
-  if (main) main.style.display = "none";
-
-  renderDashboard();
+ renderDashboard();
 }
 
 
 
 
-
 function openCustomerModal(id) {
-  document.getElementById("dashboardView").style.display = "none";
   document.getElementById("custList").style.display = "block";
 
   const c = state.customers.find(x => x.id === id);
@@ -3226,15 +3220,11 @@ function canViewDashboard() {
 
 
 function hideDashboard() {
-  document.getElementById("dashboardView").style.display = "none";
+ const dash = document.getElementById("dashboardView");
+ const app = document.getElementById("app");
 
-  const main =
-    document.getElementById("appView") ||
-    document.getElementById("mainView") ||
-    document.getElementById("homeView") ||
-    document.getElementById("app");
-
-  if (main) main.style.display = "block";
+ if (dash) dash.style.display = "none";
+ if (app) app.style.display = "grid"; // restore 3-column layout
 }
 
 
@@ -3988,7 +3978,15 @@ if (dashBtn) {
     save();
   };
 }
+document.getElementById("btnDashboard").addEventListener("click", () => {
+ const dash = document.getElementById("dashboardView");
 
+ if (dash.style.display === "block") {
+   hideDashboard();
+ } else {
+   showDashboard();
+ }
+});
 document.getElementById("btnVerify").addEventListener("click", async () => {
     const probs = await verifyAudit();
     if (!probs.length) showToast("Audit OK");
