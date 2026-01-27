@@ -71,6 +71,9 @@ window.currentStaff = currentStaff;
 };
   window.state = state;
 
+  state.ui = state.ui || {};
+state.ui.dashboardMode = false;
+
   const dashboardState = {
   filter: null,              // "approvals" | "risk" | null
   selectedApprovalId: null,
@@ -3935,29 +3938,21 @@ function bindDashboardButton() {
     const dash = document.getElementById("dashboardView");
     const app = document.getElementById("app");
 
-    console.log("DASH CLICKED");
-    console.log("Before:", {
-      dash: dash.style.display,
-      app: app.style.display
-    });
+    const openingDashboard = dash.style.display !== "block";
 
-    const dashboardVisible = dash.style.display === "block";
+    // 🔒 LOCK STATE
+    state.ui.dashboardMode = openingDashboard;
 
-    if (dashboardVisible) {
-      dash.style.display = "none";
-      app.style.display = "grid";
-      console.log("Switched → MAIN");
-    } else {
+    if (openingDashboard) {
       dash.style.display = "block";
-      app.style.display = "none";
-      console.log("Switched → DASHBOARD");
-      renderDashboard();
+      app.style.display = "none";   // FULLY hide main app
+      renderDashboard();            // render dashboard only
+    } else {
+      dash.style.display = "none";
+      app.style.display = "grid";   // restore main layout
     }
 
-    console.log("After:", {
-      dash: dash.style.display,
-      app: app.style.display
-    });
+    console.log("Dashboard mode:", state.ui.dashboardMode);
   };
 }
 
@@ -4065,14 +4060,17 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
 
   if (!state.staff.length || !state.customers.length) seed();
 
+  if (!state.ui.dashboardMode) {
   renderStaff();
   renderCustomers();
   renderApprovals();
   renderAudit();
   buildChart();
   updateChartData();
+  }
   bindCODButtons();
-   bindDashboardButton();
+  bindDashboardButton();
+  
 
 
   // ===============================
