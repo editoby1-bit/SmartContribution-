@@ -3935,16 +3935,29 @@ function bindDashboardButton() {
     const dash = document.getElementById("dashboardView");
     const app = document.getElementById("app");
 
+    console.log("DASH CLICKED");
+    console.log("Before:", {
+      dash: dash.style.display,
+      app: app.style.display
+    });
+
     const dashboardVisible = dash.style.display === "block";
 
     if (dashboardVisible) {
       dash.style.display = "none";
       app.style.display = "grid";
+      console.log("Switched → MAIN");
     } else {
       dash.style.display = "block";
       app.style.display = "none";
+      console.log("Switched → DASHBOARD");
       renderDashboard();
     }
+
+    console.log("After:", {
+      dash: dash.style.display,
+      app: app.style.display
+    });
   };
 }
 

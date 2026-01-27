@@ -1120,3 +1120,10 @@ body.dashboard-active #app.container {
   grid-template-columns: 320px 1fr 320px !important;
   gap: 24px !important;
 }
+#app {
+  outline: 4px solid red !important;
+}
+
+#dashboardView {
+  outline: 4px solid blue !important;
+}
