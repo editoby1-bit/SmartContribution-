@@ -4144,13 +4144,7 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
     };
   }
 
-} catch (e) {
-  console.error("init err", e);
-}
-
-
-
-
+  
 function bindCODButtons() {
   const staff = currentStaff();
   if (!staff) return;
