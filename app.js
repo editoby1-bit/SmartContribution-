@@ -3950,6 +3950,26 @@ function initDashboardToggle() {
 }
 
 
+function bindDashboardButton() {
+  const btn = document.getElementById("btnDashboard");
+  if (!btn) return;
+
+  btn.onclick = () => {
+    const dash = document.getElementById("dashboardView");
+    const app = document.getElementById("app");
+
+    const dashboardVisible = dash.style.display === "block";
+
+    if (dashboardVisible) {
+      dash.style.display = "none";
+      app.style.display = "grid";
+    } else {
+      dash.style.display = "block";
+      app.style.display = "none";
+      renderDashboard();
+    }
+  };
+}
 
   document.getElementById("btnNew").addEventListener("click", async () => {
     const f = document.createElement("div");
@@ -4063,6 +4083,7 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   updateChartData();
   bindCODButtons();
   initDashboardToggle();
+  bindDashboardButton();
 
 
   // ===============================
