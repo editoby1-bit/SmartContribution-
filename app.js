@@ -4085,15 +4085,19 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   bindDashboardButton();
 
   const dashBtn = document.getElementById("btnDashboard");
-if (dashBtn) {
-  dashBtn.onclick = () => {
-    if (dashboardIsOpen()) {
-      hideDashboard();
-    } else {
-      showDashboard();
-    }
-  };
-  
+  if (dashBtn) {
+    dashBtn.onclick = () => {
+      if (dashboardIsOpen()) {
+        hideDashboard();
+      } else {
+        showDashboard();
+      }
+    };
+  }
+
+} catch (e) {
+  console.error("INIT ERROR", e);
+}
 
 
   // ===============================
