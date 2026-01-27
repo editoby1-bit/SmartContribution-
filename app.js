@@ -1672,18 +1672,19 @@ document.getElementById("mCancel").onclick = () => {
  window.forceModalTab = null;
 
 function showDashboard() {
-  document.body.classList.add("dashboard-active");
-  const dash = document.getElementById("dashboardView");
-  const app = document.getElementById("app");
+  document.getElementById("dashboardView").style.display = "block";
 
-  if (dash) dash.style.display = "block";
-  if (app) app.style.display = "none";
+  const main =
+    document.getElementById("appView") ||
+    document.getElementById("mainView") ||
+    document.getElementById("homeView") ||
+    document.getElementById("app");
 
-  state.ui.dashboardOpen = true;
-  save();
+  if (main) main.style.display = "none";
 
   renderDashboard();
 }
+
 
 
 
@@ -3225,13 +3226,17 @@ function canViewDashboard() {
 
 
 function hideDashboard() {
-  document.body.classList.remove("dashboard-active");
   document.getElementById("dashboardView").style.display = "none";
-  document.getElementById("app").style.display = "flex";
 
-  state.ui.dashboardOpen = false;
-  save();
+  const main =
+    document.getElementById("appView") ||
+    document.getElementById("mainView") ||
+    document.getElementById("homeView") ||
+    document.getElementById("app");
+
+  if (main) main.style.display = "block";
 }
+
 
 function initCODDatePicker() {
   const picker = document.getElementById("codDatePicker");

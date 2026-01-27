@@ -1103,4 +1103,15 @@ body.dashboard-active #app.container {
   gap: 10px !important;
   flex-wrap: wrap !important;
 }
+/* ===== SCREEN VISIBILITY LOCK ===== */
+#dashboardView {
+  display: none;
+}
+
+#appView, 
+#mainView,
+#homeView,
+#app {
+  display: block;
+}
 
