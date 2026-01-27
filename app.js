@@ -426,6 +426,7 @@ if (!state.accounts) {
   syncDashboardVisibility(); // ✅ REQUIRED
 }
 
+
   function syncDashboardVisibility() {
   const btn = document.getElementById("btnDashboard");
 
@@ -3700,7 +3701,11 @@ window.openCODDrillDown = openCODDrillDown;
 
 
 function renderDashboard() {
+  const dash = document.getElementById("dashboardView");
+  if (!dash || dash.style.display !== "block") return; // 🛑 Do nothing if dashboard isn't visible
+
   if (!canViewDashboard()) return;
+
   renderDashboardKPIs();
   renderAttentionRequired();
   renderDashboardApprovals();
