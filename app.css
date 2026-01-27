@@ -1066,5 +1066,41 @@ body:not(.dashboard-active) .card {
 #app.container > * {
  min-width: 0;
 }
+/* ===============================
+   🔒 MASTER LAYOUT LOCK (FINAL)
+   This overrides ALL earlier grid rules
+   =============================== */
 
+body:not(.dashboard-active) #app.container {
+  display: grid !important;
+  grid-template-columns: 320px 1fr 320px !important; /* LEFT | CENTER | RIGHT */
+  gap: 24px !important;
+  max-width: 1500px !important;
+  margin: 0 auto !important;
+  align-items: start !important;
+}
+
+body:not(.dashboard-active) #app.container > * {
+  min-width: 0 !important;
+}
+
+/* Dashboard must NOT use the 3-column layout */
+body.dashboard-active #app.container {
+  display: block !important;
+}
+/* ===============================
+   Approval card layout — FINAL
+   =============================== */
+
+.approval-row {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+
+.approval-actions {
+  display: flex !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+}
 
