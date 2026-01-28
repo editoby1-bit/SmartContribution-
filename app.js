@@ -69,10 +69,11 @@ window.currentStaff = currentStaff;
   window.state = state;
 
   state.ui = state.ui || {};
+state.ui.dashboardMode = false; // ONLY dashboard flag now
 
-state.ui = state.ui || {};
-state.ui.dashboardOpen = false;
-
+function dashboardIsOpen() {
+  return state?.ui?.dashboardMode === true;
+}
   const dashboardState = {
   filter: null,              // "approvals" | "risk" | null
   selectedApprovalId: null,
@@ -1056,6 +1057,7 @@ back.style.display = "flex";
 window.openCODResolutionModal = openCODResolutionModal;
 
 function renderApprovals() {
+  if (dashboardIsOpen()) return;
    const el = document.getElementById("approvals");
   if (!el) return;
 
@@ -1129,6 +1131,7 @@ function renderApprovals() {
 }
 
   function renderCustomers() {
+    if (dashboardIsOpen()) return;
      // =========================
   // EXISTING CUSTOMER LOGIC
   // =========================
@@ -1565,6 +1568,7 @@ function reject(id) {
 
 
   function renderAudit() {
+    if (dashboardIsOpen()) return;
   const staff = currentStaff();
   const el = document.getElementById("audit");
   if (!el) return;
@@ -4049,10 +4053,7 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   if (!Array.isArray(state.audit)) state.audit = [];
   if (!state.ui) state.ui = {};
 
-  if (state.ui.dashboardOpen === undefined) {
-    state.ui.dashboardOpen = false;
-  }
-
+  
   if (!state.staff.length || !state.customers.length) seed();
 
   if (!state.ui.dashboardMode) {
