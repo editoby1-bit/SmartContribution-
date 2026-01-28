@@ -1164,20 +1164,4 @@ body.dashboard-active #app.container {
   background: #f5f7fa;
   z-index: 2;
 }
-/* ===== OVERVIEW PANEL ONLY (SAFE TARGET) ===== */
 
-/* Target ONLY the Overview card by its title text structure */
-.panel.left .card h3:first-child {
-  font-size: 18px;
-  margin-bottom: 10px;
-}
-
-/* Make the numbers inside Overview a bit bigger */
-.panel.left .card:first-of-type div {
-  font-size: 15px;
-}
-
-/* Make Weekly Collections chart slightly taller */
-#chartWeek {
-  height: 170px !important;
-}
