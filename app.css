@@ -1164,4 +1164,27 @@ body.dashboard-active #app.container {
   background: #f5f7fa;
   z-index: 2;
 }
+/* ==============================
+   OVERVIEW PANEL POLISH (SAFE)
+   ============================== */
+
+/* Make numbers in Overview slightly larger */
+.panel.left .card:first-child strong {
+  font-size: 18px;
+}
+
+/* Add a bit more vertical spacing inside overview card */
+.panel.left .card:first-child .small {
+  margin-bottom: 6px;
+}
+
+/* Make the chart slightly taller */
+#chartWeek {
+  height: 160px !important;
+}
+
+/* Give left panel cards a bit more breathing room */
+.panel.left .card {
+  padding: 18px;
+}
 
