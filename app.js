@@ -95,7 +95,7 @@ window.currentStaff = currentStaff;
 state.ui.dashboardMode = false; // ONLY dashboard flag now
 
 function dashboardIsOpen() {
-  return state?.ui?.dashboardMode === true;
+  return state.ui && state.ui.dashboardMode === true;
 }
   const dashboardState = {
   filter: null,              // "approvals" | "risk" | null
@@ -1073,8 +1073,7 @@ back.style.display = "flex";
 window.openCODResolutionModal = openCODResolutionModal;
 
 function renderApprovals() {
-  if (dashboardIsOpen()) return;
-   const el = document.getElementById("approvals");
+     const el = document.getElementById("approvals");
   if (!el) return;
 
   const staff = currentStaff();
@@ -1147,8 +1146,7 @@ function renderApprovals() {
 }
 
   function renderCustomers() {
-    if (dashboardIsOpen()) return;
-     // =========================
+         // =========================
   // EXISTING CUSTOMER LOGIC
   // =========================
   const list = $("#custList");
@@ -1584,8 +1582,7 @@ function reject(id) {
 
 
   function renderAudit() {
-    if (dashboardIsOpen()) return;
-  const staff = currentStaff();
+      const staff = currentStaff();
   const el = document.getElementById("audit");
   if (!el) return;
 
@@ -3078,8 +3075,7 @@ renderAudit();
 
   let chartWeek = null;
   function buildChart() {
-    if (dashboardIsOpen()) return;
-    try {
+       try {
       const ctx = document.getElementById("chartWeek").getContext("2d");
       chartWeek = new Chart(ctx, {
         type: "bar",
@@ -3120,8 +3116,7 @@ renderAudit();
     }
   }
   function updateChartData() {
-    if (dashboardIsOpen()) return;
-    if (!chartWeek) return;
+     if (!chartWeek) return;
     const data = [0, 0, 0, 0, 0, 0, 0];
     for (const c of state.customers) {
       for (const t of c.transactions || []) {
@@ -3956,18 +3951,20 @@ function bindDashboardButton() {
     const dash = document.getElementById("dashboardView");
     const app = document.getElementById("app");
 
-    const isOpen = dash.style.display === "block";
+    const openingDashboard = dash.style.display !== "block";
 
-    if (isOpen) {
-      // 🔁 CLOSE DASHBOARD
-      dash.style.display = "none";
-      app.style.display = "grid";
-    } else {
-      // 📊 OPEN DASHBOARD
+    state.ui.dashboardMode = openingDashboard; // 🔥 THIS is critical
+
+    if (openingDashboard) {
       dash.style.display = "block";
       app.style.display = "none";
       renderDashboard();
+    } else {
+      dash.style.display = "none";
+      app.style.display = "grid";
     }
+
+    save();
   };
 }
 
