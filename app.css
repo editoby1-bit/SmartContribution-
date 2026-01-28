@@ -1143,16 +1143,14 @@ body.dashboard-active #app.container {
   --topbar-height: 72px; /* adjust if your header is taller */
 }
 
-/* MAIN APP LAYER */
+/* MAIN APP NORMAL GRID LAYOUT */
 #app {
-  position: fixed;
-  top: var(--topbar-height);
-  left: 0;
-  width: 100%;
-  height: calc(100vh - var(--topbar-height));
-  overflow-y: auto;
-  background: #f5f7fa;
-  z-index: 1;
+  display: grid;
+  grid-template-columns: 320px 1fr 320px;
+  gap: 24px;
+  max-width: 1500px;
+  margin: 0 auto;
+  align-items: start;
 }
 
 /* DASHBOARD LAYER */
