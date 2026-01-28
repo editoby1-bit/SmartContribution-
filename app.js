@@ -597,37 +597,51 @@ function openMyCOD() {
   box.appendChild(list);
 
   function renderList(date) {
-    const records = getRecords(date);
+  const records = getRecords(date);
 
-    if (!records.length) {
-      list.innerHTML = `<div class="small muted">No records for this date</div>`;
-      return;
-    }
+  if (!records.length) {
+    list.innerHTML = `<div class="small muted">No records for this date</div>`;
+    return;
+  }
 
-    list.innerHTML = records.map(rec => `
+  list.innerHTML = records.map(rec => {
+    const expected = Number(rec.systemExpected || 0);
+    const initial = Number(rec.initialDeclared || 0);
+    const declared = Number(rec.staffDeclared || 0);
+    const variance = Number(rec.variance || 0);
+
+    return `
       <div class="card" style="margin-bottom:10px">
         <div class="small"><b>Date:</b> ${rec.date}</div>
 
-        <div class="small">
-          Expected: ${fmt(rec.expectedCash)}<br/>
-          Declared: ${fmt(rec.declared)}<br/>
-          Variance:
-          <span style="color:${rec.variance === 0 ? "green" : "red"}">
-            ${fmt(rec.variance)}
+        <div class="small" style="margin-top:6px">
+          <b>System Expected:</b> ${fmt(expected)}<br/>
+          <b>Initial Declared:</b> ${fmt(initial)}<br/>
+          <b>Final Declared:</b> ${fmt(declared)}<br/>
+          <b>Variance:</b>
+          <span style="color:${variance === 0 ? "green" : "red"}">
+            ${fmt(variance)}
           </span>
         </div>
 
-        
-        ${rec.managerNote ? `
-          <div class="small warning" style="margin-top:6px">
-            Manager note: ${rec.managerNote}
+        ${rec.staffNote ? `
+          <div class="small muted" style="margin-top:6px">
+            Staff note: ${rec.staffNote}
           </div>
         ` : ""}
 
-        
+        ${rec.status === "resolved" ? `
+          <div class="small success" style="margin-top:6px">
+            Resolved Amount: ${fmt(rec.resolvedAmount)}
+          </div>
+          <div class="small muted">
+            Resolution Note: ${rec.resolutionNote || "—"}
+          </div>
+        ` : ""}
       </div>
-    `).join("");
-  }
+    `;
+  }).join("");
+}
 
   renderList(selectedDate);
 
