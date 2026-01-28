@@ -1241,25 +1241,25 @@ if (c.balance < 0) {
 }
 
 function showDashboard() {
+  state.ui.dashboardMode = true;
+
   const dash = document.getElementById("dashboardView");
   const app = document.getElementById("app");
 
-  if (!dash || !app) return;
+  if (dash) dash.style.display = "block";
+  if (app) app.style.display = "none";
 
-  dash.style.display = "block";   // show dashboard
-  app.style.display = "none";     // completely hide main screen
-
-  renderDashboard();              // render dashboard content
+  renderDashboard();
 }
 
 function hideDashboard() {
+  state.ui.dashboardMode = false;
+
   const dash = document.getElementById("dashboardView");
   const app = document.getElementById("app");
 
-  if (!dash || !app) return;
-
-  dash.style.display = "none";    // hide dashboard
-  app.style.display = "grid";     // restore main 3-panel layout
+  if (dash) dash.style.display = "none";
+  if (app) app.style.display = "grid";
 }
 
 
@@ -2702,6 +2702,7 @@ document.getElementById("submitTx").onclick = () => {
   console.log("🔥 SUBMIT BUTTON CLICKED");
 };
 
+
   // =========================
 // TRANSACTION PROCESSING
 // =========================
@@ -4053,22 +4054,32 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   if (!Array.isArray(state.audit)) state.audit = [];
   if (!state.ui) state.ui = {};
 
-  
   if (!state.staff.length || !state.customers.length) seed();
 
-  if (!state.ui.dashboardMode) {
-  renderStaff();
-  renderCustomers();
-  renderApprovals();
-  renderAudit();
-  buildChart();
-  updateChartData();
+  if (!dashboardIsOpen()) {
+    renderStaff();
+    renderCustomers();
+    renderApprovals();
+    renderAudit();
+    buildChart();
+    updateChartData();
   }
+
   bindCODButtons();
   bindDashboardButton();
   syncDashboardVisibility();
 
-  
+  const dashBtn = document.getElementById("btnDashboard");
+  if (dashBtn) {
+    dashBtn.onclick = () => {
+      if (dashboardIsOpen()) {
+        hideDashboard();
+      } else {
+        showDashboard();
+      }
+    };
+  }
+
 } catch (e) {
   console.error("INIT ERROR", e);
 }
