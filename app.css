@@ -1145,21 +1145,22 @@ body.dashboard-active #app.container {
 
 /* MAIN APP NORMAL GRID LAYOUT */
 #app {
-  display: grid;
-  grid-template-columns: 320px 1fr 320px;
-  gap: 24px;
-  max-width: 1500px;
-  margin: 0 auto;
-  align-items: start;
-}
-
-/* DASHBOARD LAYER */
-#dashboardView {
   position: fixed;
-  top: var(--topbar-height);
+  top: 70px;   /* 👈 PUSH BELOW HEADER */
   left: 0;
   width: 100%;
-  height: calc(100vh - var(--topbar-height));
+  height: calc(100% - 70px); /* 👈 prevent bottom overflow */
+  overflow-y: auto;
+  background: #f5f7fa;
+  z-index: 1;
+}
+
+#dashboardView {
+  position: fixed;
+  top: 70px;   /* 👈 SAME OFFSET */
+  left: 0;
+  width: 100%;
+  height: calc(100% - 70px);
   overflow-y: auto;
   background: #f5f7fa;
   z-index: 2;
