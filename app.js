@@ -68,6 +68,29 @@ window.currentStaff = currentStaff;
 };
   window.state = state;
 
+  function load() {
+  try {
+    const raw = localStorage.getItem(CONFIG?.STORAGE || "sc_pro_b_v2");
+    if (!raw) return;
+
+    const data = JSON.parse(raw);
+
+    // Restore main collections safely
+    state.staff = Array.isArray(data.staff) ? data.staff : [];
+    state.customers = Array.isArray(data.customers) ? data.customers : [];
+    state.approvals = Array.isArray(data.approvals) ? data.approvals : [];
+    state.audit = Array.isArray(data.audit) ? data.audit : [];
+    state.cod = Array.isArray(data.cod) ? data.cod : [];
+    state.codDrafts = data.codDrafts || {};
+
+    state.ui = data.ui || { current: null };
+
+  } catch (e) {
+    console.warn("Load failed, using fresh state", e);
+  }
+}
+
+
   state.ui = state.ui || {};
 state.ui.dashboardMode = false; // ONLY dashboard flag now
 
