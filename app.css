@@ -1172,13 +1172,4 @@ body.dashboard-active #app.container {
   background: #f5f7fa;
   z-index: 2;
 }
-/* OVERVIEW CARD EMPHASIS */
-#app .card:first-child {
-  font-size: 16px;
-}
-
-#app .card:first-child b {
-  font-size: 20px;
-  font-weight: 700;
-}
 
