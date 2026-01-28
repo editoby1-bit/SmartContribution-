@@ -1181,14 +1181,4 @@ body.dashboard-active #app.container {
   font-size: 20px;
   font-weight: 700;
 }
-/* WEEKLY COLLECTIONS CHART SIZE */
-canvas {
-  max-height: 260px !important;
-}
-
-#app .card canvas {
-  height: 240px !important;
-}#app .card {
-  padding-bottom: 20px;
-}
 
