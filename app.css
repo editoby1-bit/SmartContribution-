@@ -1127,3 +1127,14 @@ body.dashboard-active #app.container {
 #dashboardView {
   outline: 4px solid blue !important;
 }
+/* MAIN APP SHOULD ALSO BE A FULL SCREEN LAYER */
+#app {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  background: #f5f7fa;
+}
+
