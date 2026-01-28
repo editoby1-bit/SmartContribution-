@@ -1166,12 +1166,4 @@ body.dashboard-active #app.container {
   background: #f5f7fa;
   z-index: 2;
 }
-/* OVERVIEW CARD ONLY (left column top card) */
-#app .container > div:first-child .card:first-child {
-  font-size: 16px;
-}
 
-#app .container > div:first-child .card:first-child b {
-  font-size: 20px;
-  font-weight: 700;
-}
