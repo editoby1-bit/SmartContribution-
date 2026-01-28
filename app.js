@@ -4061,7 +4061,10 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   // init
   
  try {
+  console.log("1️⃣ INIT START");
+
   load();
+  console.log("2️⃣ after load", state.staff.length, state.customers.length);
 
   if (!Array.isArray(state.approvals)) state.approvals = [];
   if (!Array.isArray(state.audit)) state.audit = [];
@@ -4069,29 +4072,22 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
 
   if (!state.staff.length || !state.customers.length) seed();
 
-  if (!dashboardIsOpen()) {
-    renderStaff();
-    renderCustomers();
-    renderApprovals();
-    renderAudit();
-    buildChart();
-    updateChartData();
-  }
+  console.log("3️⃣ rendering main UI");
+
+  renderStaff();
+  renderCustomers();
+  renderApprovals();
+  renderAudit();
+  buildChart();
+  updateChartData();
+
+  console.log("4️⃣ binding buttons");
 
   bindCODButtons();
-  bindDashboardButton();
-  syncDashboardVisibility();
+  bindDashboardButton();      // controls show/hide dashboard
+  syncDashboardVisibility();  // shows dashboard button only for managers
 
-  const dashBtn = document.getElementById("btnDashboard");
-  if (dashBtn) {
-    dashBtn.onclick = () => {
-      if (dashboardIsOpen()) {
-        hideDashboard();
-      } else {
-        showDashboard();
-      }
-    };
-  }
+  console.log("✅ INIT COMPLETE");
 
 } catch (e) {
   console.error("INIT ERROR", e);
