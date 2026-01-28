@@ -4061,18 +4061,12 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   // init
   
  try {
-  console.log("1️⃣ INIT START");
-
-  load();
-  console.log("2️⃣ after load", state.staff.length, state.customers.length);
-
+    load();
   if (!Array.isArray(state.approvals)) state.approvals = [];
   if (!Array.isArray(state.audit)) state.audit = [];
   if (!state.ui) state.ui = {};
 
   if (!state.staff.length || !state.customers.length) seed();
-
-  console.log("3️⃣ rendering main UI");
 
   renderStaff();
   renderCustomers();
@@ -4080,15 +4074,12 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   renderAudit();
   buildChart();
   updateChartData();
-
-  console.log("4️⃣ binding buttons");
-
+  
   bindCODButtons();
   bindDashboardButton();      // controls show/hide dashboard
   syncDashboardVisibility();  // shows dashboard button only for managers
 
-  console.log("✅ INIT COMPLETE");
-
+ 
 } catch (e) {
   console.error("INIT ERROR", e);
 }
