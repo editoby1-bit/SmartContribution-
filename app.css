@@ -1137,27 +1137,36 @@ body.dashboard-active #app.container {
   overflow-y: auto;
   background: #f5f7fa;
 }
+/* ===============================
+   LAYER FIX — PREVENT SCREEN MERGE
+   =============================== */
+
+/* Height of your top navbar */
+:root {
+  --topbar-height: 64px; /* adjust if your header is taller */
+}
+
 /* MAIN APP LAYER */
 #app {
   position: fixed;
-  top: 0;
+  top: var(--topbar-height);
   left: 0;
   width: 100%;
-  height: 100%;
+  height: calc(100% - var(--topbar-height));
   overflow-y: auto;
   background: #f5f7fa;
-  z-index: 1;   /* 👈 LOWER layer */
+  z-index: 1;
 }
 
 /* DASHBOARD LAYER */
 #dashboardView {
   position: fixed;
-  top: 0;
+  top: var(--topbar-height);
   left: 0;
   width: 100%;
-  height: 100%;
+  height: calc(100% - var(--topbar-height));
   overflow-y: auto;
   background: #f5f7fa;
-  z-index: 2;   /* 👈 ALWAYS ABOVE APP */
+  z-index: 2;
 }
 
