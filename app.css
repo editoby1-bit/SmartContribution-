@@ -1175,7 +1175,3 @@ body.dashboard-active #app.container {
   font-size: 20px;
   font-weight: 700;
 }
-/* Weekly Collections chart bigger */
-#app canvas {
-  max-height: 240px !important;
-}
