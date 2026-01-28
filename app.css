@@ -582,6 +582,13 @@ h3 {
 .approval-item:hover {
   background: rgba(15, 185, 177, 0.04);
 }
+.approval-item .btn {
+  margin-top: 6px;
+}
+
+.approval-item {
+  line-height: 1.4;
+}
 
 /* Lock modal height */
 .modal {
