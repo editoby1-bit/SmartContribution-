@@ -111,14 +111,7 @@ function dashboardIsOpen() {
       console.warn("save fail", e);
     }
   }
-  function load() {
-    try {
-      const r = localStorage.getItem(CONFIG.STORAGE);
-      if (r) state = JSON.parse(r);
-    } catch (e) {
-      console.warn("load fail", e);
-    }
-  }
+  
   // 🔑 ENSURE ACCOUNTS STATE EXISTS (REQUIRED FOR DASHBOARD)
 if (!state.accounts) {
   state.accounts = {
