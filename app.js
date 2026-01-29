@@ -119,6 +119,8 @@ if (!state.accounts) {
     expense: []
   };
 }
+  if (!state.accountEntries) state.accountEntries = [];
+
 
   function seed() {
     state.staff = [
@@ -541,6 +543,100 @@ function createAccount(type, name) {
   showToast(`${type.toUpperCase()} account created`);
 }
 
+function createAccountEntry(accountId, type, amount, note, date) {
+  const staff = currentStaff();
+  if (!staff || !["manager", "ceo"].includes(staff.role)) {
+    showToast("Not authorized");
+    return;
+  }
+
+  // ✅ REQUIRED GUARD (ONLY PLACE IT EXISTS)
+  if (!state.accountEntries) state.accountEntries = [];
+
+  amount = Number(amount);
+  if (!amount || amount <= 0) {
+    showToast("Invalid amount");
+    return;
+  }
+
+  const entry = {
+    id: uid("txn"),
+    accountId,
+    type, // "income" | "expense"
+    amount,
+    note: note?.trim() || "",
+    date,
+    createdBy: staff.name,
+    createdAt: new Date().toISOString()
+  };
+
+ state.accountEntries.push(entry);
+save();
+renderAccounts(); // 🔥 THIS LINE ADDED
+showToast(`${type.toUpperCase()} entry recorded`);
+}
+
+
+function closeModal() {
+  const modal = document.getElementById("accountEntryModal");
+  if (modal) modal.style.display = "none";
+
+  // Clear inputs
+  const amt = document.getElementById("entryAmount");
+  const note = document.getElementById("entryNote");
+  if (amt) amt.value = "";
+  if (note) note.value = "";
+}
+
+window.closeModal = closeModal;
+
+
+
+function openAccountEntryModal(accountId, type)  {
+  const acc = state.accounts[type].find(a => a.id === accountId);
+  if (!acc) return;
+
+  const box = document.createElement("div");
+
+  box.innerHTML = `
+    <div class="small"><b>${acc.accountNumber} — ${acc.name}</b></div>
+
+    <div style="margin-top:10px">
+      <input id="entryAmount" class="input" type="number" placeholder="Amount">
+    </div>
+
+    <div style="margin-top:6px">
+      <input id="entryNote" class="input" placeholder="Note (optional)">
+    </div>
+
+    <div style="margin-top:10px; display:flex; gap:8px;">
+  <button class="btn" onclick="saveAccountEntry('${accountId}', '${type}')">
+    Save Entry
+  </button>
+  <button class="btn secondary" onclick="closeModal()">
+    Cancel
+  </button>
+</div>
+  `;
+
+  openModalGeneric("Add Account Entry", box);
+
+window.openAccountEntryModal = openAccountEntryModal;
+
+function saveAccountEntry(accountId, type) {
+  const amount = document.getElementById("entryAmount").value;
+  const note = document.getElementById("entryNote").value;
+  const date = new Date().toISOString().slice(0,10);
+
+  createAccountEntry(accountId, type, amount, note, date);
+
+  closeModal();
+}
+
+window.saveAccountEntry = saveAccountEntry;
+
+
+
 function promptCreateAccount(type) {
   const name = prompt(
     `Enter ${type.toUpperCase()} account name`
@@ -549,6 +645,7 @@ function promptCreateAccount(type) {
     createAccount(type, name);
   }
 }
+window.promptCreateAccount = promptCreateAccount;
 
 function getCODDraft(staffId, date) {
   if (!state.codDrafts) state.codDrafts = {};
@@ -570,18 +667,7 @@ function openMyCOD() {
       )
       .sort((a, b) => new Date(b.date) - new Date(a.date));
   }
-
-  // ✅ DEFINE RECORDS BEFORE USING IT
-  const initialRecords = getRecords(selectedDate);
-
-  if (!initialRecords.length) {
-    return openModalGeneric(
-      "My Close of Day",
-      `<div class="small muted">No Close of Day records yet</div>`,
-      "Close"
-    );
-  }
-
+  
   const box = document.createElement("div");
 
   const header = document.createElement("div");
@@ -631,13 +717,17 @@ function openMyCOD() {
         ` : ""}
 
         ${rec.status === "resolved" ? `
-          <div class="small success" style="margin-top:6px">
-            Resolved Amount: ${fmt(rec.resolvedAmount)}
-          </div>
-          <div class="small muted">
-            Resolution Note: ${rec.resolutionNote || "—"}
-          </div>
-        ` : ""}
+  <div class="small success" style="margin-top:6px">
+    <b>Resolved Amount:</b> ${fmt(rec.resolvedAmount)}
+  </div>
+  <div class="small muted">
+    🧾 Resolution Note: ${rec.resolutionNote || "—"}
+  </div>
+` : rec.managerNote ? `
+  <div class="small warning" style="margin-top:6px">
+    ⚠ Manager Note: ${rec.managerNote}
+  </div>
+` : ""}
       </div>
     `;
   }).join("");
@@ -3416,9 +3506,15 @@ state.staff.forEach(staff => {
       <b>${staff.name}</b> (${staff.role})<br/>
       <div class="small">${statusLabel}</div>
 
-      <div class="small" style="margin-top:4px">
-        Expected: <b>${fmt(rec.systemExpected)}</b><br/>
-        Staff Declared: <b>${fmt(rec.staffDeclared)}</b><br/>
+     <div class="small" style="margin-top:4px">
+  <b>Expected:</b> ${fmt(rec.systemExpected)}<br/>
+
+  ${
+    isResolved
+      ? `<b style="color:#0a7d2c">Resolved Amount:</b> ${fmt(rec.resolvedAmount)}<br/>
+         <span style="opacity:.6">Staff Declared: ${fmt(rec.staffDeclared)}</span><br/>`
+      : `<b>Staff Declared:</b> ${fmt(rec.staffDeclared)}<br/>`
+  }
 
         ${
   isResolved && rec.resolutionNote
@@ -3829,6 +3925,26 @@ if (["manager", "ceo"].includes(currentStaff()?.role)) {
 }
 }
 
+function renderAccountEntries(accountId) {
+  const entries = (state.accountEntries || [])
+    .filter(e => e.accountId === accountId)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  if (!entries.length) {
+    return `<div class="small muted">No entries yet</div>`;
+  }
+
+  return entries.map(e => `
+    <div class="small" style="margin-top:4px;padding-left:6px;border-left:2px solid #ddd;">
+      ${e.date} — ${fmt(e.amount)} 
+      ${e.note ? `<span class="muted">(${e.note})</span>` : ""}
+    </div>
+  `).join("");
+}
+
+window.renderAccountEntries = renderAccountEntries;
+
+
 function renderAccounts() {
 
   // 🔒 HARD GUARD — accounts must always exist
@@ -3848,13 +3964,22 @@ function renderAccounts() {
   if (!el) return;
 
   const renderList = (type) =>
-    state.accounts[type]
-      .filter(a => !a.archived)
-      .map(a => `
-        <div class="card small">
-          <b>${a.accountNumber}</b> — ${a.name}
-        </div>
-      `).join("");
+  state.accounts[type]
+    .filter(a => !a.archived)
+    .map(a => `
+  <div class="card small">
+    <b>${a.accountNumber}</b> — ${a.name}<br/>
+
+    <button class="btn-entry"
+      onclick="openAccountEntryModal('${a.id}', '${type}')">
+      + Add Entry
+    </button>
+
+    <div class="account-entries">
+      ${renderAccountEntries(a.id)}
+    </div>
+  </div>
+`).join("");
 
   el.innerHTML = `
     <h4>Income Accounts</h4>
