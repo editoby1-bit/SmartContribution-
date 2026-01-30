@@ -406,37 +406,6 @@ state.accounts.expense = state.accounts.expense || [];
 
 window.setDateFilter = setDateFilter;
 
-function entryMatchesFilter(entryDate) {
-  const filter = state.ui.dateFilter || "all";
-  if (filter === "all") return true;
-
-  const today = new Date();
-  const d = new Date(entryDate);
-
-  // TODAY
-  if (filter === "today") {
-    return d.toDateString() === today.toDateString();
-  }
-
-  // THIS WEEK (Monday → Today)
-  if (filter === "week") {
-    const firstDayOfWeek = new Date(today);
-    const day = today.getDay(); // 0 (Sun) - 6 (Sat)
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-    firstDayOfWeek.setDate(diff);
-    firstDayOfWeek.setHours(0,0,0,0);
-
-    return d >= firstDayOfWeek && d <= today;
-  }
-
-  // THIS MONTH
-  if (filter === "month") {
-    return d.getMonth() === today.getMonth() &&
-           d.getFullYear() === today.getFullYear();
-  }
-
-  return true;
-}
 
   function nextAccountNumber(type) {
   const base = type === "income" ? 2000 : 3000;
@@ -449,6 +418,44 @@ function getEntriesByAccount(accountId) {
   return (state.accountEntries || []).filter(e => e.accountId === accountId);
 }
 
+function entryMatchesFilter(dateStr) {
+  const filter = state.ui.dateFilter || "all";
+  const d = new Date(dateStr + "T00:00:00");
+  const now = new Date();
+
+  // ✅ CUSTOM DATE RANGE OVERRIDE
+  if (state.ui.fromDate || state.ui.toDate) {
+    const from = state.ui.fromDate ? new Date(state.ui.fromDate + "T00:00:00") : null;
+    const to = state.ui.toDate ? new Date(state.ui.toDate + "T23:59:59") : null;
+
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  }
+
+  if (filter === "today") {
+    return d.toDateString() === now.toDateString();
+  }
+
+  if (filter === "week") {
+    const start = new Date(now);
+    start.setDate(now.getDate() - now.getDay());
+    start.setHours(0,0,0,0);
+    return d >= start;
+  }
+
+  if (filter === "month") {
+    return d.getMonth() === now.getMonth() &&
+           d.getFullYear() === now.getFullYear();
+  }
+
+  if (filter === "year") {
+    return d.getFullYear() === now.getFullYear();
+  }
+
+  return true; // all time
+}
+
 function sumEntries(entries) {
   return entries.reduce((t, e) => t + Number(e.amount || 0), 0);
 }
@@ -456,7 +463,7 @@ function sumEntries(entries) {
 function sumByType(type) {
   return (state.accountEntries || [])
     .filter(e => e.type === type)
-    .filter(e => entryMatchesFilter(e.date)) // 👈 ADD THIS
+    .filter(e => entryMatchesFilter(e.date))
     .reduce((t, e) => t + Number(e.amount || 0), 0);
 }
 
@@ -3436,6 +3443,33 @@ function initCODDatePicker() {
   renderCODForDate(window.activeCODDate);
 }
 
+function setCustomDateRange() {
+  const from = document.getElementById("fromDate").value;
+  const to = document.getElementById("toDate").value;
+
+  state.ui.fromDate = from || null;
+  state.ui.toDate = to || null;
+
+  state.ui.dateFilter = "custom"; // override buttons
+  save();
+  renderAccounts();
+}
+
+function clearDateRange() {
+  state.ui.fromDate = null;
+  state.ui.toDate = null;
+
+  document.getElementById("fromDate").value = "";
+  document.getElementById("toDate").value = "";
+
+  state.ui.dateFilter = "all";
+  save();
+  renderAccounts();
+}
+
+window.setCustomDateRange = setCustomDateRange;
+window.clearDateRange = clearDateRange;
+
 function saveManagerCODNote(codId) {
   const note = document.getElementById("managerNoteBox")?.value || "";
 
@@ -3993,6 +4027,7 @@ if (["manager", "ceo"].includes(currentStaff()?.role)) {
 function renderAccountEntries(accountId) {
   const entries = (state.accountEntries || [])
     .filter(e => e.accountId === accountId)
+    .filter(e => entryMatchesFilter(e.date))   // ⭐ ADD THIS LINE
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   if (!entries.length) {
@@ -4036,8 +4071,9 @@ const net = totalIncome - totalExpense;
     <b>${a.accountNumber}</b> — ${a.name}<br/>
 
 <div class="small muted" style="margin:4px 0">
-  Total: <b>${fmt(sumEntries(getEntriesByAccount(a.id)))}</b>
-</div>
+  Total: <b>${fmt(sumEntries(
+  getEntriesByAccount(a.id).filter(e => entryMatchesFilter(e.date))
+))}</b>
 
 <button class="btn small solid" add-entry-btn"
   onclick="openAccountEntryModal('${a.id}', '${type}')">
@@ -4050,17 +4086,53 @@ const net = totalIncome - totalExpense;
   </div>
 `).join("");
 
-  const active = state.ui.dateFilter || "all";
+ const active = state.ui.dateFilter || "all";
 
 el.innerHTML = `
 <div class="card" style="margin-bottom:12px;border-left:4px solid #1976d2">
+  <div style="margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap;">
+    <button class="btn small solid ${active==='today'?'primary':''}" onclick="setDateFilter('today')">Today</button>
+    <button class="btn small solid ${active==='week'?'primary':''}" onclick="setDateFilter('week')">This Week</button>
+    <button class="btn small solid ${active==='month'?'primary':''}" onclick="setDateFilter('month')">This Month</button>
+    <button class="btn small solid ${active==='year'?'primary':''}" 
+        onclick="setDateFilter('year')">This Year</button>
+    <button class="btn small solid ${active==='all'?'primary':''}" onclick="setDateFilter('all')">All Time</button>
+  </div>
+  <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+  <input type="date" id="fromDate" class="input small"
+         value="${state.ui.fromDate || ''}"
+         onchange="setCustomDateRange()" />
 
- <div style="margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap;">
-  <button class="btn small solid ${active==='today'?'primary':''}" onclick="setDateFilter('today')">Today</button>
-  <button class="btn small solid ${active==='week'?'primary':''}" onclick="setDateFilter('week')">This Week</button>
-  <button class="btn small solid ${active==='month'?'primary':''}" onclick="setDateFilter('month')">This Month</button>
-  <button class="btn small solid ${active==='all'?'primary':''}" onclick="setDateFilter('all')">All Time</button>
- </div>
+  <span style="font-size:12px; opacity:0.7;">to</span>
+
+  <input type="date" id="toDate" class="input small"
+         value="${state.ui.toDate || ''}"
+         onchange="setCustomDateRange()" />
+
+  <button class="btn small" onclick="clearDateRange()">Clear</button>
+</div>
+</div>
+
+<div class="card" style="margin-bottom:12px;border-left:4px solid #1976d2">
+  <div class="small">
+    Total Income: <b>${fmt(totalIncome)}</b><br/>
+    Total Expenses: <b>${fmt(totalExpense)}</b><br/>
+    Net (Income − Expense):
+    <b style="color:${net >= 0 ? 'green' : 'red'}">${fmt(net)}</b>
+  </div>
+</div>
+
+<h4>Income Accounts</h4>
+${renderList("income")}
+<button class="accounts-btn" onclick="promptCreateAccount('income')">
+  + Add Income Account
+</button>
+
+<h4 style="margin-top:18px">Expense Accounts</h4>
+${renderList("expense")}
+<button class="accounts-btn" onclick="promptCreateAccount('expense')">
+  + Add Expense Account
+</button>
 `;
 }
 window.renderAccounts = renderAccounts;
@@ -4285,6 +4357,8 @@ state.accountEntries = Array.isArray(state.accountEntries) ? state.accountEntrie
 
 state.ui = state.ui || { current: null };
 state.ui.dateFilter = state.ui.dateFilter || "all";
+state.ui.fromDate = state.ui.fromDate || null;
+state.ui.toDate = state.ui.toDate || null;
   if (!Array.isArray(state.approvals)) state.approvals = [];
   if (!Array.isArray(state.audit)) state.audit = [];
   if (!state.ui) state.ui = {};
