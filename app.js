@@ -2666,6 +2666,28 @@ if (interest < 0) {
   }
 }
 
+function openTransactionSummaryModal() {
+  const entries = (state.accountEntries || [])
+    .filter(e => entryMatchesFilter(e.date))
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  if (!entries.length) {
+    openModalGeneric("Transactions", "<div class='small muted'>No transactions in this period.</div>");
+    return;
+  }
+
+  const rows = entries.map(e => `
+    <div class="card small" style="margin-bottom:6px">
+      <b>${e.date}</b> — ${e.note || "No note"}<br/>
+      Amount: <b>${fmt(e.amount)}</b><br/>
+      Type: ${e.type}
+    </div>
+  `).join("");
+
+  openModalGeneric("Transaction Summary", rows);
+}
+window.openTransactionSummaryModal = openTransactionSummaryModal;
+
 function openCreditAllocationModal(cust, amount) {
   return new Promise(resolve => {
 
@@ -3145,6 +3167,8 @@ if (app.type === "credit") {
     cust.empowerment.active === true &&
     cust.empowerment.balance < 0
   ) {
+
+
 
     const allocation = await openCreditAllocationModal(cust, app.amount);
     if (allocation === null) return;
@@ -4114,11 +4138,21 @@ el.innerHTML = `
 </div>
 
 <div class="card" style="margin-bottom:12px;border-left:4px solid #1976d2">
-  <div class="small">
-    Total Income: <b>${fmt(totalIncome)}</b><br/>
-    Total Expenses: <b>${fmt(totalExpense)}</b><br/>
-    Net (Income − Expense):
-    <b style="color:${net >= 0 ? 'green' : 'red'}">${fmt(net)}</b>
+  <div class="card small clickable"
+     style="cursor:pointer"
+     onclick="openTransactionSummaryModal()">
+
+  <div>Total Income: <b>${fmt(totalIncome)}</b></div>
+  <div>Total Expenses: <b>${fmt(totalExpense)}</b></div>
+  <div>
+    Net (Income – Expense):
+    <b style="color:${net >= 0 ? 'green' : 'red'}">
+      ${fmt(net)}
+    </b>
+  </div>
+
+  <div class="muted small" style="margin-top:6px">
+    Click to view transactions
   </div>
 </div>
 
