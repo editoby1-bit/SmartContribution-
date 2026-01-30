@@ -66,19 +66,10 @@ window.currentStaff = currentStaff;
   codDrafts: {},
   accounts: { income: [], expense: [] },
   accountEntries: [],
-  ui: { current: null }
+  ui: { current: null, dateFilter: "all" }
 };
 
 window.state = state; // make global
-
-state.accounts = state.accounts || {};
-state.accounts.income = state.accounts.income || [];
-state.accounts.expense = state.accounts.expense || [];
-
-state.accountEntries = state.accountEntries || [];
-
-state.ui = state.ui || {};
-state.ui.dateFilter = state.ui.dateFilter || "all";
 
   function load() {
   try {
@@ -126,6 +117,7 @@ function dashboardIsOpen() {
       console.warn("save fail", e);
     }
   }
+  window.save = save;
   
   // 🔑 ENSURE ACCOUNTS STATE EXISTS (REQUIRED FOR DASHBOARD)
 state.accounts = state.accounts || {};
@@ -406,10 +398,10 @@ state.accounts.expense = state.accounts.expense || [];
   }
 
   function setDateFilter(filter) {
- console.log("DATE FILTER:", filter); // TEMP TEST
- state.ui.dateFilter = filter;
- save();
- renderAccounts();
+  state.ui.dateFilter = filter;
+  console.log("SET FILTER TO:", state.ui.dateFilter);
+  save();
+  renderAccounts();
 }
 
 window.setDateFilter = setDateFilter;
@@ -4019,11 +4011,13 @@ window.renderAccountEntries = renderAccountEntries;
 
 
 function renderAccounts() {
+  console.log("ACTIVE FILTER:", state.ui.dateFilter);
 
   // 🔒 HARD GUARD — accounts must always exist
   state.accounts = state.accounts || {};
 state.accounts.income = state.accounts.income || [];
 state.accounts.expense = state.accounts.expense || [];
+console.log("ACTIVE FILTER:", state.ui.dateFilter);
 const totalIncome = sumByType("income");
 const totalExpense = sumByType("expense");
 const net = totalIncome - totalExpense;
@@ -4045,7 +4039,7 @@ const net = totalIncome - totalExpense;
   Total: <b>${fmt(sumEntries(getEntriesByAccount(a.id)))}</b>
 </div>
 
-<button class="btn small add-entry-btn"
+<button class="btn small solid" add-entry-btn"
   onclick="openAccountEntryModal('${a.id}', '${type}')">
   + Add Entry
 </button>
@@ -4061,35 +4055,15 @@ const net = totalIncome - totalExpense;
 el.innerHTML = `
 <div class="card" style="margin-bottom:12px;border-left:4px solid #1976d2">
 
- <div style="margin-bottom:10px">
-  <button class="btn small ${active==='today'?'primary':''}" onclick="setDateFilter('today')">Today</button>
-  <button class="btn small ${active==='week'?'primary':''}" onclick="setDateFilter('week')">This Week</button>
-  <button class="btn small ${active==='month'?'primary':''}" onclick="setDateFilter('month')">This Month</button>
-  <button class="btn small ${active==='all'?'primary':''}" onclick="setDateFilter('all')">All Time</button>
+ <div style="margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap;">
+  <button class="btn small solid ${active==='today'?'primary':''}" onclick="setDateFilter('today')">Today</button>
+  <button class="btn small solid ${active==='week'?'primary':''}" onclick="setDateFilter('week')">This Week</button>
+  <button class="btn small solid ${active==='month'?'primary':''}" onclick="setDateFilter('month')">This Month</button>
+  <button class="btn small solid ${active==='all'?'primary':''}" onclick="setDateFilter('all')">All Time</button>
  </div>
-
-    <div class="small">
-      Total Income: <b>${fmt(totalIncome)}</b><br/>
-      Total Expenses: <b>${fmt(totalExpense)}</b><br/>
-      Net (Income − Expense):
-      <b style="color:${net >= 0 ? 'green' : 'red'}">
-        ${fmt(net)}
-      </b>
-    </div>
-  </div>
-    <h4>Income Accounts</h4>
-    ${renderList("income")}
-   <button class="accounts-btn" onclick="promptCreateAccount('income')">
-  + Add Income Account
-</button>
-
-    <h4 style="margin-top:12px">Expense Accounts</h4>
-    ${renderList("expense")}
-    <button class="accounts-btn" onclick="promptCreateAccount('expense')">
-  + Add Expense Account
-</button>
-  `;
+`;
 }
+window.renderAccounts = renderAccounts;
 
   function showToast(msg, ms = 1800) {
     const t = $("#toast");
@@ -4302,6 +4276,15 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   
  try {
     load();
+    // 🔒 GUARANTEE STRUCTURE AFTER LOAD
+state.accounts = state.accounts || { income: [], expense: [] };
+state.accounts.income = state.accounts.income || [];
+state.accounts.expense = state.accounts.expense || [];
+
+state.accountEntries = Array.isArray(state.accountEntries) ? state.accountEntries : [];
+
+state.ui = state.ui || { current: null };
+state.ui.dateFilter = state.ui.dateFilter || "all";
   if (!Array.isArray(state.approvals)) state.approvals = [];
   if (!Array.isArray(state.audit)) state.audit = [];
   if (!state.ui) state.ui = {};

@@ -1196,3 +1196,21 @@ body.dashboard-active #app.container {
 .add-entry-btn:hover {
   background: #00796b !important;
 }
+.btn.solid {
+  background: #0f766e;
+  color: white;
+  border: none;
+}
+
+.btn.solid:hover {
+  background: #115e59;
+}
+
+.btn.small {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.btn.primary {
+  background: #0b5e55;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.2);
+}
