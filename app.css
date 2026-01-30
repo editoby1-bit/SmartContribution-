@@ -1185,3 +1185,14 @@ body.dashboard-active #app.container {
   padding: 2px 0;
   border-bottom: 1px solid #eee;
 }
+/* 🔹 Make Add Entry buttons clearly visible */
+.add-entry-btn {
+  background: #009688 !important;
+  color: #ffffff !important;
+  border: none !important;
+  opacity: 1 !important;
+}
+
+.add-entry-btn:hover {
+  background: #00796b !important;
+}

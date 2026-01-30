@@ -63,10 +63,22 @@ window.currentStaff = currentStaff;
   approvals: [],
   audit: [],
   cod: [],
-  codDrafts: {},   // 🔑 ADD THIS LINE
-  ui: { current: null },
+  codDrafts: {},
+  accounts: { income: [], expense: [] },
+  accountEntries: [],
+  ui: { current: null }
 };
-  window.state = state;
+
+window.state = state; // make global
+
+state.accounts = state.accounts || {};
+state.accounts.income = state.accounts.income || [];
+state.accounts.expense = state.accounts.expense || [];
+
+state.accountEntries = state.accountEntries || [];
+
+state.ui = state.ui || {};
+state.ui.dateFilter = state.ui.dateFilter || "all";
 
   function load() {
   try {
@@ -83,13 +95,16 @@ window.currentStaff = currentStaff;
     state.cod = Array.isArray(data.cod) ? data.cod : [];
     state.codDrafts = data.codDrafts || {};
 
+    // ✅ ADD THESE LINES
+    state.accounts = data.accounts || { income: [], expense: [] };
+    state.accountEntries = Array.isArray(data.accountEntries) ? data.accountEntries : [];
+
     state.ui = data.ui || { current: null };
 
   } catch (e) {
     console.warn("Load failed, using fresh state", e);
   }
 }
-
 
   state.ui = state.ui || {};
 state.ui.dashboardMode = false; // ONLY dashboard flag now
@@ -113,12 +128,9 @@ function dashboardIsOpen() {
   }
   
   // 🔑 ENSURE ACCOUNTS STATE EXISTS (REQUIRED FOR DASHBOARD)
-if (!state.accounts) {
-  state.accounts = {
-    income: [],
-    expense: []
-  };
-}
+state.accounts = state.accounts || {};
+state.accounts.income = state.accounts.income || [];
+state.accounts.expense = state.accounts.expense || [];
   if (!state.accountEntries) state.accountEntries = [];
 
 
@@ -333,12 +345,9 @@ if (!state.accounts) {
     save();
   }
 
-  if (!state.accounts) {
-  state.accounts = {
-    income: [],
-    expense: []
-  };
-}
+  state.accounts = state.accounts || {};
+state.accounts.income = state.accounts.income || [];
+state.accounts.expense = state.accounts.expense || [];
 
   async function pushAudit(actor, role, action, details) {
   const staff = currentStaff();
@@ -396,12 +405,76 @@ if (!state.accounts) {
     return issues;
   }
 
+  function setDateFilter(filter) {
+ console.log("DATE FILTER:", filter); // TEMP TEST
+ state.ui.dateFilter = filter;
+ save();
+ renderAccounts();
+}
+
+window.setDateFilter = setDateFilter;
+
+function entryMatchesFilter(entryDate) {
+  const filter = state.ui.dateFilter || "all";
+  if (filter === "all") return true;
+
+  const today = new Date();
+  const d = new Date(entryDate);
+
+  // TODAY
+  if (filter === "today") {
+    return d.toDateString() === today.toDateString();
+  }
+
+  // THIS WEEK (Monday → Today)
+  if (filter === "week") {
+    const firstDayOfWeek = new Date(today);
+    const day = today.getDay(); // 0 (Sun) - 6 (Sat)
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+    firstDayOfWeek.setDate(diff);
+    firstDayOfWeek.setHours(0,0,0,0);
+
+    return d >= firstDayOfWeek && d <= today;
+  }
+
+  // THIS MONTH
+  if (filter === "month") {
+    return d.getMonth() === today.getMonth() &&
+           d.getFullYear() === today.getFullYear();
+  }
+
+  return true;
+}
+
   function nextAccountNumber(type) {
   const base = type === "income" ? 2000 : 3000;
   const list = state.accounts[type] || [];
   const num = base + list.length;
   return `${type === "income" ? "INC" : "EXP"}-${num}`;
 }
+
+function getEntriesByAccount(accountId) {
+  return (state.accountEntries || []).filter(e => e.accountId === accountId);
+}
+
+function sumEntries(entries) {
+  return entries.reduce((t, e) => t + Number(e.amount || 0), 0);
+}
+
+function sumByType(type) {
+  return (state.accountEntries || [])
+    .filter(e => e.type === type)
+    .filter(e => entryMatchesFilter(e.date)) // 👈 ADD THIS
+    .reduce((t, e) => t + Number(e.amount || 0), 0);
+}
+
+function sumByAccounts(accountIds) {
+  return (state.accountEntries || [])
+    .filter(e => accountIds.includes(e.accountId))
+    .filter(e => entryMatchesFilter(e.date)) // 👈 ADD THIS
+    .reduce((t, e) => t + Number(e.amount || 0), 0);
+}
+
 
   function can(role, action) {
     const map = {
@@ -460,6 +533,7 @@ if (!state.accounts) {
    
   }
 }
+
 
 function confirmApproval(approval, action) {
   const cust = state.customers.find(c => c.id === approval.customerId);
@@ -599,27 +673,26 @@ function openAccountEntryModal(accountId, type)  {
   const box = document.createElement("div");
 
   box.innerHTML = `
-    <div class="small"><b>${acc.accountNumber} — ${acc.name}</b></div>
+  <div class="small"><b>${acc.accountNumber} — ${acc.name}</b></div>
 
-    <div style="margin-top:10px">
-      <input id="entryAmount" class="input" type="number" placeholder="Amount">
-    </div>
+  <div style="margin-top:10px">
+    <input id="entryAmount" class="input" type="number" placeholder="Amount">
+  </div>
 
-    <div style="margin-top:6px">
-      <input id="entryNote" class="input" placeholder="Note (optional)">
-    </div>
+  <div style="margin-top:6px">
+    <input id="entryNote" class="input" placeholder="Note (optional)">
+  </div>
 
-    <div style="margin-top:10px; display:flex; gap:8px;">
-  <button class="btn" onclick="saveAccountEntry('${accountId}', '${type}')">
-    Save Entry
-  </button>
-  <button class="btn secondary" onclick="closeModal()">
-    Cancel
-  </button>
-</div>
-  `;
+  <div style="margin-top:10px">
+    <button class="btn primary"
+      onclick="saveAccountEntry('${accountId}', '${type}')">
+      Save Entry
+    </button>
+  </div>
+`;
 
-  openModalGeneric("Add Account Entry", box);
+  openModalGeneric("Add Account Entry", box, null);
+  }
 
 window.openAccountEntryModal = openAccountEntryModal;
 
@@ -3948,14 +4021,12 @@ window.renderAccountEntries = renderAccountEntries;
 function renderAccounts() {
 
   // 🔒 HARD GUARD — accounts must always exist
-  if (!state.accounts) {
-    state.accounts = {
-      income: [],
-      expense: []
-    };
-    save();
-  }
-
+  state.accounts = state.accounts || {};
+state.accounts.income = state.accounts.income || [];
+state.accounts.expense = state.accounts.expense || [];
+const totalIncome = sumByType("income");
+const totalExpense = sumByType("expense");
+const net = totalIncome - totalExpense;
   // 🔒 DOUBLE GUARD — legacy safety
   if (!Array.isArray(state.accounts.income)) state.accounts.income = [];
   if (!Array.isArray(state.accounts.expense)) state.accounts.expense = [];
@@ -3970,10 +4041,14 @@ function renderAccounts() {
   <div class="card small">
     <b>${a.accountNumber}</b> — ${a.name}<br/>
 
-    <button class="btn-entry"
-      onclick="openAccountEntryModal('${a.id}', '${type}')">
-      + Add Entry
-    </button>
+<div class="small muted" style="margin:4px 0">
+  Total: <b>${fmt(sumEntries(getEntriesByAccount(a.id)))}</b>
+</div>
+
+<button class="btn small add-entry-btn"
+  onclick="openAccountEntryModal('${a.id}', '${type}')">
+  + Add Entry
+</button>
 
     <div class="account-entries">
       ${renderAccountEntries(a.id)}
@@ -3981,7 +4056,27 @@ function renderAccounts() {
   </div>
 `).join("");
 
-  el.innerHTML = `
+  const active = state.ui.dateFilter || "all";
+
+el.innerHTML = `
+<div class="card" style="margin-bottom:12px;border-left:4px solid #1976d2">
+
+ <div style="margin-bottom:10px">
+  <button class="btn small ${active==='today'?'primary':''}" onclick="setDateFilter('today')">Today</button>
+  <button class="btn small ${active==='week'?'primary':''}" onclick="setDateFilter('week')">This Week</button>
+  <button class="btn small ${active==='month'?'primary':''}" onclick="setDateFilter('month')">This Month</button>
+  <button class="btn small ${active==='all'?'primary':''}" onclick="setDateFilter('all')">All Time</button>
+ </div>
+
+    <div class="small">
+      Total Income: <b>${fmt(totalIncome)}</b><br/>
+      Total Expenses: <b>${fmt(totalExpense)}</b><br/>
+      Net (Income − Expense):
+      <b style="color:${net >= 0 ? 'green' : 'red'}">
+        ${fmt(net)}
+      </b>
+    </div>
+  </div>
     <h4>Income Accounts</h4>
     ${renderList("income")}
    <button class="accounts-btn" onclick="promptCreateAccount('income')">
@@ -4019,26 +4114,32 @@ function renderAccounts() {
   if (typeof content === "string") bodyEl.innerHTML = content;
   else bodyEl.appendChild(content);
 
-  const okBtn = document.createElement("button");
+  let okBtn = null;
+
+if (okText) {
+  okBtn = document.createElement("button");
   okBtn.className = "btn tx-ok";
   okBtn.textContent = okText;
   actions.appendChild(okBtn);
+}
 
   back.style.display = "flex";
 
   return new Promise(resolve => {
     const cleanup = () => {
       back.style.display = "none";
-      okBtn.onclick = null;
+      if (okBtn) okBtn.onclick = null;
       cancelBtn.onclick = null;
       back.onclick = null;
     };
 
-    okBtn.onclick = e => {
-      e.stopPropagation();
-      cleanup();
-      resolve(true);
-    };
+    if (okBtn) {
+  okBtn.onclick = e => {
+    e.stopPropagation();
+    cleanup();
+    resolve(true);
+  };
+}
 
     cancelBtn.onclick = e => {
       e.stopPropagation();
