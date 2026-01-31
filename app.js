@@ -687,10 +687,7 @@ function openAccountEntryModal(accountId, type)  {
   </div>
 
   <div style="margin-top:10px">
-    <button class="btn solid"
-      onclick="saveAccountEntry('${accountId}', '${type}')">
-      Save Entry
-    </button>
+    <button id="saveEntryBtn" onclick="saveAccountEntry('...')">Save Entry</button>
   </div>
 `;
 
@@ -700,24 +697,29 @@ function openAccountEntryModal(accountId, type)  {
 window.openAccountEntryModal = openAccountEntryModal;
 
 function saveAccountEntry(accountId, type) {
-  const amount = document.getElementById("entryAmount").value;
-  const note = document.getElementById("entryNote").value;
-  const date = new Date().toISOString(); // full timestamp
+  const amountInput = document.getElementById("entryAmount");
+  const noteInput   = document.getElementById("entryNote");
+  const btn         = document.getElementById("saveEntryBtn");
+
+  const amount = Number(amountInput.value || 0);
+  const note   = noteInput.value || "";
+  const date   = new Date().toISOString(); // includes time now
+
+  if (!amount) return;
+
+  // 🔒 Prevent double click
+  if (btn) btn.disabled = true;
 
   createAccountEntry(accountId, type, amount, note, date);
 
-  // 🔥 ONLY refresh entries for THIS account (not whole dashboard)
-  const container = document.querySelector(`[data-account-id="${accountId}"] .account-entries`);
-  if (container) container.innerHTML = renderAccountEntries(accountId);
+  // 🧹 Clear fields BEFORE closing
+  amountInput.value = "";
+  noteInput.value   = "";
 
-  // 🔥 Update totals safely
-  updateAccountTotals();
-
-  // 🔥 Clear fields for next entry
-  document.getElementById("entryAmount").value = "";
-  document.getElementById("entryNote").value = "";
+  closeModal();
 }
 window.saveAccountEntry = saveAccountEntry;
+
 
 
 
@@ -2689,8 +2691,9 @@ function openTransactionSummaryModal() {
   }
 
   const rows = entries.map(e => `
-    <div class="card small" style="margin-bottom:6px">
-      <b>${e.date}</b> — ${e.note || "No note"}<br/>
+  <div style="padding:12px; border-radius:8px; margin-bottom:10px; cursor:pointer;"
+       onclick="jumpToAccountEntry('${e.accountId}', '${e.id}')">
+      <b>${formatDateTime(e.date)}</b>
       Amount: <b>${fmt(e.amount)}</b><br/>
       Type: ${e.type}
     </div>
@@ -3456,6 +3459,17 @@ function canViewDashboard() {
   return isManager();
 }
 
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 
 function initCODDatePicker() {
   const picker = document.getElementById("codDatePicker");
@@ -4090,7 +4104,8 @@ function renderAccountEntries(accountId) {
    const color = isPositive ? "green" : "red";
 
    return `
-     <div class="entry-row" style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #eee;">
+     <div id="entry-${e.id}" class="entry-row"
+     style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #eee;">
        <div style="flex:1">
          <div><b>${formatDateTime(e.date)}</b> — ${e.note || "Entry"}</div>
          <div style="font-size:12px; color:#666;">
@@ -4139,7 +4154,7 @@ const maxAccountTotal = Math.max(...accountTotals, 1);
   state.accounts[type]
     .filter(a => !a.archived)
     .map(a => `
-  <div class="card small" data-account-id="${a.id}">
+  <div id="acc-${a.id}" class="card small">
     <b>${a.accountNumber}</b> — ${a.name}<br/>
 
 <div class="small muted" style="margin:4px 0">
@@ -4248,6 +4263,7 @@ function updateAccountTotals() {
   document.getElementById("accTotalExpense").textContent = fmt(totalExpense);
   document.getElementById("accNet").textContent = fmt(net);
 }
+
 
   function showToast(msg, ms = 1800) {
     const t = $("#toast");
@@ -4366,6 +4382,27 @@ function bindDashboardButton() {
     save();
   };
 }
+
+function jumpToAccountEntry(accountId, entryId) {
+  closeModal(); // close summary modal
+
+  // Ensure accounts panel is visible
+  const accountCard = document.getElementById("acc-" + accountId);
+  if (!accountCard) return;
+
+  accountCard.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  // Small highlight effect
+  setTimeout(() => {
+    const entryEl = document.getElementById("entry-" + entryId);
+    if (entryEl) {
+      entryEl.style.background = "#fff3cd";
+      setTimeout(() => entryEl.style.background = "", 2000);
+    }
+  }, 400);
+}
+
+window.jumpToAccountEntry = jumpToAccountEntry;
 
 function exportTransactionsCSV() {
   const rows = [["Date","Account","Type","Amount","Note"]];
