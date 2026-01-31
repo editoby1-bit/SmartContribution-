@@ -70,6 +70,10 @@ window.currentStaff = currentStaff;
 };
 
 window.state = state; // make global
+// 🔒 LOCK ACCOUNTS STRUCTURE (RUNS ONCE AT BOOT)
+state.accounts = state.accounts || { income: [], expense: [] };
+state.accountEntries = state.accountEntries || [];
+
 
   function load() {
   try {
@@ -78,7 +82,8 @@ window.state = state; // make global
 
     const data = JSON.parse(raw);
 
-    // Restore main collections safely
+    // NEVER replace state object — only mutate fields
+
     state.staff = Array.isArray(data.staff) ? data.staff : [];
     state.customers = Array.isArray(data.customers) ? data.customers : [];
     state.approvals = Array.isArray(data.approvals) ? data.approvals : [];
@@ -86,19 +91,29 @@ window.state = state; // make global
     state.cod = Array.isArray(data.cod) ? data.cod : [];
     state.codDrafts = data.codDrafts || {};
 
-    // ✅ ADD THESE LINES
-    state.accounts = data.accounts || { income: [], expense: [] };
+    if (data.accounts) {
+  state.accounts.income = Array.isArray(data.accounts.income)
+    ? data.accounts.income
+    : [];
+
+  state.accounts.expense = Array.isArray(data.accounts.expense)
+    ? data.accounts.expense
+    : [];
+}
+    state.accounts.income = Array.isArray(state.accounts.income) ? state.accounts.income : [];
+    state.accounts.expense = Array.isArray(state.accounts.expense) ? state.accounts.expense : [];
+
     state.accountEntries = Array.isArray(data.accountEntries) ? data.accountEntries : [];
 
-    state.ui = data.ui || { current: null };
+    state.ui = data.ui || {};
+    state.ui.dateFilter = state.ui.dateFilter || "all";
 
   } catch (e) {
     console.warn("Load failed, using fresh state", e);
   }
 }
 
-  state.ui = state.ui || {};
-state.ui.dashboardMode = false; // ONLY dashboard flag now
+  
 
 function dashboardIsOpen() {
   return state.ui && state.ui.dashboardMode === true;
@@ -119,13 +134,6 @@ function dashboardIsOpen() {
   }
   window.save = save;
   
-  // 🔑 ENSURE ACCOUNTS STATE EXISTS (REQUIRED FOR DASHBOARD)
-state.accounts = state.accounts || {};
-state.accounts.income = state.accounts.income || [];
-state.accounts.expense = state.accounts.expense || [];
-  if (!state.accountEntries) state.accountEntries = [];
-
-
   function seed() {
     state.staff = [
       { id: "t1", name: "Ada Teller", role: "teller" },
@@ -337,9 +345,6 @@ state.accounts.expense = state.accounts.expense || [];
     save();
   }
 
-  state.accounts = state.accounts || {};
-state.accounts.income = state.accounts.income || [];
-state.accounts.expense = state.accounts.expense || [];
 
   async function pushAudit(actor, role, action, details) {
   const staff = currentStaff();
@@ -623,8 +628,7 @@ function createAccountEntry(accountId, type, amount, note, date) {
     return;
   }
 
-  // ✅ REQUIRED GUARD (ONLY PLACE IT EXISTS)
-  if (!state.accountEntries) state.accountEntries = [];
+  
 
   amount = Number(amount);
   if (!amount || amount <= 0) {
@@ -683,7 +687,7 @@ function openAccountEntryModal(accountId, type)  {
   </div>
 
   <div style="margin-top:10px">
-    <button class="btn primary"
+    <button class="btn solid"
       onclick="saveAccountEntry('${accountId}', '${type}')">
       Save Entry
     </button>
@@ -698,13 +702,21 @@ window.openAccountEntryModal = openAccountEntryModal;
 function saveAccountEntry(accountId, type) {
   const amount = document.getElementById("entryAmount").value;
   const note = document.getElementById("entryNote").value;
-  const date = new Date().toISOString().slice(0,10);
+  const date = new Date().toISOString(); // full timestamp
 
   createAccountEntry(accountId, type, amount, note, date);
 
-  closeModal();
-}
+  // 🔥 ONLY refresh entries for THIS account (not whole dashboard)
+  const container = document.querySelector(`[data-account-id="${accountId}"] .account-entries`);
+  if (container) container.innerHTML = renderAccountEntries(accountId);
 
+  // 🔥 Update totals safely
+  updateAccountTotals();
+
+  // 🔥 Clear fields for next entry
+  document.getElementById("entryAmount").value = "";
+  document.getElementById("entryNote").value = "";
+}
 window.saveAccountEntry = saveAccountEntry;
 
 
@@ -4049,37 +4061,73 @@ if (["manager", "ceo"].includes(currentStaff()?.role)) {
 }
 
 function renderAccountEntries(accountId) {
-  const entries = (state.accountEntries || [])
-    .filter(e => e.accountId === accountId)
-    .filter(e => entryMatchesFilter(e.date))   // ⭐ ADD THIS LINE
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+ const entries = (state.accountEntries || [])
+ .filter(e => e.accountId === accountId)
+ .sort((a, b) => new Date(b.date) - new Date(a.date)); // NEWEST FIRST
 
-  if (!entries.length) {
-    return `<div class="small muted">No entries yet</div>`;
-  }
+ let running = 0;
 
-  return entries.map(e => `
-    <div class="small" style="margin-top:4px;padding-left:6px;border-left:2px solid #ddd;">
-      ${e.date} — ${fmt(e.amount)} 
-      ${e.note ? `<span class="muted">(${e.note})</span>` : ""}
-    </div>
-  `).join("");
+ const formatDateTime = (iso) => {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
+  const time = d.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  return `${date}, ${time}`;
+ };
+
+ const rows = entries.map(e => {
+   const amount = Number(e.amount || 0);
+   running += amount;
+
+   const isPositive = amount >= 0;
+   const sign = isPositive ? "+" : "−";
+   const color = isPositive ? "green" : "red";
+
+   return `
+     <div class="entry-row" style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #eee;">
+       <div style="flex:1">
+         <div><b>${formatDateTime(e.date)}</b> — ${e.note || "Entry"}</div>
+         <div style="font-size:12px; color:#666;">
+           Amount: <span style="color:${color}">${sign}${fmt(Math.abs(amount))}</span>
+         </div>
+       </div>
+       <div style="text-align:right; font-weight:bold;">
+         ${fmt(running)}
+       </div>
+     </div>
+   `;
+ });
+
+ return rows.length
+   ? rows.join("")
+   : `<div class="small muted">No entries yet</div>`;
 }
 
 window.renderAccountEntries = renderAccountEntries;
 
 
 function renderAccounts() {
-  console.log("ACTIVE FILTER:", state.ui.dateFilter);
-
-  // 🔒 HARD GUARD — accounts must always exist
-  state.accounts = state.accounts || {};
-state.accounts.income = state.accounts.income || [];
-state.accounts.expense = state.accounts.expense || [];
-console.log("ACTIVE FILTER:", state.ui.dateFilter);
 const totalIncome = sumByType("income");
 const totalExpense = sumByType("expense");
 const net = totalIncome - totalExpense;
+const accountTotals = [];
+
+["income","expense"].forEach(type => {
+  state.accounts[type].forEach(a => {
+    const total = sumEntries(
+      getEntriesByAccount(a.id).filter(e => entryMatchesFilter(e.date))
+    );
+    accountTotals.push(total);
+  });
+});
+
+const maxAccountTotal = Math.max(...accountTotals, 1);
   // 🔒 DOUBLE GUARD — legacy safety
   if (!Array.isArray(state.accounts.income)) state.accounts.income = [];
   if (!Array.isArray(state.accounts.expense)) state.accounts.expense = [];
@@ -4091,13 +4139,17 @@ const net = totalIncome - totalExpense;
   state.accounts[type]
     .filter(a => !a.archived)
     .map(a => `
-  <div class="card small">
+  <div class="card small" data-account-id="${a.id}">
     <b>${a.accountNumber}</b> — ${a.name}<br/>
 
 <div class="small muted" style="margin:4px 0">
-  Total: <b>${fmt(sumEntries(
-  getEntriesByAccount(a.id).filter(e => entryMatchesFilter(e.date))
-))}</b>
+  Total: <b class="account-total">${fmt(sumEntries(getEntriesByAccount(a.id)))}</b>
+</div>
+
+${renderMiniBar(
+  sumEntries(getEntriesByAccount(a.id).filter(e => entryMatchesFilter(e.date))),
+  maxAccountTotal
+)}
 
 <button class="btn small solid" add-entry-btn"
   onclick="openAccountEntryModal('${a.id}', '${type}')">
@@ -4133,9 +4185,16 @@ el.innerHTML = `
          value="${state.ui.toDate || ''}"
          onchange="setCustomDateRange()" />
 
-  <button class="btn small" onclick="clearDateRange()">Clear</button>
+  <button class="btn small solid primary" onclick="clearDateRange()">
+  Clear
+</button>
 </div>
 </div>
+<div style="margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap;">
+  <button class="btn small solid" onclick="exportTransactionsCSV()">Export CSV</button>
+  <button class="btn small solid" onclick="printSummaryReport()">Print Summary</button>
+</div>
+
 
 <div class="card" style="margin-bottom:12px;border-left:4px solid #1976d2">
   <div class="card small clickable"
@@ -4171,6 +4230,25 @@ ${renderList("expense")}
 }
 window.renderAccounts = renderAccounts;
 
+function updateAccountTotals() {
+  document.querySelectorAll("[data-account-id]").forEach(card => {
+    const accountId = card.dataset.accountId;
+    const totalEl = card.querySelector(".account-total");
+    if (totalEl) {
+      totalEl.textContent = fmt(sumEntries(getEntriesByAccount(accountId)));
+    }
+  });
+
+  // Also refresh header totals
+  const totalIncome = sumByType("income");
+  const totalExpense = sumByType("expense");
+  const net = totalIncome - totalExpense;
+
+  document.getElementById("accTotalIncome").textContent = fmt(totalIncome);
+  document.getElementById("accTotalExpense").textContent = fmt(totalExpense);
+  document.getElementById("accNet").textContent = fmt(net);
+}
+
   function showToast(msg, ms = 1800) {
     const t = $("#toast");
     t.textContent = msg;
@@ -4204,6 +4282,7 @@ if (okText) {
 }
 
   back.style.display = "flex";
+
 
   return new Promise(resolve => {
     const cleanup = () => {
@@ -4288,6 +4367,114 @@ function bindDashboardButton() {
   };
 }
 
+function exportTransactionsCSV() {
+  const rows = [["Date","Account","Type","Amount","Note"]];
+
+  const accountsMap = {};
+  ["income","expense"].forEach(type => {
+    state.accounts[type].forEach(a => accountsMap[a.id] = a.name);
+  });
+
+  (state.accountEntries || [])
+    .filter(e => entryMatchesFilter(e.date))
+    .forEach(e => {
+      rows.push([
+        e.date,
+        accountsMap[e.accountId] || "Unknown",
+        e.type,
+        e.amount,
+        e.note || ""
+      ]);
+    });
+
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "transactions_report.csv";
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+window.exportTransactionsCSV = exportTransactionsCSV;
+
+function printSummaryReport() {
+  const incomeTotal = sumByType("income");
+  const expenseTotal = sumByType("expense");
+  const net = incomeTotal - expenseTotal;
+
+  const accountsMap = {};
+  ["income","expense"].forEach(type => {
+    state.accounts[type].forEach(a => accountsMap[a.id] = a.name);
+  });
+
+  const entries = (state.accountEntries || [])
+    .filter(e => entryMatchesFilter(e.date))
+    .map(e => `
+      <tr>
+        <td>${e.date}</td>
+        <td>${accountsMap[e.accountId] || "Unknown"}</td>
+        <td>${e.type}</td>
+        <td>${fmt(e.amount)}</td>
+        <td>${e.note || ""}</td>
+      </tr>
+    `).join("");
+
+  const win = window.open("", "", "width=900,height=700");
+  win.document.write(`
+    <html>
+    <head>
+      <title>Financial Summary Report</title>
+      <style>
+        body { font-family: Arial; padding:20px; }
+        table { width:100%; border-collapse: collapse; margin-top:20px; }
+        th, td { border:1px solid #ccc; padding:6px; text-align:left; }
+        th { background:#f0f0f0; }
+        h2 { margin-bottom:5px; }
+      </style>
+    </head>
+    <body>
+      <h2>Financial Summary Report</h2>
+      <p><strong>Total Income:</strong> ${fmt(incomeTotal)}</p>
+      <p><strong>Total Expense:</strong> ${fmt(expenseTotal)}</p>
+      <p><strong>Net:</strong> ${fmt(net)}</p>
+
+      <table>
+        <tr>
+          <th>Date</th>
+          <th>Account</th>
+          <th>Type</th>
+          <th>Amount</th>
+          <th>Note</th>
+        </tr>
+        ${entries}
+      </table>
+    </body>
+    </html>
+  `);
+
+  win.document.close();
+  win.print();
+}
+
+window.printSummaryReport = printSummaryReport;
+
+function renderMiniBar(amount, max) {
+  const percent = max > 0 ? (amount / max) * 100 : 0;
+  return `
+    <div style="margin-top:6px;">
+      <div style="background:#e0e0e0; height:6px; border-radius:4px; overflow:hidden;">
+        <div style="width:${percent}%; height:100%; background:#1976d2;"></div>
+      </div>
+      <div class="small muted">${fmt(amount)}</div>
+    </div>
+  `;
+}
+window.renderMiniBar = renderMiniBar;
 
   document.getElementById("btnNew").addEventListener("click", async () => {
     const f = document.createElement("div");
@@ -4382,11 +4569,7 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   
  try {
     load();
-    // 🔒 GUARANTEE STRUCTURE AFTER LOAD
-state.accounts = state.accounts || { income: [], expense: [] };
-state.accounts.income = state.accounts.income || [];
-state.accounts.expense = state.accounts.expense || [];
-
+   
 state.accountEntries = Array.isArray(state.accountEntries) ? state.accountEntries : [];
 
 state.ui = state.ui || { current: null };
