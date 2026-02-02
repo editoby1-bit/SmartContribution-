@@ -80,6 +80,7 @@ window.state = state; // make global
 // 🔒 LOCK ACCOUNTS STRUCTURE (RUNS ONCE AT BOOT)
 state.accounts = state.accounts || { income: [], expense: [] };
 state.accountEntries = state.accountEntries || [];
+state.empowerments = state.empowerments || [];
 
 
   function load() {
@@ -743,29 +744,43 @@ function openAccountEntryModal(accountId, type)  {
 window.openAccountEntryModal = openAccountEntryModal;
 
 function saveAccountEntry(accountId, type) {
-  const amountInput = document.getElementById("entryAmount");
-  const noteInput   = document.getElementById("entryNote");
-  const btn         = document.getElementById("saveEntryBtn");
-
-  const amount = Number(amountInput.value || 0);
-  const note   = noteInput.value || "";
-  const date   = new Date().toISOString(); // includes time now
-
-  if (!amount) return;
-
-  // 🔒 Prevent double click
-  if (btn) btn.disabled = true;
+  const amount = Number(document.getElementById("entryAmount").value || 0);
+  const note = document.getElementById("entryNote").value || "";
+  const date = new Date().toISOString();
 
   createAccountEntry(accountId, type, amount, note, date);
 
-  // 🧹 Clear fields BEFORE closing
-  amountInput.value = "";
-  noteInput.value   = "";
+  // 🔥 STEP 10 — EMPOWERMENT TRACKING
+  const acc = [...state.accounts.income, ...state.accounts.expense]
+    .find(a => a.id === accountId);
 
+  if (acc && acc.name && acc.name.toLowerCase().includes("empowerment")) {
+
+    // If it's money going OUT → empowerment given
+    if (type === "expense") {
+      state.empowerments.push({
+        id: crypto.randomUUID(),
+        amount: Math.abs(amount),
+        type: "given",
+        date
+      });
+    }
+
+    // If it's money coming IN → empowerment repayment
+    if (type === "income") {
+      state.empowerments.push({
+        id: crypto.randomUUID(),
+        amount: Math.abs(amount),
+        type: "returned",
+        date
+      });
+    }
+  }
+
+  save();
+  renderAccounts();
   closeModal();
 }
-window.saveAccountEntry = saveAccountEntry;
-
 
 
 
@@ -2752,6 +2767,7 @@ function openTransactionSummaryModal() {
 }
 window.openTransactionSummaryModal = openTransactionSummaryModal;
 
+
 function openCreditAllocationModal(cust, amount) {
   return new Promise(resolve => {
 
@@ -2846,6 +2862,24 @@ empInput.addEventListener("input", syncFromEmp);
     balInput.oninput = syncFromBal;
   });
 }
+
+function openEmpowermentSummaryModal() {
+  const rows = (state.empowerments || [])
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .map(e => `
+      <div style="padding:10px;border-bottom:1px solid #eee">
+        <b>${formatDateTime(e.date)}</b><br/>
+        Type: ${e.type === "given" ? "Empowerment Given" : "Returned / Repaid"}<br/>
+        Amount: <b style="color:${e.type === "given" ? "red" : "green"}">
+          ${fmt(e.amount)}
+        </b>
+      </div>
+    `).join("");
+
+  openModalGeneric("Empowerment Transactions", rows || "<div class='small muted'>No empowerment records</div>");
+}
+window.openEmpowermentSummaryModal = openEmpowermentSummaryModal;
+
 
 async function confirmDeleteCustomer(id) {
     const cur = currentStaff();
@@ -4177,12 +4211,139 @@ function renderAccountEntries(accountId) {
 
 window.renderAccountEntries = renderAccountEntries;
 
+function createEmpowerment(clientName, amount, note="") {
+  const staff = currentStaff();
+  if (!staff || !["manager","ceo"].includes(staff.role)) {
+    showToast("Not authorized");
+    return;
+  }
+
+  amount = Number(amount);
+  if (!amount || amount <= 0) {
+    showToast("Invalid amount");
+    return;
+  }
+
+  state.empowerments.push({
+    id: uid("emp"),
+    clientName,
+    note,
+    principalGiven: amount,
+    principalRepaid: 0,
+    interestRepaid: 0,
+    status: "active",
+    createdAt: new Date().toISOString(),
+    createdBy: staff.name,
+    history: [
+      {
+        type: "disbursement",
+        amount,
+        date: new Date().toISOString(),
+        by: staff.name
+      }
+    ]
+  });
+
+  save();
+  renderEmpowermentBalance();
+  showToast("Empowerment created");
+}
+
+window.createEmpowerment = createEmpowerment;
+
+function recordEmpowermentRepayment(empId, principal=0, interest=0) {
+  const emp = state.empowerments.find(e => e.id === empId);
+  if (!emp) return;
+
+  principal = Number(principal) || 0;
+  interest = Number(interest) || 0;
+
+  emp.principalRepaid += principal;
+  emp.interestRepaid += interest;
+
+  emp.history.push({
+    type: "repayment",
+    principal,
+    interest,
+    date: new Date().toISOString(),
+    by: currentStaff().name
+  });
+
+  // Auto complete if fully repaid
+  if (emp.principalRepaid >= emp.principalGiven) {
+    emp.status = "completed";
+  }
+
+  save();
+  renderEmpowermentBalance();
+}
+
+window.recordEmpowermentRepayment = recordEmpowermentRepayment;
+
+function sumEmpowermentDisbursed() {
+  return (state.transactions || [])
+    .filter(t => t.approved && t.type === "empowerment_disbursement")
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+}
+
+function sumEmpowermentPrincipalRepaid() {
+  return (state.transactions || [])
+    .filter(t => t.approved && t.type === "empowerment_principal_repayment")
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+}
+
+function sumEmpowermentInterest() {
+  return (state.transactions || [])
+    .filter(t => t.approved && t.type === "empowerment_interest_repayment")
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+}
+
+function calculateEmpowermentBalance() {
+  const disbursed = sumEmpowermentDisbursed();
+  const principalBack = sumEmpowermentPrincipalRepaid();
+  const interest = sumEmpowermentInterest();
+
+  return principalBack + interest - disbursed;
+}
+
+function renderEmpowermentBalance() {
+  const el = document.getElementById("empowermentPanel");
+  if (!el) return;
+
+  const b = calculateEmpowermentBalance();
+
+  el.innerHTML = `
+    <div class="card" style="border-left:4px solid #6a1b9a; margin-bottom:12px;">
+      <h4>Empowerment Balance</h4>
+
+      <div>Capital Given Out: <b>${fmt(b.totalGivenOut)}</b></div>
+      <div>Capital Repaid: <b>${fmt(b.totalReturnedCapital)}</b></div>
+      <div>Interest Earned: <b style="color:green">${fmt(b.totalInterestEarned)}</b></div>
+
+      <hr/>
+
+      <div>
+        Outstanding Capital:
+        <b style="color:${b.deployedCapital>0?'red':'green'}">
+          ${fmt(b.deployedCapital)}
+        </b>
+      </div>
+    </div>
+  `;
+}
+
+window.renderEmpowermentBalance = renderEmpowermentBalance;
 
 function renderAccounts() {
 const totalIncome = sumByType("income");
 const totalExpense = sumByType("expense");
 const net = totalIncome - totalExpense;
 const accountTotals = [];
+const empGiven = sumEmpowermentDisbursed();
+const empPrincipalBack = sumEmpowermentPrincipalRepaid();
+const empInterest = sumEmpowermentInterest();
+const empBalance = calculateEmpowermentBalance();
+
 
 ["income","expense"].forEach(type => {
   state.accounts[type].forEach(a => {
@@ -4288,6 +4449,26 @@ el.innerHTML = `
   
 </div>
 <div class="card" style="margin-bottom:12px;border-left:4px solid #6a1b9a">
+  <div class="card small clickable"
+       style="cursor:pointer"
+       onclick="openEmpowermentSummaryModal()">
+
+    <div>Empowerment Given: <b>${fmt(empowermentGiven)}</b></div>
+    <div>Empowerment Returned: <b>${fmt(empowermentReturned)}</b></div>
+
+    <div>
+      Empowerment Balance:
+      <b style="color:${empowermentBalance >= 0 ? 'green' : 'red'}">
+        ${fmt(empowermentBalance)}
+      </b>
+    </div>
+
+    <div class="muted small" style="margin-top:6px">
+      Click to view empowerment transactions
+    </div>
+  </div>
+</div>
+<div class="card" style="margin-bottom:12px;border-left:4px solid #6a1b9a">
   <div style="display:flex; justify-content:space-between; align-items:center;">
     <div>
       <div class="small muted">Business Balance</div>
@@ -4334,13 +4515,15 @@ function calculateBusinessBalance() {
 
   let balance = approvedCredits - approvedWithdrawals;
 
-  // Optional empowerment impact
+  // 🔥 Empowerment impact (real financial model)
   if (state.business.includeEmpowerment) {
-    const empowermentOut = (state.approvals || [])
-      .filter(a => a.type === "empowerment" && a.status === "approved")
-      .reduce((sum, a) => sum + Number(a.amount || 0), 0);
+    const empGiven = sumEmpowermentDisbursed();              // capital out
+    const empPrincipalBack = sumEmpowermentPrincipalRepaid(); // capital returned
+    const empInterest = sumEmpowermentInterest();             // profit earned
 
-    balance -= empowermentOut;
+    const empowermentNet = empPrincipalBack + empInterest - empGiven;
+
+    balance += empowermentNet; // add net effect (can be + or -)
   }
 
   return balance;
@@ -4747,6 +4930,7 @@ state.ui.toDate = state.ui.toDate || null;
   renderAudit();
   buildChart();
   updateChartData();
+  renderEmpowermentBalance();
   
   bindCODButtons();
   bindDashboardButton();      // controls show/hide dashboard
