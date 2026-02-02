@@ -66,7 +66,14 @@ window.currentStaff = currentStaff;
   codDrafts: {},
   accounts: { income: [], expense: [] },
   accountEntries: [],
-  ui: { current: null, dateFilter: "all" }
+  ui: { current: null, dateFilter: "all" },
+
+business: {
+  approvedIncome: 0,
+  approvedExpense: 0,
+  empowermentExpense: 0,
+  includeEmpowerment: false
+},
 };
 
 window.state = state; // make global
@@ -404,8 +411,11 @@ function dashboardIsOpen() {
 
   function setDateFilter(filter) {
   state.ui.dateFilter = filter;
-  console.log("SET FILTER TO:", state.ui.dateFilter);
-  save();
+
+  // IMPORTANT: reset custom range when using preset filters
+  state.ui.fromDate = null;
+  state.ui.toDate = null;
+
   renderAccounts();
 }
 
@@ -425,16 +435,16 @@ function getEntriesByAccount(accountId) {
 
 function entryMatchesFilter(dateStr) {
   const filter = state.ui.dateFilter || "all";
-  const d = new Date(dateStr + "T00:00:00");
+  const d = new Date(dateStr);   // ← FIXED (no manual T00)
   const now = new Date();
 
-  // ✅ CUSTOM DATE RANGE OVERRIDE
+  // CUSTOM RANGE OVERRIDE
   if (state.ui.fromDate || state.ui.toDate) {
-    const from = state.ui.fromDate ? new Date(state.ui.fromDate + "T00:00:00") : null;
-    const to = state.ui.toDate ? new Date(state.ui.toDate + "T23:59:59") : null;
+    const from = state.ui.fromDate ? new Date(state.ui.fromDate) : null;
+    const to   = state.ui.toDate   ? new Date(state.ui.toDate)   : null;
 
     if (from && d < from) return false;
-    if (to && d > to) return false;
+    if (to && d > new Date(to.setHours(23,59,59,999))) return false;
     return true;
   }
 
@@ -458,18 +468,53 @@ function entryMatchesFilter(dateStr) {
     return d.getFullYear() === now.getFullYear();
   }
 
-  return true; // all time
+  return true;
 }
+
 
 function sumEntries(entries) {
   return entries.reduce((t, e) => t + Number(e.amount || 0), 0);
 }
 
 function sumByType(type) {
-  return (state.accountEntries || [])
-    .filter(e => e.type === type)
-    .filter(e => entryMatchesFilter(e.date))
-    .reduce((t, e) => t + Number(e.amount || 0), 0);
+  return sumEntries(
+    state.accountEntries.filter(e =>
+      e.type === type && entryMatchesFilter(e.date)
+    )
+  );
+}
+
+function renderMiniBars(accountId) {
+  const entries = (state.accountEntries || [])
+    .filter(e => e.accountId === accountId)
+    .filter(e => entryMatchesFilter(e.date));
+
+  let income = 0;
+  let expense = 0;
+
+  entries.forEach(e => {
+    const amt = Number(e.amount || 0);
+    if (e.type === "income" || amt > 0) income += Math.abs(amt);
+    else expense += Math.abs(amt);
+  });
+
+  const max = Math.max(income, expense, 1); // prevent divide by zero
+
+  const incomeWidth = (income / max) * 100;
+  const expenseWidth = (expense / max) * 100;
+
+  return `
+    <div style="margin:6px 0 10px 0;">
+      <div style="height:6px; background:#e0e0e0; border-radius:4px; overflow:hidden; display:flex;">
+        <div style="width:${incomeWidth}%; background:#2e7d32;"></div>
+        <div style="width:${expenseWidth}%; background:#c62828;"></div>
+      </div>
+      <div style="font-size:11px; color:#666; margin-top:2px; display:flex; justify-content:space-between;">
+        <span>Income: ${fmt(income)}</span>
+        <span>Expense: ${fmt(expense)}</span>
+      </div>
+    </div>
+  `;
 }
 
 function sumByAccounts(accountIds) {
@@ -687,8 +732,9 @@ function openAccountEntryModal(accountId, type)  {
   </div>
 
   <div style="margin-top:10px">
-    <button id="saveEntryBtn" onclick="saveAccountEntry('...')">Save Entry</button>
-  </div>
+    <button class="btn solid" onclick="saveAccountEntry('${accountId}', '${type}')">
+  Save Entry
+</button>
 `;
 
   openModalGeneric("Add Account Entry", box, null);
@@ -2699,7 +2745,10 @@ function openTransactionSummaryModal() {
     </div>
   `).join("");
 
-  openModalGeneric("Transaction Summary", rows);
+  openModalGeneric(
+  "Transaction Summary",
+  `<div style="max-height:65vh; overflow-y:auto; padding-right:6px;">${rows}</div>`
+);
 }
 window.openTransactionSummaryModal = openTransactionSummaryModal;
 
@@ -4077,7 +4126,7 @@ if (["manager", "ceo"].includes(currentStaff()?.role)) {
 function renderAccountEntries(accountId) {
  const entries = (state.accountEntries || [])
  .filter(e => e.accountId === accountId)
- .sort((a, b) => new Date(b.date) - new Date(a.date)); // NEWEST FIRST
+ .sort((a, b) => new Date(a.date) - new Date(b.date)); // OLDEST FIRST (needed for correct running balance)
 
  let running = 0;
 
@@ -4104,7 +4153,7 @@ function renderAccountEntries(accountId) {
    const color = isPositive ? "green" : "red";
 
    return `
-     <div id="entry-${e.id}" class="entry-row"
+     <div class="entry-row" data-entry="${e.id}"
      style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #eee;">
        <div style="flex:1">
          <div><b>${formatDateTime(e.date)}</b> — ${e.note || "Entry"}</div>
@@ -4120,8 +4169,10 @@ function renderAccountEntries(accountId) {
  });
 
  return rows.length
-   ? rows.join("")
-   : `<div class="small muted">No entries yet</div>`;
+  ? `<div style="max-height:260px; overflow-y:auto; padding-right:4px;">
+       ${rows.reverse().join("")}
+     </div>`
+  : `<div class="small muted">No entries yet</div>`;
 }
 
 window.renderAccountEntries = renderAccountEntries;
@@ -4158,7 +4209,13 @@ const maxAccountTotal = Math.max(...accountTotals, 1);
     <b>${a.accountNumber}</b> — ${a.name}<br/>
 
 <div class="small muted" style="margin:4px 0">
-  Total: <b class="account-total">${fmt(sumEntries(getEntriesByAccount(a.id)))}</b>
+  Total: <b class="account-total">
+  ${fmt(
+    sumEntries(
+      getEntriesByAccount(a.id).filter(e => entryMatchesFilter(e.date))
+    )
+  )}
+</b>
 </div>
 
 ${renderMiniBar(
@@ -4228,7 +4285,26 @@ el.innerHTML = `
   <div class="muted small" style="margin-top:6px">
     Click to view transactions
   </div>
+  
 </div>
+<div class="card" style="margin-bottom:12px;border-left:4px solid #6a1b9a">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <div class="small muted">Business Balance</div>
+      <div style="font-size:22px; font-weight:bold;">
+        ${fmt(calculateBusinessBalance())}
+      </div>
+    </div>
+
+    <label style="font-size:12px;">
+      <input type="checkbox"
+        ${state.business.includeEmpowerment ? "checked" : ""}
+        onchange="toggleEmpowermentImpact(this.checked)">
+      Include Empowerment
+    </label>
+  </div>
+</div>
+
 
 <h4>Income Accounts</h4>
 ${renderList("income")}
@@ -4244,6 +4320,38 @@ ${renderList("expense")}
 `;
 }
 window.renderAccounts = renderAccounts;
+
+function calculateBusinessBalance() {
+  // Approved system money IN
+  const approvedCredits = (state.approvals || [])
+    .filter(a => a.type === "credit" && a.status === "approved")
+    .reduce((sum, a) => sum + Number(a.amount || 0), 0);
+
+  // Approved system money OUT
+  const approvedWithdrawals = (state.approvals || [])
+    .filter(a => a.type === "withdraw" && a.status === "approved")
+    .reduce((sum, a) => sum + Number(a.amount || 0), 0);
+
+  let balance = approvedCredits - approvedWithdrawals;
+
+  // Optional empowerment impact
+  if (state.business.includeEmpowerment) {
+    const empowermentOut = (state.approvals || [])
+      .filter(a => a.type === "empowerment" && a.status === "approved")
+      .reduce((sum, a) => sum + Number(a.amount || 0), 0);
+
+    balance -= empowermentOut;
+  }
+
+  return balance;
+}
+
+function toggleEmpowermentImpact(val) {
+  state.business.includeEmpowerment = val;
+  save();
+  renderDashboard(); // or main render function
+}
+window.toggleEmpowermentImpact = toggleEmpowermentImpact;
 
 function updateAccountTotals() {
   document.querySelectorAll("[data-account-id]").forEach(card => {
@@ -4292,7 +4400,7 @@ function updateAccountTotals() {
 
 if (okText) {
   okBtn = document.createElement("button");
-  okBtn.className = "btn tx-ok";
+  okBtn.className = "btn solid tx-ok";
   okBtn.textContent = okText;
   actions.appendChild(okBtn);
 }
@@ -4384,25 +4492,22 @@ function bindDashboardButton() {
 }
 
 function jumpToAccountEntry(accountId, entryId) {
-  closeModal(); // close summary modal
-
-  // Ensure accounts panel is visible
-  const accountCard = document.getElementById("acc-" + accountId);
+  const accountCard = document.getElementById(`acc-${accountId}`);
   if (!accountCard) return;
 
   accountCard.scrollIntoView({ behavior: "smooth", block: "center" });
 
-  // Small highlight effect
   setTimeout(() => {
-    const entryEl = document.getElementById("entry-" + entryId);
-    if (entryEl) {
-      entryEl.style.background = "#fff3cd";
-      setTimeout(() => entryEl.style.background = "", 2000);
-    }
+    const row = accountCard.querySelector(`.entry-row[data-entry='${entryId}']`);
+    if (!row) return;
+
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.style.background = "#ffeeba";
+    setTimeout(() => row.style.background = "", 2000);
   }, 400);
 }
 
-window.jumpToAccountEntry = jumpToAccountEntry;
+
 
 function exportTransactionsCSV() {
   const rows = [["Date","Account","Type","Amount","Note"]];
@@ -4606,6 +4711,23 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
   
  try {
     load();
+    // DATE RANGE FILTER WIRING
+const fromInput = document.getElementById("fromDate");
+const toInput   = document.getElementById("toDate");
+
+if (fromInput) {
+  fromInput.addEventListener("change", e => {
+    state.ui.fromDate = e.target.value || null;
+    renderAccounts();
+  });
+}
+
+if (toInput) {
+  toInput.addEventListener("change", e => {
+    state.ui.toDate = e.target.value || null;
+    renderAccounts();
+  });
+}
    
 state.accountEntries = Array.isArray(state.accountEntries) ? state.accountEntries : [];
 
