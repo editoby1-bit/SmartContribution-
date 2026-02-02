@@ -4453,15 +4453,17 @@ el.innerHTML = `
        style="cursor:pointer"
        onclick="openEmpowermentSummaryModal()">
 
-    <div>Empowerment Given: <b>${fmt(empowermentGiven)}</b></div>
-    <div>Empowerment Returned: <b>${fmt(empowermentReturned)}</b></div>
+    <div>Empowerment Given: <b>${fmt(empGiven)}</b></div>
+<div>Empowerment Principal Returned: <b>${fmt(empPrincipalBack)}</b></div>
+<div>Empowerment Interest Earned: <b>${fmt(empInterest)}</b></div>
 
-    <div>
-      Empowerment Balance:
-      <b style="color:${empowermentBalance >= 0 ? 'green' : 'red'}">
-        ${fmt(empowermentBalance)}
-      </b>
-    </div>
+<div>
+  Empowerment Balance:
+  <b style="color:${empBalance >= 0 ? 'green' : 'red'}">
+    ${fmt(empBalance)}
+  </b>
+</div>
+
 
     <div class="muted small" style="margin-top:6px">
       Click to view empowerment transactions
