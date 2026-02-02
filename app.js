@@ -2864,19 +2864,27 @@ empInput.addEventListener("input", syncFromEmp);
 }
 
 function openEmpowermentSummaryModal() {
-  const rows = (state.empowerments || [])
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .map(e => `
-      <div style="padding:10px;border-bottom:1px solid #eee">
-        <b>${formatDateTime(e.date)}</b><br/>
-        Type: ${e.type === "given" ? "Empowerment Given" : "Returned / Repaid"}<br/>
-        Amount: <b style="color:${e.type === "given" ? "red" : "green"}">
-          ${fmt(e.amount)}
+  const given = sumEmpowermentDisbursed();
+  const principalBack = sumEmpowermentPrincipalRepaid();
+  const interest = sumEmpowermentInterest();
+  const balance = calculateEmpowermentBalance();
+
+  const html = `
+    <div class="card small">
+      <div>Empowerment Given: <b>${fmt(given)}</b></div>
+      <div>Principal Returned: <b>${fmt(principalBack)}</b></div>
+      <div>Interest Earned: <b>${fmt(interest)}</b></div>
+      <hr/>
+      <div>
+        Net Empowerment Position:
+        <b style="color:${balance >= 0 ? 'green' : 'red'}">
+          ${fmt(balance)}
         </b>
       </div>
-    `).join("");
+    </div>
+  `;
 
-  openModalGeneric("Empowerment Transactions", rows || "<div class='small muted'>No empowerment records</div>");
+  openModalGeneric("Empowerment Balance", html);
 }
 window.openEmpowermentSummaryModal = openEmpowermentSummaryModal;
 
@@ -4280,31 +4288,48 @@ function recordEmpowermentRepayment(empId, principal=0, interest=0) {
 
 window.recordEmpowermentRepayment = recordEmpowermentRepayment;
 
+
 function sumEmpowermentDisbursed() {
-  return (state.transactions || [])
-    .filter(t => t.approved && t.type === "empowerment_disbursement")
-    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  return (state.approvals || [])
+    .filter(a =>
+      a.type === "empowerment" &&
+      a.status === "approved"
+    )
+    .reduce((sum, a) => sum + Number(a.amount || 0), 0);
 }
 
-function sumEmpowermentPrincipalRepaid() {
-  return (state.transactions || [])
-    .filter(t => t.approved && t.type === "empowerment_principal_repayment")
-    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+function sumEmpowermentRepaid() {
+  return (state.approvals || [])
+    .filter(a =>
+      a.type === "credit" &&
+      a.status === "approved" &&
+      a.customerId && hasActiveEmpowerment(a.customerId)
+    )
+    .reduce((sum, a) => sum + Number(a.amount || 0), 0);
+}
+
+function hasActiveEmpowerment(customerId) {
+  return (state.customers || []).some(c =>
+    c.id === customerId && c.empowermentActive
+  );
 }
 
 function sumEmpowermentInterest() {
-  return (state.transactions || [])
-    .filter(t => t.approved && t.type === "empowerment_interest_repayment")
-    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const totalGiven = sumEmpowermentDisbursed();
+  const totalRepaid = sumEmpowermentRepaid();
+
+  return Math.max(0, totalRepaid - totalGiven);
 }
 
-function calculateEmpowermentBalance() {
-  const disbursed = sumEmpowermentDisbursed();
-  const principalBack = sumEmpowermentPrincipalRepaid();
+
+function calculateEmpowermentPosition() {
+  const given = sumEmpowermentDisbursed();
+  const repaid = sumEmpowermentRepaid();
   const interest = sumEmpowermentInterest();
 
-  return principalBack + interest - disbursed;
+  return repaid + interest - given;
 }
+
 
 function renderEmpowermentBalance() {
   const el = document.getElementById("empowermentPanel");
@@ -4430,18 +4455,38 @@ el.innerHTML = `
 
 
 <div class="card" style="margin-bottom:12px;border-left:4px solid #1976d2">
-  <div class="card small clickable"
-     style="cursor:pointer"
-     onclick="openTransactionSummaryModal()">
+  ${(() => {
+  const capitalGiven = sumEmpowermentDisbursed();
+  const totalRepaid = sumEmpowermentRepaid();
+  const interestEarned = sumEmpowermentInterest();
+  const position = calculateEmpowermentPosition(); // net effect
 
-  <div>Total Income: <b>${fmt(totalIncome)}</b></div>
-  <div>Total Expenses: <b>${fmt(totalExpense)}</b></div>
-  <div>
-    Net (Income – Expense):
-    <b style="color:${net >= 0 ? 'green' : 'red'}">
-      ${fmt(net)}
-    </b>
-  </div>
+  const outstanding = capitalGiven - totalRepaid;
+
+  return `
+    <div>Capital Given: <b>${fmt(capitalGiven)}</b></div>
+    <div>Total Repaid: <b>${fmt(totalRepaid)}</b></div>
+    <div>Interest Earned: <b style="color:green">${fmt(interestEarned)}</b></div>
+
+    <div style="margin-top:6px;">
+      Outstanding Capital:
+      <b style="color:${outstanding > 0 ? 'red' : 'green'}">
+        ${fmt(Math.max(0, outstanding))}
+      </b>
+    </div>
+
+    <div style="margin-top:6px;">
+      Empowerment Position:
+      <b style="color:${position >= 0 ? 'green' : 'red'}">
+        ${fmt(position)}
+      </b>
+    </div>
+
+    <div class="muted small" style="margin-top:6px">
+      Click to view empowerment transactions
+    </div>
+  `;
+})()}
 
   <div class="muted small" style="margin-top:6px">
     Click to view transactions
@@ -4517,16 +4562,11 @@ function calculateBusinessBalance() {
 
   let balance = approvedCredits - approvedWithdrawals;
 
-  // 🔥 Empowerment impact (real financial model)
-  if (state.business.includeEmpowerment) {
-    const empGiven = sumEmpowermentDisbursed();              // capital out
-    const empPrincipalBack = sumEmpowermentPrincipalRepaid(); // capital returned
-    const empInterest = sumEmpowermentInterest();             // profit earned
-
-    const empowermentNet = empPrincipalBack + empInterest - empGiven;
-
-    balance += empowermentNet; // add net effect (can be + or -)
-  }
+  // 🔥 Empowerment impact (correct financial model)
+if (state.business.includeEmpowerment) {
+  const empowermentPosition = calculateEmpowermentPosition();
+  balance += empowermentPosition;
+}
 
   return balance;
 }
