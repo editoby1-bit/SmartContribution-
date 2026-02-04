@@ -66,7 +66,7 @@ window.currentStaff = currentStaff;
   codDrafts: {},
   accounts: { income: [], expense: [] },
   accountEntries: [],
-  ui: { current: null, dateFilter: "all" },
+  ui: { current: null, dateFilter: "today" },
 
 business: {
   approvedIncome: 0,
@@ -77,6 +77,7 @@ business: {
 };
 
 window.state = state; // make global
+state.ui.entryDisplayLimit = state.ui.entryDisplayLimit || {};
 // 🔒 LOCK ACCOUNTS STRUCTURE (RUNS ONCE AT BOOT)
 state.accounts = state.accounts || { income: [], expense: [] };
 state.accountEntries = state.accountEntries || [];
@@ -114,7 +115,7 @@ state.empowerments = state.empowerments || [];
     state.accountEntries = Array.isArray(data.accountEntries) ? data.accountEntries : [];
 
     state.ui = data.ui || {};
-    state.ui.dateFilter = state.ui.dateFilter || "all";
+    state.ui.dateFilter = state.ui.dateFilter || "today";
 
   } catch (e) {
     console.warn("Load failed, using fresh state", e);
@@ -435,7 +436,7 @@ function getEntriesByAccount(accountId) {
 }
 
 function entryMatchesFilter(dateStr) {
-  const filter = state.ui.dateFilter || "all";
+   const filter = state.ui.dateFilter || "today";
   const d = new Date(dateStr);   // ← FIXED (no manual T00)
   const now = new Date();
 
@@ -747,7 +748,7 @@ function saveAccountEntry(accountId, type) {
   const amount = Number(document.getElementById("entryAmount").value || 0);
   const note = document.getElementById("entryNote").value || "";
   const date = new Date().toISOString();
-
+  
   createAccountEntry(accountId, type, amount, note, date);
 
   // 🔥 STEP 10 — EMPOWERMENT TRACKING
@@ -781,6 +782,7 @@ function saveAccountEntry(accountId, type) {
   renderAccounts();
   closeModal();
 }
+window.saveAccountEntry = saveAccountEntry;
 
 
 
@@ -2137,11 +2139,7 @@ if (c.balance < 0) {
 // =========================
 // EMPOWERMENT BADGE (LOAN)
 // =========================
-if (
-  c.empowerment &&
-  c.empowerment.active === true &&
-  c.empowerment.balance < 0
-) {
+if (c.hasEmpowerment === true) {
   html += `
   <div class="badge" style="
     margin-top:8px;
@@ -2163,33 +2161,37 @@ html += `</div>`;
   // PENDING APPROVAL CARD
   // =========================
   if (latestApproval) {
-    html += `
-      <div class="card warning" id="profilePendingApproval" style="margin-bottom:12px">
-        <div class="small"><b>Pending Approval</b></div>
+  html += `
+    <div class="card warning" id="profilePendingApproval" style="
+      margin:12px 0;
+      border-left:4px solid #f59e0b;
+      padding:12px;
+    ">
+      <div class="small"><b>Pending Approval</b></div>
 
-        <div class="small" style="margin-top:6px">
-          ${latestApproval.type.toUpperCase()} — ${fmt(latestApproval.amount)}
-        </div>
-
-        <div class="small muted">
-          Requested by: ${latestApproval.requestedBy}
-        </div>
-
-        <div class="small muted">
-          ${new Date(latestApproval.requestedAt).toLocaleString()}
-        </div>
-
-        <div style="margin-top:8px">
-          <button
-            id="goToApprovalActions"
-            class="btn btn-sm"
-            data-approval-id="${latestApproval.id}">
-            Go to Approval Actions
-          </button>
-        </div>
+      <div class="small" style="margin-top:6px">
+        ${latestApproval.type.toUpperCase()} — ${fmt(latestApproval.amount)}
       </div>
-    `;
-  }
+
+      <div class="small muted">
+        Requested by: ${latestApproval.requestedBy}
+      </div>
+
+      <div class="small muted">
+        ${new Date(latestApproval.requestedAt).toLocaleString()}
+      </div>
+
+      <div style="margin-top:8px">
+        <button
+          id="goToApprovalActions"
+          class="btn btn-sm"
+          data-approval-id="${latestApproval.id}">
+          Go to Approval Actions
+        </button>
+      </div>
+    </div>
+  `;
+}
   if (
   c.empowerment &&
   c.empowerment.history &&
@@ -2199,14 +2201,15 @@ html += `</div>`;
     <div class="card" style="margin-top:12px">
       <h4>Empowerment History</h4>
       ${[...c.empowerment.history]
-        .sort((a, b) => new Date(b.date) - new Date(a.date))
-        .map(h => `
-          <div class="small" style="margin-top:6px">
-            ${new Date(h.date).toLocaleDateString()} —
-            ${fmt(h.total)} (${fmt(h.interest)} interest)
-          </div>
-        `)
-        .join("")}
+  .sort((a, b) => new Date(b.date) - new Date(a.date))
+  .map(h => `
+    <div class="small" style="margin-top:6px">
+      ${new Date(h.date).toLocaleDateString()} —
+      Principal: <b>${fmt(h.principal)}</b>,
+      Interest: <b>${fmt(h.interest)}</b>
+    </div>
+  `)
+  .join("")}
     </div>
   `;
 }
@@ -2484,20 +2487,28 @@ function printStatement(id) {
       list.innerHTML = '<div class="small">No transactions</div>';
     else {
       for (const t of c.transactions.slice().reverse()) {
-        const r = document.createElement("div");
-        r.className = "tx-row";
-        r.innerHTML = `<div style="display:flex;justify-content:space-between"><div><strong>${
-          t.type
-        }</strong> <span class="small"> ${t.desc || ""}</span></div><div>${fmt(
-          t.amount
-        )}</div></div><div class="small">${new Date(
-          t.date
-        ).toLocaleString()} • ${t.actor}</div>`;
-        r.onclick = () => openTransactionModal(t.id, c.id);
-        list.appendChild(r);
-      }
-    }
+  const r = document.createElement("div");
+  r.className = "tx-row clickable";
+  r.style.cursor = "pointer";
+
+  r.innerHTML = `
+    <div style="display:flex;justify-content:space-between">
+      <div>
+        <strong>${t.type}</strong>
+        <div class="small muted">${t.desc || ""}</div>
+      </div>
+      <div><b>${fmt(t.amount)}</b></div>
+    </div>
+    <div class="small muted">
+      ${new Date(t.date).toLocaleString()} • ${t.actor || "—"}
+    </div>
+  `;
+
+  r.onclick = () => openTransactionDetails(t.id);
+  list.appendChild(r);
+}
     mBody.appendChild(list);
+  }
   }
 
   function refreshCustomerProfile() {
@@ -3150,6 +3161,16 @@ function detectApprovalAnomalies(app, cust) {
   return flags;
 }
 
+function checkEmpowermentCleared(customerId) {
+  const c = state.customers.find(x => x.id === customerId);
+  if (!c || !c.empowerment) return;
+
+  if (c.empowerment.balance >= 0) {
+    c.empowerment.active = false;
+    c.hasEmpowerment = false;
+  }
+}
+
 async function processApproval(id, action) {
   const staff = currentStaff();
 if (!canApprove()) {
@@ -3215,9 +3236,14 @@ const totalLoan = principal + interestAmount;
 
 // 🔴 ALWAYS STORE AS NEGATIVE (DEBT)
 cust.empowerment.balance -= totalLoan;
+cust.hasEmpowerment = true;
 
+// 🧱 Ensure transactions array exists
+if (!Array.isArray(cust.transactions)) {
+  cust.transactions = [];
+}
 
-  cust.transactions.push({
+cust.transactions.push({
   id: uid("tx"),
   type: "empowerment",
   amount: totalLoan,
@@ -3227,13 +3253,19 @@ cust.empowerment.balance -= totalLoan;
   approvalId: app.id
 });
 
-  if (!cust.empowerment.history) cust.empowerment.history = [];
+// 🧱 Ensure empowerment object exists
+cust.empowerment = cust.empowerment || { active: true, balance: 0, interestRate: 0 };
 
-  cust.empowerment.history.push({
+// 🧱 Ensure history array ALWAYS exists
+if (!Array.isArray(cust.empowerment.history)) {
+  cust.empowerment.history = [];
+}
+
+cust.empowerment.history.push({
   approvalId: app.id,
-  principal,               // ₦ principal
-  interest: interestAmount, // ₦ interest (ABSOLUTE)
-  total: totalLoan,        // ₦ principal + interest
+  principal: Number(principal) || 0,
+  interest: Number(interestAmount) || 0,
+  total: Number(totalLoan) || 0,
   date: app.processedAt,
   approvedBy: staff.name
 });
@@ -3311,6 +3343,7 @@ const appliedEmp = Math.min(allocation.emp, outstanding);
 
 // reduce debt (move toward zero)
 cust.empowerment.balance += appliedEmp;
+checkEmpowermentCleared(cust.id);
 
 // remainder goes to balance
 creditedToBalance = allocation.bal;
@@ -3603,7 +3636,7 @@ function clearDateRange() {
   document.getElementById("fromDate").value = "";
   document.getElementById("toDate").value = "";
 
-  state.ui.dateFilter = "all";
+  state.ui.dateFilter = state.ui.dateFilter || "today";
   save();
   renderAccounts();
 }
@@ -3827,6 +3860,7 @@ document.querySelectorAll(".cod-resolve-btn").forEach(btn => {
 window.renderCODForDate = renderCODForDate;
 
 
+
 function renderManagerCODSummary(dateStr) {
   const staff = currentStaff();
   if (!staff || !["manager", "ceo"].includes(staff.role)) return;
@@ -3911,6 +3945,53 @@ function renderManagerCODSummary(dateStr) {
 }
 
 window.renderManagerCODSummary = renderManagerCODSummary;
+
+function openOperationalDrilldown() {
+  // Ensure UI storage exists
+  if (!state.ui) state.ui = {};
+
+  // Default limit = 50
+  state.ui.operationalTxLimit = state.ui.operationalTxLimit || 50;
+
+  // Filter + sort (newest first for drilldown view)
+  const entries = (state.accountEntries || [])
+    .filter(e => entryMatchesFilter(e.date))
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  // Apply limit
+  const visibleEntries = entries.slice(0, state.ui.operationalTxLimit);
+  const hasMore = entries.length > visibleEntries.length;
+
+  // Build list HTML
+  const listHtml = visibleEntries.length
+    ? visibleEntries.map(e => {
+        const acc = [...state.accounts.income, ...state.accounts.expense]
+          .find(a => a.id === e.accountId);
+
+        return `
+          <div class="small" style="margin-bottom:10px; padding:6px; border-bottom:1px solid #eee;">
+            <b>${fmt(e.amount)}</b> — ${acc ? acc.name : "Unknown Account"}<br>
+            <span class="muted">${new Date(e.date).toLocaleString()}</span><br>
+            <span class="muted">${e.note || ""}</span>
+          </div>
+        `;
+      }).join("")
+    : `<div class="small muted">No entries in this range</div>`;
+
+  // Add Load More button if needed
+  const finalHtml = listHtml + (hasMore ? `
+    <div style="text-align:center; margin-top:12px;">
+      <button class="btn small solid"
+        onclick="loadMoreOperationalTransactions()">
+        Load More
+      </button>
+    </div>
+  ` : "");
+
+  openModalGeneric("Operational Transactions", finalHtml, null);
+}
+
+window.openOperationalDrilldown = openOperationalDrilldown;
 
 
 function openCODDrillDown(staffId, date) {
@@ -4066,6 +4147,48 @@ function openCODDrillDown(staffId, date) {
 window.openCODDrillDown = openCODDrillDown;
 
 
+function openTransactionDetails(txId) {
+  const cust = state.customers.find(c => c.id === activeCustomerId);
+  if (!cust) return;
+
+  const tx = cust.transactions.find(t => t.id === txId);
+  if (!tx) return;
+
+  let approvalInfo = "";
+
+  if (tx.approvalId) {
+    const approval = state.approvals.find(a => a.id === tx.approvalId);
+    if (approval) {
+      approvalInfo += `
+        <div class="small"><b>Approval Type:</b> ${approval.type}</div>
+        <div class="small"><b>Requested By:</b> ${approval.requestedBy}</div>
+        <div class="small"><b>Status:</b> ${approval.status}</div>
+      `;
+    }
+  }
+
+  if (tx.type === "credit" && tx.desc && tx.desc.toLowerCase().includes("empowerment")) {
+    approvalInfo += `
+      <div class="small" style="margin-top:6px"><b>This credit was split between:</b></div>
+      <div class="small">• Empowerment repayment</div>
+      <div class="small">• Main balance credit</div>
+    `;
+  }
+
+  openModalGeneric(
+  "Transaction Details",
+  `
+    <div class="small"><b>Amount:</b> ${fmt(tx.amount)}</div>
+    <div class="small"><b>Date:</b> ${new Date(tx.date).toLocaleString()}</div>
+    <div class="small"><b>Description:</b> ${tx.desc || "—"}</div>
+    <div class="small"><b>Processed By:</b> ${tx.actor || "—"}</div>
+    ${approvalInfo}
+  `,
+  "Close",
+  false   // 🔥 hides Cancel button ONLY here
+);
+}
+
 function renderDashboard() {
   const dash = document.getElementById("dashboardView");
   if (!dash || dash.style.display !== "block") return; // 🛑 Do nothing if dashboard isn't visible
@@ -4166,58 +4289,95 @@ if (["manager", "ceo"].includes(currentStaff()?.role)) {
 }
 
 function renderAccountEntries(accountId) {
- const entries = (state.accountEntries || [])
- .filter(e => e.accountId === accountId)
- .sort((a, b) => new Date(a.date) - new Date(b.date)); // OLDEST FIRST (needed for correct running balance)
 
- let running = 0;
+  // Ensure entry limit storage exists
+if (!state.ui.entryDisplayLimit) {
+  state.ui.entryDisplayLimit = {};
+}
 
- const formatDateTime = (iso) => {
-  const d = new Date(iso);
-  const date = d.toLocaleDateString(undefined, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
+const limitMap = state.ui.entryDisplayLimit;
+
+if (!limitMap[accountId]) {
+  limitMap[accountId] = 50; // default visible entries
+}
+
+  const entries = (state.accountEntries || [])
+    .filter(e => e.accountId === accountId)
+    .filter(e => entryMatchesFilter(e.date)) // respect date filter
+    .sort((a, b) => new Date(a.date) - new Date(b.date)); // oldest first
+
+  const visibleEntries = entries.slice(-limitMap[accountId]); // last N entries
+
+  let running = 0;
+
+  const formatDateTime = (iso) => {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString(undefined, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    });
+    const time = d.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+    return `${date}, ${time}`;
+  };
+
+  const rows = visibleEntries.map(e => {
+    const amount = Number(e.amount || 0);
+    running += amount;
+
+    const isPositive = amount >= 0;
+    const sign = isPositive ? "+" : "−";
+    const color = isPositive ? "green" : "red";
+
+    return `
+      <div class="entry-row" data-entry="${e.id}"
+      style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #eee;">
+        <div style="flex:1">
+          <div><b>${formatDateTime(e.date)}</b> — ${e.note || "Entry"}</div>
+          <div style="font-size:12px; color:#666;">
+            Amount: <span style="color:${color}">${sign}${fmt(Math.abs(amount))}</span>
+          </div>
+        </div>
+        <div style="text-align:right; font-weight:bold;">
+          ${fmt(running)}
+        </div>
+      </div>
+    `;
   });
-  const time = d.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-  return `${date}, ${time}`;
- };
 
- const rows = entries.map(e => {
-   const amount = Number(e.amount || 0);
-   running += amount;
+  const hasMore = entries.length > visibleEntries.length;
 
-   const isPositive = amount >= 0;
-   const sign = isPositive ? "+" : "−";
-   const color = isPositive ? "green" : "red";
-
-   return `
-     <div class="entry-row" data-entry="${e.id}"
-     style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #eee;">
-       <div style="flex:1">
-         <div><b>${formatDateTime(e.date)}</b> — ${e.note || "Entry"}</div>
-         <div style="font-size:12px; color:#666;">
-           Amount: <span style="color:${color}">${sign}${fmt(Math.abs(amount))}</span>
-         </div>
-       </div>
-       <div style="text-align:right; font-weight:bold;">
-         ${fmt(running)}
-       </div>
-     </div>
-   `;
- });
-
- return rows.length
-  ? `<div style="max-height:260px; overflow-y:auto; padding-right:4px;">
-       ${rows.reverse().join("")}
-     </div>`
-  : `<div class="small muted">No entries yet</div>`;
+  return rows.length
+    ? `<div style="max-height:260px; overflow-y:auto; padding-right:4px;">
+         ${rows.reverse().join("")}
+         ${hasMore ? `
+           <div style="text-align:center; padding:8px;">
+             <button class="btn small solid"
+               onclick="loadMoreEntries('${accountId}')">
+               Load More
+             </button>
+           </div>
+         ` : ``}
+       </div>`
+    : `<div class="small muted">No entries yet</div>`;
 }
 
 window.renderAccountEntries = renderAccountEntries;
+
+function loadMoreEntries(accountId) {
+  state.ui.entryDisplayLimit[accountId] += 50;
+  renderAccounts();
+}
+window.loadMoreEntries = loadMoreEntries;
+
+function loadMoreOperationalTransactions() {
+  state.ui.operationalTxLimit += 50;
+  openOperationalDrilldown();
+}
+window.loadMoreOperationalTransactions = loadMoreOperationalTransactions;
 
 function createEmpowerment(clientName, amount, note="") {
   const staff = currentStaff();
@@ -4323,11 +4483,9 @@ function sumEmpowermentInterest() {
 
 
 function calculateEmpowermentPosition() {
-  const given = sumEmpowermentDisbursed();
-  const repaid = sumEmpowermentRepaid();
-  const interest = sumEmpowermentInterest();
-
-  return repaid + interest - given;
+  const capitalGiven = sumEmpowermentDisbursed();
+  const totalRepaid = sumEmpowermentRepaid();
+  return totalRepaid - capitalGiven;
 }
 
 
@@ -4360,14 +4518,25 @@ function renderEmpowermentBalance() {
 window.renderEmpowermentBalance = renderEmpowermentBalance;
 
 function renderAccounts() {
-const totalIncome = sumByType("income");
-const totalExpense = sumByType("expense");
+const totalIncome = sumEntries(
+  state.accountEntries.filter(e =>
+    state.accounts.income.some(a => a.id === e.accountId) &&
+    entryMatchesFilter(e.date)
+  )
+);
+
+const totalExpense = sumEntries(
+  state.accountEntries.filter(e =>
+    state.accounts.expense.some(a => a.id === e.accountId) &&
+    entryMatchesFilter(e.date)
+  )
+);
 const net = totalIncome - totalExpense;
 const accountTotals = [];
 const empGiven = sumEmpowermentDisbursed();
-const empPrincipalBack = sumEmpowermentPrincipalRepaid();
-const empInterest = sumEmpowermentInterest();
-const empBalance = calculateEmpowermentBalance();
+const empRepaid = sumEmpowermentRepaid();
+const empBalance = calculateEmpowermentPosition();
+const empInterest = Math.max(0, empRepaid - empGiven);
 
 
 ["income","expense"].forEach(type => {
@@ -4420,103 +4589,113 @@ ${renderMiniBar(
   </div>
 `).join("");
 
- const active = state.ui.dateFilter || "all";
+ const active = state.ui.dateFilter || "today";
 
 el.innerHTML = `
-<div class="card" style="margin-bottom:12px;border-left:4px solid #1976d2">
-  <div style="margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap;">
-    <button class="btn small solid ${active==='today'?'primary':''}" onclick="setDateFilter('today')">Today</button>
-    <button class="btn small solid ${active==='week'?'primary':''}" onclick="setDateFilter('week')">This Week</button>
-    <button class="btn small solid ${active==='month'?'primary':''}" onclick="setDateFilter('month')">This Month</button>
-    <button class="btn small solid ${active==='year'?'primary':''}" 
-        onclick="setDateFilter('year')">This Year</button>
-    <button class="btn small solid ${active==='all'?'primary':''}" onclick="setDateFilter('all')">All Time</button>
+
+<!-- OPERATIONAL BALANCE -->
+<div class="card" style="margin-bottom:12px; border-left:4px solid #00897b;">
+  <div style="display:flex; flex-direction:column; gap:8px">
+
+    <div onclick="openOperationalDrilldown()" style="cursor:pointer">
+      <div class="small muted">Operational Balance</div>
+      <div style="font-size:22px; font-weight:bold;">${fmt(net)}</div>
+      <div class="small muted">
+        Income: <b id="accTotalIncome">${fmt(totalIncome)}</b> |
+        Expense: <b id="accTotalExpense">${fmt(totalExpense)}</b>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      <button class="btn small solid ${active==='today'?'primary':''}" onclick="setDateFilter('today')">Today</button>
+      <button class="btn small solid ${active==='week'?'primary':''}" onclick="setDateFilter('week')">This Week</button>
+      <button class="btn small solid ${active==='month'?'primary':''}" onclick="setDateFilter('month')">This Month</button>
+      <button class="btn small solid ${active==='year'?'primary':''}" onclick="setDateFilter('year')">This Year</button>
+      <button class="btn small solid ${active==='all'?'primary':''}" onclick="setDateFilter('all')">All Time</button>
+    </div>
+
+    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+      <input type="date" id="fromDate" class="input small"
+             value="${state.ui.fromDate || ''}"
+             onchange="setCustomDateRange()" />
+      <span style="font-size:12px; opacity:0.7;">to</span>
+      <input type="date" id="toDate" class="input small"
+             value="${state.ui.toDate || ''}"
+             onchange="setCustomDateRange()" />
+      <button class="btn small solid primary" onclick="clearDateRange()">Clear</button>
+    </div>
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn small solid" onclick="exportTransactionsCSV()">Export CSV</button>
+      <button class="btn small solid" onclick="printSummaryReport()">Print Summary</button>
+    </div>
+
+    <hr style="margin:14px 0; opacity:0.2">
+
+    <div>
+      <input type="text"
+             class="input small"
+             placeholder="Search account by name or number..."
+             oninput="filterAccounts(this.value)">
+    </div>
+
+    <h4>Income Accounts</h4>
+    ${renderList("income")}
+    <button class="accounts-btn" onclick="promptCreateAccount('income')">
+      + Add Income Account
+    </button>
+
+    <h4 style="margin-top:18px">Expense Accounts</h4>
+    ${renderList("expense")}
+    <button class="accounts-btn" onclick="promptCreateAccount('expense')">
+      + Add Expense Account
+    </button>
+
   </div>
-  <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-  <input type="date" id="fromDate" class="input small"
-         value="${state.ui.fromDate || ''}"
-         onchange="setCustomDateRange()" />
-
-  <span style="font-size:12px; opacity:0.7;">to</span>
-
-  <input type="date" id="toDate" class="input small"
-         value="${state.ui.toDate || ''}"
-         onchange="setCustomDateRange()" />
-
-  <button class="btn small solid primary" onclick="clearDateRange()">
-  Clear
-</button>
-</div>
-</div>
-<div style="margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap;">
-  <button class="btn small solid" onclick="exportTransactionsCSV()">Export CSV</button>
-  <button class="btn small solid" onclick="printSummaryReport()">Print Summary</button>
 </div>
 
 
-<div class="card" style="margin-bottom:12px;border-left:4px solid #1976d2">
+<!-- EMPOWERMENT BALANCE -->
+<div class="card" style="margin-bottom:12px; border-left:4px solid #1976d2;">
   ${(() => {
-  const capitalGiven = sumEmpowermentDisbursed();
-  const totalRepaid = sumEmpowermentRepaid();
-  const interestEarned = sumEmpowermentInterest();
-  const position = calculateEmpowermentPosition(); // net effect
+    const capitalGiven = sumEmpowermentDisbursed();
+    const totalRepaid = sumEmpowermentRepaid();
+    const interestEarned = Math.max(0, totalRepaid - capitalGiven);
+    const position = calculateEmpowermentPosition();
+    const outstanding = capitalGiven - totalRepaid;
 
-  const outstanding = capitalGiven - totalRepaid;
+    return `
+      <div class="small muted">Empowerment Balance</div>
 
-  return `
-    <div>Capital Given: <b>${fmt(capitalGiven)}</b></div>
-    <div>Total Repaid: <b>${fmt(totalRepaid)}</b></div>
-    <div>Interest Earned: <b style="color:green">${fmt(interestEarned)}</b></div>
+      <div>Capital Given: <b>${fmt(capitalGiven)}</b></div>
+      <div>Total Repaid: <b>${fmt(totalRepaid)}</b></div>
+      <div>Interest Earned: <b style="color:green">${fmt(interestEarned)}</b></div>
 
-    <div style="margin-top:6px;">
-      Outstanding Capital:
-      <b style="color:${outstanding > 0 ? 'red' : 'green'}">
-        ${fmt(Math.max(0, outstanding))}
-      </b>
-    </div>
+      <div style="margin-top:6px;">
+        Outstanding Capital:
+        <b style="color:${outstanding > 0 ? 'red' : 'green'}">
+          ${fmt(Math.max(0, outstanding))}
+        </b>
+      </div>
 
-    <div style="margin-top:6px;">
-      Empowerment Position:
-      <b style="color:${position >= 0 ? 'green' : 'red'}">
-        ${fmt(position)}
-      </b>
-    </div>
+      <div style="margin-top:6px;">
+        Empowerment Position:
+        <b style="color:${position >= 0 ? 'green' : 'red'}">
+          ${fmt(position)}
+        </b>
+      </div>
 
-    <div class="muted small" style="margin-top:6px">
-      Click to view empowerment transactions
-    </div>
-  `;
-})()}
-
-  <div class="muted small" style="margin-top:6px">
-    Click to view transactions
-  </div>
-  
-</div>
-<div class="card" style="margin-bottom:12px;border-left:4px solid #6a1b9a">
-  <div class="card small clickable"
-       style="cursor:pointer"
-       onclick="openEmpowermentSummaryModal()">
-
-    <div>Empowerment Given: <b>${fmt(empGiven)}</b></div>
-<div>Empowerment Principal Returned: <b>${fmt(empPrincipalBack)}</b></div>
-<div>Empowerment Interest Earned: <b>${fmt(empInterest)}</b></div>
-
-<div>
-  Empowerment Balance:
-  <b style="color:${empBalance >= 0 ? 'green' : 'red'}">
-    ${fmt(empBalance)}
-  </b>
+      <div class="muted small" style="margin-top:6px">
+        Click to view empowerment transactions
+      </div>
+    `;
+  })()}
 </div>
 
 
-    <div class="muted small" style="margin-top:6px">
-      Click to view empowerment transactions
-    </div>
-  </div>
-</div>
-<div class="card" style="margin-bottom:12px;border-left:4px solid #6a1b9a">
-  <div style="display:flex; justify-content:space-between; align-items:center;">
+<!-- BUSINESS BALANCE -->
+<div class="card" style="margin-bottom:12px; border-left:4px solid #6a1b9a;">
+  <div style="display:flex; flex-direction:column; gap:10px">
     <div>
       <div class="small muted">Business Balance</div>
       <div style="font-size:22px; font-weight:bold;">
@@ -4533,21 +4712,22 @@ el.innerHTML = `
   </div>
 </div>
 
-
-<h4>Income Accounts</h4>
-${renderList("income")}
-<button class="accounts-btn" onclick="promptCreateAccount('income')">
-  + Add Income Account
-</button>
-
-<h4 style="margin-top:18px">Expense Accounts</h4>
-${renderList("expense")}
-<button class="accounts-btn" onclick="promptCreateAccount('expense')">
-  + Add Expense Account
-</button>
 `;
 }
 window.renderAccounts = renderAccounts;
+
+
+function filterAccounts(query) {
+  query = query.toLowerCase().trim();
+
+  document.querySelectorAll("[id^='acc-']").forEach(card => {
+    const text = card.innerText.toLowerCase();
+    card.style.display = text.includes(query) ? "" : "none";
+  });
+}
+
+window.filterAccounts = filterAccounts;
+
 
 function calculateBusinessBalance() {
   // Approved system money IN
@@ -4568,7 +4748,7 @@ if (state.business.includeEmpowerment) {
   balance += empowermentPosition;
 }
 
-  return balance;
+  return balance; 
 }
 
 function toggleEmpowermentImpact(val) {
@@ -4596,6 +4776,7 @@ function updateAccountTotals() {
   document.getElementById("accTotalExpense").textContent = fmt(totalExpense);
   document.getElementById("accNet").textContent = fmt(net);
 }
+window.updateAccountTotals = updateAccountTotals;
 
 
   function showToast(msg, ms = 1800) {
@@ -4605,13 +4786,15 @@ function updateAccountTotals() {
     setTimeout(() => (t.style.display = "none"), ms);
   }
 
-  function openModalGeneric(title, content, okText = "OK") {
+  function openModalGeneric(title, content, okText = "OK", showCancel = true) {
   const back = document.getElementById("txModalBack");
   const modal = document.getElementById("txModal");
   const titleEl = document.getElementById("txTitle");
   const bodyEl = document.getElementById("txBody");
   const actions = modal.querySelector(".modal-actions");
   const cancelBtn = document.getElementById("txCancel");
+  // Show or hide cancel button depending on modal type
+cancelBtn.style.display = showCancel ? "inline-flex" : "none";
 
   // reset modal completely
   titleEl.textContent = title;
@@ -4649,11 +4832,15 @@ if (okText) {
   };
 }
 
-    cancelBtn.onclick = e => {
-      e.stopPropagation();
-      cleanup();
-      resolve(false);
-    };
+    if (showCancel) {
+  cancelBtn.onclick = e => {
+    e.stopPropagation();
+    cleanup();
+    resolve(false);
+  };
+} else {
+  cancelBtn.onclick = null;
+}
 
     back.onclick = e => {
       if (e.target === back) {
@@ -4957,7 +5144,7 @@ if (toInput) {
 state.accountEntries = Array.isArray(state.accountEntries) ? state.accountEntries : [];
 
 state.ui = state.ui || { current: null };
-state.ui.dateFilter = state.ui.dateFilter || "all";
+state.ui.dateFilter = state.ui.dateFilter || "today";
 state.ui.fromDate = state.ui.fromDate || null;
 state.ui.toDate = state.ui.toDate || null;
   if (!Array.isArray(state.approvals)) state.approvals = [];

@@ -1221,3 +1221,37 @@ body.dashboard-active #app.container {
 .entry-row:hover {
   background: #f9fbfd;
 }
+.timeline-wrap {
+  padding-right: 6px;
+}
+/* Prevent text from breaking modal layout */
+.modal-content,
+.modal-body,
+.card,
+.timeline-item,
+.timeline-desc,
+.kv,
+.small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.timeline-desc {
+  margin-top: 2px;
+  line-height: 1.4;
+}
+/* Force modal body to behave as scroll container */
+#mBody {
+  max-height: 75vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px; /* prevents text cut-off near scrollbar */
+}
+
+/* Prevent wide content from stretching modal */
+#mBody * {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
