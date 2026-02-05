@@ -1436,25 +1436,34 @@ if (c.balance < 0) {
    nameBtn.innerHTML = `
   ${c.name}
   ${
+  (() => {
+    const activeLoan = (state.empowerments || []).find(e =>
+      e.customerId === c.id && e.status !== "completed"
+    );
+
+    if (!activeLoan) return "";
+
+    const remaining = activeLoan.principalGiven - activeLoan.principalRepaid;
+
+    if (remaining <= 0) return "";
+
+    return `<span class="badge" style="
+              margin-left:6px;
+              background:#fff3cd;
+              color:#7a5c00
+            ">
+              EMPOWERMENT ${fmt(remaining)}
+            </span>`;
+  })()
+}
+  ${
     c.balance < 0
       ? `<span class="badge danger" style="margin-left:6px">
            NEGATIVE ${fmt(Math.abs(c.balance))}
          </span>`
       : ""
   }
-  ${
-    c.empowerment &&
-    c.empowerment.active &&
-    c.empowerment.balance < 0
-      ? `<span class="badge" style="
-           margin-left:6px;
-           background:#fff3cd;
-           color:#7a5c00
-         ">
-           EMPOWERMENT ${fmt(Math.abs(c.empowerment.balance))}
-         </span>`
-      : ""
-  }
+  
 `;
 
 
@@ -1787,32 +1796,25 @@ function initEmpowermentModel(c, config = {}) {
 }
 
 function applyEmpowermentRepayment(c, amount) {
-  if (!c.empowerment || !c.empowerment.active) return amount;
+  const activeLoan = state.empowerments.find(e =>
+    e.customerId === c.id && e.status !== "completed"
+  );
 
-  const repay = Math.min(amount, c.empowerment.balance);
-  c.empowerment.balance -= repay;
+  if (!activeLoan) return amount; // no loan, money goes fully to savings
 
-  // 🔑 log repayment
-  c.empowerment.history.push({
-    type: "repayment",
-    amount: repay,
-    date: Date.now()
-  });
+  const remainingPrincipal = activeLoan.principalGiven - activeLoan.principalRepaid;
+  const repay = Math.min(amount, remainingPrincipal);
 
-  // ✅ FULLY PAID
-  if (c.empowerment.balance === 0) {
-    c.empowerment.active = false;
-    c.empowerment.status = "completed";
+  activeLoan.principalRepaid += repay;
 
-    c.empowerment.history.push({
-      type: "completed",
-      principal: c.empowerment.principal,
-      date: Date.now()
-    });
+  if (activeLoan.principalRepaid >= activeLoan.principalGiven) {
+    activeLoan.status = "completed";
   }
 
-  return amount - repay;
+  save();
+  return amount - repay; // leftover goes to savings balance
 }
+
 function reject(id) {
   const a = state.approvals.find(x => x.id === id);
   if (!a) return;
@@ -2090,150 +2092,163 @@ function openCustomerModal(id) {
 }
 
 function renderProfileTab() {
-  const c = state.customers.find(x => x.id === activeCustomerId);
-  if (!c) {
-    mBody.innerHTML = `<div class="small muted">Customer not found</div>`;
-    return;
-  }
-
-  // 🔑 get pending approvals (newest first)
-  const pendingApprovals = state.approvals
-    .filter(a => a.customerId === c.id && a.status === "pending")
-    .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
-
-  const latestApproval = pendingApprovals[0];
-
-  // =========================
-  // BUILD HTML SAFELY
-  // =========================
-  let html = `
-  <div class="card" style="margin-bottom:12px">
-    <h4>${c.name}</h4>
-    <div class="small">Customer ID: ${c.id}</div>
-    <div class="small">Phone: ${c.phone || "—"}</div>
-  </div>
-
-  <div class="card" style="margin-bottom:12px">
-    <div class="kv">
-      <div class="kv-label">Balance</div>
-      <div class="kv-value">${fmt(c.balance)}</div>
-    </div>
-`;
-
+ const c = state.customers.find(x => x.id === activeCustomerId);
+ // =========================
+// 🔄 AUTO-MIGRATE OLD EMPOWERMENT TO NEW ENGINE
 // =========================
-// NEGATIVE MAIN BALANCE BADGE
-// =========================
-if (c.balance < 0) {
-  html += `
-    <div class="badge" style="
-      margin-top:6px;
-      background:#fdecea;
-      color:#b42318;
-      display:inline-block;
-    ">
-      Negative Balance: ${fmt(Math.abs(c.balance))}
-    </div>
-  `;
-}
-
-// =========================
-// EMPOWERMENT BADGE (LOAN)
-// =========================
-if (c.hasEmpowerment === true) {
-  html += `
-  <div class="badge" style="
-    margin-top:8px;
-    background:#fff3cd;
-    color:#7a5c00;
-    display:inline-block;
-  ">
-    Empowerment Balance: ${fmt(c.empowerment.balance)}
-  </div>
-`;
-
-}
-
-// 🔒 CLOSE BALANCE CARD
-html += `</div>`;
-
-
-  // =========================
-  // PENDING APPROVAL CARD
-  // =========================
-  if (latestApproval) {
-  html += `
-    <div class="card warning" id="profilePendingApproval" style="
-      margin:12px 0;
-      border-left:4px solid #f59e0b;
-      padding:12px;
-    ">
-      <div class="small"><b>Pending Approval</b></div>
-
-      <div class="small" style="margin-top:6px">
-        ${latestApproval.type.toUpperCase()} — ${fmt(latestApproval.amount)}
-      </div>
-
-      <div class="small muted">
-        Requested by: ${latestApproval.requestedBy}
-      </div>
-
-      <div class="small muted">
-        ${new Date(latestApproval.requestedAt).toLocaleString()}
-      </div>
-
-      <div style="margin-top:8px">
-        <button
-          id="goToApprovalActions"
-          class="btn btn-sm"
-          data-approval-id="${latestApproval.id}">
-          Go to Approval Actions
-        </button>
-      </div>
-    </div>
-  `;
-}
-  if (
+if (
   c.empowerment &&
-  c.empowerment.history &&
-  c.empowerment.history.length > 0
+  Array.isArray(c.empowerment.history) &&
+  c.empowerment.history.length > 0 &&
+  !(state.empowerments || []).some(e => e.customerId === c.id)
 ) {
-  html += `
-    <div class="card" style="margin-top:12px">
-      <h4>Empowerment History</h4>
-      ${[...c.empowerment.history]
-  .sort((a, b) => new Date(b.date) - new Date(a.date))
-  .map(h => `
-    <div class="small" style="margin-top:6px">
-      ${new Date(h.date).toLocaleDateString()} —
-      Principal: <b>${fmt(h.principal)}</b>,
-      Interest: <b>${fmt(h.interest)}</b>
-    </div>
-  `)
-  .join("")}
-    </div>
-  `;
+  const totalPrincipal = c.empowerment.history.reduce((s, h) => s + (h.principal || 0), 0);
+  const totalInterest = c.empowerment.history.reduce((s, h) => s + (h.interest || 0), 0);
+
+  state.empowerments = state.empowerments || [];
+  state.empowerments.push({
+    id: "emp_" + crypto.randomUUID(),
+    customerId: c.id,
+    principalGiven: totalPrincipal,
+    principalRepaid: 0,
+    interestRepaid: totalInterest,
+    status: "active",
+    history: c.empowerment.history
+  });
+
+  save();
+}
+ if (!c) {
+   mBody.innerHTML = `<div class="small muted">Customer not found</div>`;
+   return;
+ }
+
+// =========================
+// ✅ CENTRAL EMPOWERMENT ENGINE (PERMANENT)
+// =========================
+const savingsBalance = Number(c.balance || 0);
+
+// =========================
+// EMPOWERMENT POSITION (ONLY ACTIVE LOANS)
+// =========================
+
+const totalBalance = savingsBalance;
+
+ // 🔑 get pending approvals
+ const pendingApprovals = state.approvals
+   .filter(a => a.customerId === c.id && a.status === "pending")
+   .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
+
+ const latestApproval = pendingApprovals[0];
+
+ // =========================
+ // BUILD HTML
+ // =========================
+ let html = `
+<div class="card" style="margin-bottom:12px">
+  <h4>${c.name}</h4>
+  <div class="small">Customer ID: ${c.id}</div>
+  <div class="small">Phone: ${c.phone || "—"}</div>
+</div>
+
+<div class="card" style="margin-bottom:12px">
+  <div class="kv">
+  <div class="kv-label">Account Balance</div>
+  <div class="kv-value">${fmt(savingsBalance)}</div>
+</div>
+
+
+`;
+
+ // =========================
+ // NEGATIVE MAIN BALANCE BADGE
+ // =========================
+ if (totalBalance < 0) {
+   html += `
+     <div class="badge" style="
+       margin-top:6px;
+       background:#fdecea;
+       color:#b42318;
+       display:inline-block;
+     ">
+       Negative Balance: ${fmt(Math.abs(totalBalance))}
+     </div>
+   `;
+ }
+
+ 
+ html += `</div>`;
+
+ // =========================
+ // PENDING APPROVAL CARD
+ // =========================
+ if (latestApproval) {
+   html += `
+     <div class="card warning" id="profilePendingApproval" style="
+       margin:12px 0;
+       border-left:4px solid #f59e0b;
+       padding:12px;
+     ">
+       <div class="small"><b>Pending Approval</b></div>
+
+       <div class="small" style="margin-top:6px">
+         ${latestApproval.type.toUpperCase()} — ${fmt(latestApproval.amount)}
+       </div>
+
+       <div class="small muted">
+         Requested by: ${latestApproval.requestedBy}
+       </div>
+
+       <div class="small muted">
+         ${new Date(latestApproval.requestedAt).toLocaleString()}
+       </div>
+
+       <div style="margin-top:8px">
+         <button
+           id="goToApprovalActions"
+           class="btn btn-sm"
+           data-approval-id="${latestApproval.id}">
+           Go to Approval Actions
+         </button>
+       </div>
+     </div>
+   `;
+ }
+
+ // =========================
+ // EMPOWERMENT HISTORY
+ // =========================
+ if (c.empowerment && c.empowerment.history && c.empowerment.history.length > 0) {
+   html += `
+     <div class="card" style="margin-top:12px">
+       <h4>Empowerment History</h4>
+       ${[...c.empowerment.history]
+         .sort((a, b) => new Date(b.date) - new Date(a.date))
+         .map(h => `
+           <div class="small" style="margin-top:6px">
+             ${new Date(h.date).toLocaleDateString()} —
+             Principal: <b>${fmt(h.principal)}</b>,
+             Interest: <b>${fmt(h.interest)}</b>
+           </div>
+         `)
+         .join("")}
+     </div>
+   `;
+ }
+
+ mBody.innerHTML = html;
+
+ const btn = document.getElementById("goToApprovalActions");
+ if (btn) {
+   btn.onclick = (e) => {
+     e.stopPropagation();
+     activeCustomerId = c.id;
+     window.activeApprovalId = btn.dataset.approvalId;
+     setActiveTab("tools");
+   };
+ }
 }
 
-  // =========================
-  // RENDER ONCE
-  // =========================
-  mBody.innerHTML = html;
-
-  // =========================
-  // BIND BUTTON AFTER RENDER
-  // =========================
-  const btn = document.getElementById("goToApprovalActions");
-  if (btn) {
-    btn.onclick = (e) => {
-      e.stopPropagation();
-
-      activeCustomerId = c.id;
-      window.activeApprovalId = btn.dataset.approvalId;
-
-      setActiveTab("tools");
-    };
-  }
-}
   function setActiveTab(tab) {
   // 1️⃣ force tab highlight
   $$(".tab-btn").forEach(b =>
@@ -2782,7 +2797,8 @@ window.openTransactionSummaryModal = openTransactionSummaryModal;
 function openCreditAllocationModal(cust, amount) {
   return new Promise(resolve => {
 
-    const maxEmp = Math.abs(cust.empowerment.balance);
+    const maxEmp = 0; // old engine disabled
+
 
     const wrapper = document.createElement("div");
 
@@ -3162,13 +3178,7 @@ function detectApprovalAnomalies(app, cust) {
 }
 
 function checkEmpowermentCleared(customerId) {
-  const c = state.customers.find(x => x.id === customerId);
-  if (!c || !c.empowerment) return;
-
-  if (c.empowerment.balance >= 0) {
-    c.empowerment.active = false;
-    c.hasEmpowerment = false;
-  }
+  // old empowerment engine disabled
 }
 
 async function processApproval(id, action) {
@@ -3234,9 +3244,6 @@ if (isNaN(principal) || isNaN(interestAmount)) {
 // ✅ TOTAL = principal + flat interest
 const totalLoan = principal + interestAmount;
 
-// 🔴 ALWAYS STORE AS NEGATIVE (DEBT)
-cust.empowerment.balance -= totalLoan;
-cust.hasEmpowerment = true;
 
 // 🧱 Ensure transactions array exists
 if (!Array.isArray(cust.transactions)) {
@@ -3300,11 +3307,8 @@ if (app.type === "credit") {
   // =========================
   // SPLIT REPAYMENT IF EMPOWERMENT EXISTS
   // =========================
-  if (
-    cust.empowerment &&
-    cust.empowerment.active === true &&
-    cust.empowerment.balance < 0
-  ) {
+  if (false) // old empowerment engine disabled
+{
 
 
 
@@ -3335,15 +3339,6 @@ if (!confirmSplit) {
   showToast("Credit allocation cancelled");
   return;
 }
-
-    const outstanding = Math.abs(cust.empowerment.balance);
-
-// amount actually repaid
-const appliedEmp = Math.min(allocation.emp, outstanding);
-
-// reduce debt (move toward zero)
-cust.empowerment.balance += appliedEmp;
-checkEmpowermentCleared(cust.id);
 
 // remainder goes to balance
 creditedToBalance = allocation.bal;
@@ -4438,9 +4433,12 @@ function recordEmpowermentRepayment(empId, principal=0, interest=0) {
   });
 
   // Auto complete if fully repaid
-  if (emp.principalRepaid >= emp.principalGiven) {
-    emp.status = "completed";
-  }
+  const totalRepaid = emp.principalRepaid + emp.interestRepaid;
+const totalOwed = emp.principalGiven + (emp.expectedInterest || 0);
+
+if (totalRepaid >= totalOwed) {
+  emp.status = "completed";
+}
 
   save();
   renderEmpowermentBalance();
