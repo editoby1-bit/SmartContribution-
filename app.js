@@ -1801,23 +1801,49 @@ function initEmpowermentModel(c, config = {}) {
 }
 
 function applyEmpowermentRepayment(c, amount) {
-  const activeLoan = state.empowerments.find(e =>
-    e.customerId === c.id && e.status !== "completed"
-  );
+  let remaining = amount;
 
-  if (!activeLoan) return amount; // no loan, money goes fully to savings
+  // Get ALL active loans, oldest first
+  const loans = (state.empowerments || [])
+    .filter(e => e.customerId === c.id && e.status !== "completed")
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
-  const remainingPrincipal = activeLoan.principalGiven - activeLoan.principalRepaid;
-  const repay = Math.min(amount, remainingPrincipal);
+  if (loans.length === 0) return amount; // no loan, full amount goes to savings
 
-  activeLoan.principalRepaid += repay;
+  for (const loan of loans) {
+    if (remaining <= 0) break;
 
-  if (activeLoan.principalRepaid >= activeLoan.principalGiven) {
-    activeLoan.status = "completed";
+    // =========================
+    // 1️⃣ PAY INTEREST FIRST
+    // =========================
+    const interestDue = (loan.expectedInterest || 0) - (loan.interestRepaid || 0);
+    const interestPayment = Math.min(remaining, Math.max(0, interestDue));
+
+    loan.interestRepaid = (loan.interestRepaid || 0) + interestPayment;
+    remaining -= interestPayment;
+
+    // =========================
+    // 2️⃣ THEN PAY PRINCIPAL
+    // =========================
+    const principalDue = (loan.principalGiven || 0) - (loan.principalRepaid || 0);
+    const principalPayment = Math.min(remaining, Math.max(0, principalDue));
+
+    loan.principalRepaid = (loan.principalRepaid || 0) + principalPayment;
+    remaining -= principalPayment;
+
+    // =========================
+    // 3️⃣ CLOSE LOAN IF FULLY PAID
+    // =========================
+    if (
+      loan.principalRepaid >= loan.principalGiven &&
+      loan.interestRepaid >= loan.expectedInterest
+    ) {
+      loan.status = "completed";
+    }
   }
 
   save();
-  return amount - repay; // leftover goes to savings balance
+  return remaining; // leftover still goes to savings
 }
 
 function reject(id) {
