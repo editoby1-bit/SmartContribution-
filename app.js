@@ -2135,19 +2135,22 @@ function renderProfileTab() {
   // =========================
   // EMPOWERMENT BALANCE (NEGATIVE)
   // =========================
-  const activeLoan = loans.find(l => l.status !== "completed");
+ const activeLoan = loans.find(l => l.status !== "completed");
 
-  if (activeLoan) {
-    const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
-    const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
-    const totalOutstanding = principalLeft + interestLeft;
+if (activeLoan) {
+  const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
+  const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
+  const totalOutstanding = principalLeft + interestLeft;
 
-    html += `
-      <div class="small" style="margin-top:6px;color:#b42318">
-        Empowerment Given: -${fmt(totalOutstanding)}
+  html += `
+    <div class="kv" style="margin-top:6px">
+      <div class="kv-label">Empowerment Balance</div>
+      <div class="kv-value" style="color:#b42318">
+        -${fmt(totalOutstanding)}
       </div>
-    `;
-  }
+    </div>
+  `;
+}
 
   html += `</div>`;
 
@@ -2203,7 +2206,7 @@ function renderProfileTab() {
 
             return `
               <div class="small" style="margin-top:6px">
-                ${new Date(l.createdAt).toLocaleString()} —
+                new Date(l.createdAt || l.date || Date.now()).toLocaleString()
                 Given: <b>${fmt(l.principalGiven)}</b>,
                 Interest: <b>${fmt(l.expectedInterest)}</b>,
                 Principal Left: <b>${fmt(pLeft)}</b>,
@@ -3212,6 +3215,19 @@ if (action === "approve" && app.type === "empowerment") {
   const principal = Number(app.amount || 0);
   const interestAmount = Number(app.interest || 0);
 
+  state.empowerments = state.empowerments || [];
+
+state.empowerments.push({
+  id: uid("emp"),
+  customerId: cust.id,
+  principalGiven: Number(principal) || 0,
+  principalRepaid: 0,
+  expectedInterest: Number(interestAmount) || 0,
+  interestRepaid: 0,
+  status: "active",
+  createdAt: app.processedAt
+});
+
   if (isNaN(principal) || isNaN(interestAmount)) {
     showToast("Invalid empowerment figures");
     return;
@@ -3269,82 +3285,53 @@ if (action === "approve" && app.type === "withdraw") {
 // CREDIT APPROVAL (NEW ENGINE WITH OPTIONAL SPLIT)
 // =========================
 
-let creditedToBalance = app.amount;
+// =========================
+// CREDIT APPROVAL ONLY
+// =========================
+if (app.type === "credit") {
 
-// Find active empowerment loan (if any)
-const activeLoan = (state.empowerments || []).find(e =>
-  e.customerId === cust.id && e.status !== "completed"
-);
+  let creditedToBalance = app.amount;
 
-if (activeLoan) {
-  const allocation = await openCreditAllocationModal(cust, app.amount);
-  if (allocation === null) return;
-
-  if (
-    typeof allocation.emp !== "number" ||
-    typeof allocation.bal !== "number" ||
-    allocation.emp + allocation.bal !== app.amount
-  ) {
-    showToast("Invalid allocation");
-    return;
-  }
-
-  const confirmSplit = await openModalGeneric(
-    "Confirm Credit Allocation",
-    `
-      <div class="small">
-        Total Credit: <b>${fmt(app.amount)}</b><br/>
-        Repay Empowerment: <b>${fmt(allocation.emp)}</b><br/>
-        Credit Balance: <b>${fmt(allocation.bal)}</b>
-      </div>
-    `,
-    "Confirm Allocation"
+  const activeLoan = (state.empowerments || []).find(e =>
+    e.customerId === cust.id && e.status !== "completed"
   );
 
-  if (!confirmSplit) {
-    showToast("Credit allocation cancelled");
-    return;
+  if (activeLoan) {
+    const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
+    const interestLeft = (activeLoan.expectedInterest || 0) - (activeLoan.interestRepaid || 0);
+    const totalLeft = principalLeft + interestLeft;
+
+    const repayAmount = Math.min(app.amount, totalLeft);
+
+    const interestPay = Math.min(repayAmount, interestLeft);
+    activeLoan.interestRepaid += interestPay;
+
+    const remainingAfterInterest = repayAmount - interestPay;
+
+    const principalPay = Math.min(remainingAfterInterest, principalLeft);
+    activeLoan.principalRepaid += principalPay;
+
+    creditedToBalance = app.amount - repayAmount;
+
+    if ((activeLoan.principalRepaid + activeLoan.interestRepaid) >=
+        (activeLoan.principalGiven + activeLoan.expectedInterest)) {
+      activeLoan.status = "completed";
+    }
   }
 
-  // 💰 Apply repayment to empowerment loan
-  let empRemaining = allocation.emp;
+  cust.balance += creditedToBalance;
 
-  const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
-  const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
-
-  const payPrincipal = Math.min(empRemaining, principalLeft);
-  activeLoan.principalRepaid += payPrincipal;
-  empRemaining -= payPrincipal;
-
-  const payInterest = Math.min(empRemaining, interestLeft);
-  activeLoan.interestRepaid += payInterest;
-
-  // Mark completed if fully repaid
-  if (
-    activeLoan.principalRepaid >= activeLoan.principalGiven &&
-    activeLoan.interestRepaid >= activeLoan.expectedInterest
-  ) {
-    activeLoan.status = "completed";
-  }
-
-  creditedToBalance = allocation.bal;
+  cust.transactions.push({
+    id: uid("tx"),
+    type: "credit",
+    amount: app.amount,
+    date: app.processedAt,
+    desc: "Approved credit",
+    actor: staff.name,
+    approvalId: app.id
+  });
 }
 
-// 💳 Add remaining credit to customer balance
-cust.balance += creditedToBalance;
-
-// 🧾 Record transaction
-cust.transactions.push({
-  id: uid("tx"),
-  type: "credit",
-  amount: app.amount,
-  date: app.processedAt,
-  desc: activeLoan
-    ? `Approved credit — ₦${fmt(app.amount - creditedToBalance)} to empowerment, ₦${fmt(creditedToBalance)} to balance`
-    : "Approved credit",
-  actor: staff.name,
-  approvalId: app.id
-});
 // ===== AUDIT (ROLE-AWARE, DETAILED) =====
 await pushAudit(
   staff.name,
