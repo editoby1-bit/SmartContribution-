@@ -2269,6 +2269,7 @@ if (loans.length > 0) {
    };
  }
 }
+}
 
   function setActiveTab(tab) {
   // 1️⃣ force tab highlight
