@@ -2195,7 +2195,57 @@ const totalBalance = savingsBalance;
      </div>
    `;
  }
+// =========================
+// EMPOWERMENT LOAN SUMMARY (NEW ENGINE)
+// =========================
+const loans = (state.empowerments || []).filter(e => e.customerId === c.id);
 
+if (loans.length > 0) {
+  const loan = loans.find(l => l.status !== "completed") || loans[0];
+
+  const principalLeft = loan.principalGiven - loan.principalRepaid;
+  const interestLeft = loan.expectedInterest - loan.interestRepaid;
+  const totalOutstanding = principalLeft + interestLeft;
+
+  html += `
+    <div class="card" style="margin-bottom:12px">
+      <h4>Empowerment Loan</h4>
+
+      <div class="kv">
+        <div class="kv-label">Principal Left</div>
+        <div class="kv-value">${fmt(principalLeft)}</div>
+      </div>
+
+      <div class="kv">
+        <div class="kv-label">Interest Left</div>
+        <div class="kv-value">${fmt(interestLeft)}</div>
+      </div>
+
+      <div class="kv">
+        <div class="kv-label">Total Outstanding</div>
+        <div class="kv-value" style="color:${totalOutstanding > 0 ? 'red' : 'green'}">
+          ${fmt(totalOutstanding)}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // ===== HISTORY =====
+  html += `
+    <div class="card">
+      <h4>Empowerment History</h4>
+      ${loans
+        .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(l => `
+          <div class="small" style="margin-top:6px">
+            ${new Date(l.createdAt).toLocaleString()} —
+            Given: <b>${fmt(l.principalGiven)}</b>,
+            Interest: <b>${fmt(l.expectedInterest)}</b>
+          </div>
+        `).join("")}
+    </div>
+  `;
+}
  
  mBody.innerHTML = html;
 
@@ -2758,8 +2808,18 @@ window.openTransactionSummaryModal = openTransactionSummaryModal;
 function openCreditAllocationModal(cust, amount) {
   return new Promise(resolve => {
 
-    const maxEmp = 0; // old engine disabled
+    // 🔥 GET REAL OUTSTANDING FROM NEW ENGINE
+    const activeLoan = (state.empowerments || []).find(e =>
+      e.customerId === cust.id && e.status !== "completed"
+    );
 
+    let maxEmp = 0;
+
+    if (activeLoan) {
+      const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
+      const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
+      maxEmp = principalLeft + interestLeft;
+    }
 
     const wrapper = document.createElement("div");
 
@@ -2770,7 +2830,7 @@ function openCreditAllocationModal(cust, amount) {
 
       <div class="kv">
         <div class="kv-label">Repay Empowerment</div>
-        <input id="allocEmp" class="input" type="number" min="0" placeholder="0">
+        <input id="allocEmp" class="input" type="number" min="0" max="${maxEmp}" value="0">
       </div>
 
       <div class="kv" style="margin-top:8px">
@@ -2779,7 +2839,7 @@ function openCreditAllocationModal(cust, amount) {
       </div>
 
       <div class="small muted" style="margin-top:10px">
-        Outstanding Empowerment: ${fmt(maxEmp)}
+        Outstanding Empowerment: <b>${fmt(maxEmp)}</b>
       </div>
 
       <div id="allocError" class="small danger" style="margin-top:8px;display:none"></div>
@@ -2800,21 +2860,17 @@ function openCreditAllocationModal(cust, amount) {
     const err = wrapper.querySelector("#allocError");
 
     function syncFromEmp() {
-  let emp = Number(empInput.value || 0);
+      let emp = Number(empInput.value || 0);
 
-  if (emp < 0) emp = 0;
-  if (emp > maxEmp) emp = maxEmp;
-  if (emp > amount) emp = amount;
+      if (emp < 0) emp = 0;
+      if (emp > maxEmp) emp = maxEmp;
+      if (emp > amount) emp = amount;
 
-  empInput.value = emp;
-  balInput.value = amount - emp;
+      empInput.value = emp;
+      balInput.value = amount - emp;
+      err.style.display = "none";
+    }
 
-  err.style.display = "none";
-}
-empInput.addEventListener("input", syncFromEmp);
-
-
-    
     function syncFromBal() {
       let bal = Number(balInput.value || 0);
 
@@ -2846,10 +2902,11 @@ empInput.addEventListener("input", syncFromEmp);
       return true;
     }
 
-    empInput.oninput = syncFromEmp;
-    balInput.oninput = syncFromBal;
+    empInput.addEventListener("input", syncFromEmp);
+    balInput.addEventListener("input", syncFromBal);
   });
 }
+
 
 function openEmpowermentSummaryModal() {
   const given = sumEmpowermentDisbursed();
