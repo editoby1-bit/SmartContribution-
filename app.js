@@ -3294,31 +3294,41 @@ if (app.type === "credit") {
   let creditedToBalance = app.amount;
 
   const activeLoan = (state.empowerments || []).find(e =>
-    e.customerId === cust.id && e.status !== "completed"
-  );
+  e.customerId === cust.id && e.status !== "completed"
+);
 
-  if (activeLoan) {
-    const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
-    const interestLeft = (activeLoan.expectedInterest || 0) - (activeLoan.interestRepaid || 0);
-    const totalLeft = principalLeft + interestLeft;
+if (activeLoan) {
+  const allocation = await openCreditAllocationModal(cust, app.amount);
+  if (allocation === null) return;
 
-    const repayAmount = Math.min(app.amount, totalLeft);
-
-    const interestPay = Math.min(repayAmount, interestLeft);
-    activeLoan.interestRepaid += interestPay;
-
-    const remainingAfterInterest = repayAmount - interestPay;
-
-    const principalPay = Math.min(remainingAfterInterest, principalLeft);
-    activeLoan.principalRepaid += principalPay;
-
-    creditedToBalance = app.amount - repayAmount;
-
-    if ((activeLoan.principalRepaid + activeLoan.interestRepaid) >=
-        (activeLoan.principalGiven + activeLoan.expectedInterest)) {
-      activeLoan.status = "completed";
-    }
+  if (
+    typeof allocation.emp !== "number" ||
+    typeof allocation.bal !== "number" ||
+    allocation.emp + allocation.bal !== app.amount
+  ) {
+    showToast("Invalid allocation");
+    return;
   }
+
+  const repayAmount = allocation.emp;
+  creditedToBalance = allocation.bal;
+
+  const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
+  const interestPay = Math.min(repayAmount, interestLeft);
+  activeLoan.interestRepaid += interestPay;
+
+  const remaining = repayAmount - interestPay;
+  const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
+  const principalPay = Math.min(remaining, principalLeft);
+  activeLoan.principalRepaid += principalPay;
+
+  if (
+    activeLoan.principalRepaid >= activeLoan.principalGiven &&
+    activeLoan.interestRepaid >= activeLoan.expectedInterest
+  ) {
+    activeLoan.status = "completed";
+  }
+}
 
   cust.balance += creditedToBalance;
 
