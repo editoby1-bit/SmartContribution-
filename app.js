@@ -2198,23 +2198,24 @@ if (activeLoan) {
       <div class="card" style="margin-top:12px">
         <h4>Empowerment History</h4>
         ${loans
-          .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
-          .map(l => {
-            const pLeft = l.principalGiven - l.principalRepaid;
-            const iLeft = l.expectedInterest - l.interestRepaid;
-            const totalLeft = pLeft + iLeft;
+  .sort((a,b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0))
+  .map(l => {
+    const pLeft = l.principalGiven - l.principalRepaid;
+    const iLeft = l.expectedInterest - l.interestRepaid;
+    const totalLeft = pLeft + iLeft;
+    const d = new Date(l.createdAt || l.date || Date.now());
 
-            return `
-              <div class="small" style="margin-top:6px">
-                new Date(l.createdAt || l.date || Date.now()).toLocaleString()
-                Given: <b>${fmt(l.principalGiven)}</b>,
-                Interest: <b>${fmt(l.expectedInterest)}</b>,
-                Principal Left: <b>${fmt(pLeft)}</b>,
-                Interest Left: <b>${fmt(iLeft)}</b>,
-                Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
-              </div>
-            `;
-          }).join("")}
+    return `
+      <div class="small" style="margin-top:6px">
+        ${isNaN(d) ? "Unknown Date" : d.toLocaleString()} —
+        Given: <b>${fmt(l.principalGiven)}</b>,
+        Interest: <b>${fmt(l.expectedInterest)}</b>,
+        Principal Left: <b>${fmt(pLeft)}</b>,
+        Interest Left: <b>${fmt(iLeft)}</b>,
+        Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
+      </div>
+    `;
+  }).join("")}
       </div>
     `;
   }
