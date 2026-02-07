@@ -2205,16 +2205,15 @@ if (activeLoan) {
     const totalLeft = pLeft + iLeft;
     const d = new Date(l.createdAt || l.date || Date.now());
 
-    return `
-      <div class="small" style="margin-top:6px">
-        ${isNaN(d) ? "Unknown Date" : d.toLocaleString()} —
-        Given: <b>${fmt(l.principalGiven)}</b>,
-        Interest: <b>${fmt(l.expectedInterest)}</b>,
-        Principal Left: <b>${fmt(pLeft)}</b>,
-        Interest Left: <b>${fmt(iLeft)}</b>,
-        Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
-      </div>
-    `;
+   return `
+  <div class="small" style="margin-top:6px">
+    ${isNaN(d) ? "Unknown Date" : d.toLocaleString()} —
+    Given: <b>${fmt(l.principalGiven)}</b>,
+    Interest: <b>${fmt(l.expectedInterest)}</b>,
+    Principal Left: <b>${fmt(pLeft)}</b>,
+    Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
+  </div>
+`;
   }).join("")}
       </div>
     `;
@@ -4470,7 +4469,11 @@ function renderEmpowermentBalance() {
 
       <div>Capital Given Out: <b>${fmt(b.totalGivenOut)}</b></div>
       <div>Capital Repaid: <b>${fmt(b.totalReturnedCapital)}</b></div>
-      <div>Interest Earned: <b style="color:green">${fmt(b.totalInterestEarned)}</b></div>
+      <div>
+  Interest Earned:
+  <b style="color:green">${fmt(interestEarned)}</b>
+  <span class="small muted">(Interest Left: ${fmt(interestLeft)})</span>
+</div>S
 
       <hr/>
 
@@ -4630,10 +4633,16 @@ el.innerHTML = `
 <div class="card" style="margin-bottom:12px; border-left:4px solid #1976d2;">
   ${(() => {
     const capitalGiven = sumEmpowermentDisbursed();
-    const totalRepaid = sumEmpowermentRepaid();
-    const interestEarned = Math.max(0, totalRepaid - capitalGiven);
-    const position = calculateEmpowermentPosition();
-    const outstanding = capitalGiven - totalRepaid;
+const totalRepaid = sumEmpowermentRepaid();
+const interestEarned = Math.max(0, totalRepaid - capitalGiven);
+const position = calculateEmpowermentPosition();
+const outstanding = capitalGiven - totalRepaid;
+
+// 🔹 NEW — calculate total unpaid interest
+const interestLeft = (state.empowerments || []).reduce((sum, e) => {
+  const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+  return sum + (remaining > 0 ? remaining : 0);
+}, 0);
 
     return `
       <div class="small muted">Empowerment Balance</div>
