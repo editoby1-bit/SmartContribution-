@@ -2890,7 +2890,11 @@ function openEmpowermentSummaryModal() {
     <div class="card small">
       <div>Empowerment Given: <b>${fmt(given)}</b></div>
       <div>Principal Returned: <b>${fmt(principalBack)}</b></div>
-      <div>Interest Earned: <b>${fmt(interest)}</b></div>
+      <div>
+  Interest Earned:
+  <b style="color:green">${fmt(interestEarned)}</b>
+  <span class="small muted">(Interest Left: ${fmt(interestLeft)})</span>
+</div>
       <hr/>
       <div>
         Net Empowerment Position:
@@ -4469,11 +4473,7 @@ function renderEmpowermentBalance() {
 
       <div>Capital Given Out: <b>${fmt(b.totalGivenOut)}</b></div>
       <div>Capital Repaid: <b>${fmt(b.totalReturnedCapital)}</b></div>
-      <div>
-  Interest Earned:
-  <b style="color:green">${fmt(interestEarned)}</b>
-  <span class="small muted">(Interest Left: ${fmt(interestLeft)})</span>
-</div>S
+      <div>Interest Earned: <b style="color:green">${fmt(b.totalInterestEarned)}</b></div>
 
       <hr/>
 
