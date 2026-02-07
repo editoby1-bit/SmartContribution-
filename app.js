@@ -2802,14 +2802,14 @@ function openCreditAllocationModal(cust, amount) {
       </div>
 
       <div class="kv">
-        <div class="kv-label">Repay Empowerment</div>
-        <input id="allocEmp" class="input" type="number" min="0" max="${maxEmp}" value="0">
-      </div>
+  <div class="kv-label">Repay Empowerment</div>
+  <input id="allocEmp" class="input" type="number" min="0" placeholder="0" style="width:100%">
+</div>
 
       <div class="kv" style="margin-top:8px">
-        <div class="kv-label">Credit Balance</div>
-        <input id="allocBal" class="input" type="number" min="0" value="${amount}">
-      </div>
+  <div class="kv-label">Credit Balance</div>
+  <input id="allocBal" class="input" type="number" min="0" value="${amount}" style="width:100%">
+</div>
 
       <div class="small muted" style="margin-top:10px">
         Outstanding Empowerment: <b>${fmt(maxEmp)}</b>
@@ -3216,19 +3216,6 @@ if (action === "approve" && app.type === "empowerment") {
   const principal = Number(app.amount || 0);
   const interestAmount = Number(app.interest || 0);
 
-  state.empowerments = state.empowerments || [];
-
-state.empowerments.push({
-  id: uid("emp"),
-  customerId: cust.id,
-  principalGiven: Number(principal) || 0,
-  principalRepaid: 0,
-  expectedInterest: Number(interestAmount) || 0,
-  interestRepaid: 0,
-  status: "active",
-  createdAt: app.processedAt
-});
-
   if (isNaN(principal) || isNaN(interestAmount)) {
     showToast("Invalid empowerment figures");
     return;
@@ -3236,8 +3223,9 @@ state.empowerments.push({
 
   state.empowerments = state.empowerments || [];
 
+  // ✅ CREATE ONLY ONE LOAN
   state.empowerments.push({
-    id: "emp_" + uid(),
+    id: uid("emp"),
     customerId: cust.id,
     principalGiven: principal,
     principalRepaid: 0,
@@ -3262,7 +3250,6 @@ state.empowerments.push({
   save();
   renderCustomers();
   if (typeof refreshCustomerProfile === "function") refreshCustomerProfile();
-
 }
 // =========================
 // WITHDRAW APPROVAL (ALLOW NEGATIVE)
