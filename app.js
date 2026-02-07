@@ -2097,178 +2097,136 @@ function openCustomerModal(id) {
 }
 
 function renderProfileTab() {
- const c = state.customers.find(x => x.id === activeCustomerId);
+  const c = state.customers.find(x => x.id === activeCustomerId);
 
- if (!c) {
-   mBody.innerHTML = `<div class="small muted">Customer not found</div>`;
-   return;
- }
+  if (!c) {
+    mBody.innerHTML = `<div class="small muted">Customer not found</div>`;
+    return;
+  }
 
-// =========================
-// ✅ CENTRAL EMPOWERMENT ENGINE (PERMANENT)
-// =========================
-const savingsBalance = Number(c.balance || 0);
+  const savingsBalance = Number(c.balance || 0);
 
-// =========================
-// EMPOWERMENT POSITION (ONLY ACTIVE LOANS)
-// =========================
+  // =========================
+  // LOAD CUSTOMER EMPOWERMENT LOANS
+  // =========================
+  const loans = (state.empowerments || []).filter(e => e.customerId === c.id);
 
-const totalBalance = savingsBalance;
+  // 🔑 get pending approvals
+  const pendingApprovals = state.approvals
+    .filter(a => a.customerId === c.id && a.status === "pending")
+    .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
 
- // 🔑 get pending approvals
- const pendingApprovals = state.approvals
-   .filter(a => a.customerId === c.id && a.status === "pending")
-   .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
+  const latestApproval = pendingApprovals[0];
 
- const latestApproval = pendingApprovals[0];
+  let html = `
+  <div class="card" style="margin-bottom:12px">
+    <h4>${c.name}</h4>
+    <div class="small">Customer ID: ${c.id}</div>
+    <div class="small">Phone: ${c.phone || "—"}</div>
+  </div>
 
- // =========================
- // BUILD HTML
- // =========================
- let html = `
-<div class="card" style="margin-bottom:12px">
-  <h4>${c.name}</h4>
-  <div class="small">Customer ID: ${c.id}</div>
-  <div class="small">Phone: ${c.phone || "—"}</div>
-</div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="kv">
+      <div class="kv-label">Account Balance</div>
+      <div class="kv-value">${fmt(savingsBalance)}</div>
+    </div>
+  `;
 
-<div class="card" style="margin-bottom:12px">
-  <div class="kv">
-  <div class="kv-label">Account Balance</div>
-  <div class="kv-value">${fmt(savingsBalance)}</div>
-</div>
+  // =========================
+  // EMPOWERMENT BALANCE (NEGATIVE)
+  // =========================
+  const activeLoan = loans.find(l => l.status !== "completed");
 
-
-`;
-
- // =========================
- // NEGATIVE MAIN BALANCE BADGE
- // =========================
- if (totalBalance < 0) {
-   html += `
-     <div class="badge" style="
-       margin-top:6px;
-       background:#fdecea;
-       color:#b42318;
-       display:inline-block;
-     ">
-       Negative Balance: ${fmt(Math.abs(totalBalance))}
-     </div>
-   `;
- }
-
- 
- html += `</div>`;
-
- // =========================
- // PENDING APPROVAL CARD
- // =========================
- if (latestApproval) {
-   html += `
-     <div class="card warning" id="profilePendingApproval" style="
-       margin:12px 0;
-       border-left:4px solid #f59e0b;
-       padding:12px;
-     ">
-       <div class="small"><b>Pending Approval</b></div>
-
-       <div class="small" style="margin-top:6px">
-         ${latestApproval.type.toUpperCase()} — ${fmt(latestApproval.amount)}
-       </div>
-
-       <div class="small muted">
-         Requested by: ${latestApproval.requestedBy}
-       </div>
-
-       <div class="small muted">
-         ${new Date(latestApproval.requestedAt).toLocaleString()}
-       </div>
-
-       <div style="margin-top:8px">
-         <button
-           id="goToApprovalActions"
-           class="btn btn-sm"
-           data-approval-id="${latestApproval.id}">
-           Go to Approval Actions
-         </button>
-       </div>
-     </div>
-   `;
- }
-// =========================
-// EMPOWERMENT LOAN SUMMARY (NEW ENGINE)
-// =========================
-const loans = (state.empowerments || []).filter(e => e.customerId === c.id);
-
-if (loans.length > 0) {
-  const loan = loans.find(l => l.status !== "completed") || loans[0];
-
-  const principalLeft = loan.principalGiven - loan.principalRepaid;
-  const interestLeft = loan.expectedInterest - loan.interestRepaid;
-  const totalOutstanding = principalLeft + interestLeft;
-
-
- // =========================
-// EMPOWERMENT BALANCE (ACTIVE LOANS)
-// =========================
-const loans = (state.empowerments || []).filter(e => e.customerId === c.id);
-
-if (loans.length > 0) {
-  const active = loans.find(l => l.status !== "completed");
-
-  if (active) {
-    const principalLeft = active.principalGiven - active.principalRepaid;
-    const interestLeft = active.expectedInterest - active.interestRepaid;
+  if (activeLoan) {
+    const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
+    const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
     const totalOutstanding = principalLeft + interestLeft;
 
     html += `
       <div class="small" style="margin-top:6px;color:#b42318">
-        Empowerment Balance: -${fmt(totalOutstanding)}
+        Empowerment Given: -${fmt(totalOutstanding)}
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+
+  // =========================
+  // PENDING APPROVAL CARD
+  // =========================
+  if (latestApproval) {
+    html += `
+      <div class="card warning" style="
+        margin:12px 0;
+        border-left:4px solid #f59e0b;
+        padding:12px;
+      ">
+        <div class="small"><b>Pending Approval</b></div>
+
+        <div class="small" style="margin-top:6px">
+          ${latestApproval.type.toUpperCase()} — ${fmt(latestApproval.amount)}
+        </div>
+
+        <div class="small muted">
+          Requested by: ${latestApproval.requestedBy}
+        </div>
+
+        <div class="small muted">
+          ${new Date(latestApproval.requestedAt).toLocaleString()}
+        </div>
+
+        <div style="margin-top:8px">
+          <button
+            id="goToApprovalActions"
+            class="btn btn-sm"
+            data-approval-id="${latestApproval.id}">
+            Go to Approval Actions
+          </button>
+        </div>
       </div>
     `;
   }
 
   // =========================
-  // HISTORY WITH LIVE BALANCES
+  // EMPOWERMENT HISTORY
   // =========================
-  html += `
-    <div class="card" style="margin-top:12px">
-      <h4>Empowerment History</h4>
-      ${loans
-        .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .map(l => {
-          const pLeft = l.principalGiven - l.principalRepaid;
-          const iLeft = l.expectedInterest - l.interestRepaid;
-          const totalLeft = pLeft + iLeft;
+  if (loans.length > 0) {
+    html += `
+      <div class="card" style="margin-top:12px">
+        <h4>Empowerment History</h4>
+        ${loans
+          .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
+          .map(l => {
+            const pLeft = l.principalGiven - l.principalRepaid;
+            const iLeft = l.expectedInterest - l.interestRepaid;
+            const totalLeft = pLeft + iLeft;
 
-          return `
-            <div class="small" style="margin-top:6px">
-              ${new Date(l.createdAt).toLocaleString()} —
-              Given: <b>${fmt(l.principalGiven)}</b>,
-              Interest: <b>${fmt(l.expectedInterest)}</b>,
-              Principal Left: <b>${fmt(pLeft)}</b>,
-              Interest Left: <b>${fmt(iLeft)}</b>,
-              Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
-            </div>
-          `;
-        }).join("")}
-    </div>
-  `;
-}
+            return `
+              <div class="small" style="margin-top:6px">
+                ${new Date(l.createdAt).toLocaleString()} —
+                Given: <b>${fmt(l.principalGiven)}</b>,
+                Interest: <b>${fmt(l.expectedInterest)}</b>,
+                Principal Left: <b>${fmt(pLeft)}</b>,
+                Interest Left: <b>${fmt(iLeft)}</b>,
+                Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
+              </div>
+            `;
+          }).join("")}
+      </div>
+    `;
+  }
 
- 
- mBody.innerHTML = html;
+  mBody.innerHTML = html;
 
- const btn = document.getElementById("goToApprovalActions");
- if (btn) {
-   btn.onclick = (e) => {
-     e.stopPropagation();
-     activeCustomerId = c.id;
-     window.activeApprovalId = btn.dataset.approvalId;
-     setActiveTab("tools");
-   };
- }
-}
+  const btn = document.getElementById("goToApprovalActions");
+  if (btn) {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      activeCustomerId = c.id;
+      window.activeApprovalId = btn.dataset.approvalId;
+      setActiveTab("tools");
+    };
+  }
 }
 
   function setActiveTab(tab) {
