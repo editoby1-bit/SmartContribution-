@@ -2207,45 +2207,55 @@ if (loans.length > 0) {
   const interestLeft = loan.expectedInterest - loan.interestRepaid;
   const totalOutstanding = principalLeft + interestLeft;
 
+
+ // =========================
+// EMPOWERMENT BALANCE (ACTIVE LOANS)
+// =========================
+const loans = (state.empowerments || []).filter(e => e.customerId === c.id);
+
+if (loans.length > 0) {
+  const active = loans.find(l => l.status !== "completed");
+
+  if (active) {
+    const principalLeft = active.principalGiven - active.principalRepaid;
+    const interestLeft = active.expectedInterest - active.interestRepaid;
+    const totalOutstanding = principalLeft + interestLeft;
+
+    html += `
+      <div class="small" style="margin-top:6px;color:#b42318">
+        Empowerment Balance: -${fmt(totalOutstanding)}
+      </div>
+    `;
+  }
+
+  // =========================
+  // HISTORY WITH LIVE BALANCES
+  // =========================
   html += `
-    <div class="card" style="margin-bottom:12px">
-      <h4>Empowerment Loan</h4>
-
-      <div class="kv">
-        <div class="kv-label">Principal Left</div>
-        <div class="kv-value">${fmt(principalLeft)}</div>
-      </div>
-
-      <div class="kv">
-        <div class="kv-label">Interest Left</div>
-        <div class="kv-value">${fmt(interestLeft)}</div>
-      </div>
-
-      <div class="kv">
-        <div class="kv-label">Total Outstanding</div>
-        <div class="kv-value" style="color:${totalOutstanding > 0 ? 'red' : 'green'}">
-          ${fmt(totalOutstanding)}
-        </div>
-      </div>
-    </div>
-  `;
-
-  // ===== HISTORY =====
-  html += `
-    <div class="card">
+    <div class="card" style="margin-top:12px">
       <h4>Empowerment History</h4>
       ${loans
         .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .map(l => `
-          <div class="small" style="margin-top:6px">
-            ${new Date(l.createdAt).toLocaleString()} —
-            Given: <b>${fmt(l.principalGiven)}</b>,
-            Interest: <b>${fmt(l.expectedInterest)}</b>
-          </div>
-        `).join("")}
+        .map(l => {
+          const pLeft = l.principalGiven - l.principalRepaid;
+          const iLeft = l.expectedInterest - l.interestRepaid;
+          const totalLeft = pLeft + iLeft;
+
+          return `
+            <div class="small" style="margin-top:6px">
+              ${new Date(l.createdAt).toLocaleString()} —
+              Given: <b>${fmt(l.principalGiven)}</b>,
+              Interest: <b>${fmt(l.expectedInterest)}</b>,
+              Principal Left: <b>${fmt(pLeft)}</b>,
+              Interest Left: <b>${fmt(iLeft)}</b>,
+              Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
+            </div>
+          `;
+        }).join("")}
     </div>
   `;
 }
+
  
  mBody.innerHTML = html;
 
@@ -4453,22 +4463,13 @@ window.recordEmpowermentRepayment = recordEmpowermentRepayment;
 
 
 function sumEmpowermentDisbursed() {
-  return (state.approvals || [])
-    .filter(a =>
-      a.type === "empowerment" &&
-      a.status === "approved"
-    )
-    .reduce((sum, a) => sum + Number(a.amount || 0), 0);
+  return (state.empowerments || []).reduce((s,e)=> s + (e.principalGiven || 0), 0);
 }
 
 function sumEmpowermentRepaid() {
-  return (state.approvals || [])
-    .filter(a =>
-      a.type === "credit" &&
-      a.status === "approved" &&
-      a.customerId && hasActiveEmpowerment(a.customerId)
-    )
-    .reduce((sum, a) => sum + Number(a.amount || 0), 0);
+  return (state.empowerments || []).reduce((s,e)=> 
+    s + (e.principalRepaid || 0) + (e.interestRepaid || 0)
+  , 0);
 }
 
 function hasActiveEmpowerment(customerId) {
