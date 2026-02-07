@@ -2890,11 +2890,7 @@ function openEmpowermentSummaryModal() {
     <div class="card small">
       <div>Empowerment Given: <b>${fmt(given)}</b></div>
       <div>Principal Returned: <b>${fmt(principalBack)}</b></div>
-      <div>
-  Interest Earned:
-  <b style="color:green">${fmt(interestEarned)}</b>
-  <span class="small muted">(Interest Left: ${fmt(interestLeft)})</span>
-</div>
+      <div>Interest Earned: <b>${fmt(interest)}</b></div>
       <hr/>
       <div>
         Net Empowerment Position:
@@ -4649,7 +4645,11 @@ const interestLeft = (state.empowerments || []).reduce((sum, e) => {
 
       <div>Capital Given: <b>${fmt(capitalGiven)}</b></div>
       <div>Total Repaid: <b>${fmt(totalRepaid)}</b></div>
-      <div>Interest Earned: <b style="color:green">${fmt(interestEarned)}</b></div>
+      <div>
+  Interest Earned:
+  <b style="color:green">${fmt(interestEarned)}</b>
+  <span class="small muted">(Interest Left: ${fmt(interestLeft)})</span>
+</div>
 
       <div style="margin-top:6px;">
         Outstanding Capital:
