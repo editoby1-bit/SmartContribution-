@@ -66,6 +66,7 @@ window.currentStaff = currentStaff;
   codDrafts: {},
   accounts: { income: [], expense: [] },
   accountEntries: [],
+  empowerments: [],
   ui: { current: null, dateFilter: "today" },
 
 business: {
@@ -77,6 +78,8 @@ business: {
 };
 
 window.state = state; // make global
+state.empowerments = state.empowerments || [];
+
 state.ui.entryDisplayLimit = state.ui.entryDisplayLimit || {};
 // 🔒 LOCK ACCOUNTS STRUCTURE (RUNS ONCE AT BOOT)
 state.accounts = state.accounts || { income: [], expense: [] };
@@ -99,6 +102,8 @@ state.empowerments = state.empowerments || [];
     state.audit = Array.isArray(data.audit) ? data.audit : [];
     state.cod = Array.isArray(data.cod) ? data.cod : [];
     state.codDrafts = data.codDrafts || {};
+    state.empowerments = Array.isArray(data.empowerments) ? data.empowerments : [];
+
 
     if (data.accounts) {
   state.accounts.income = Array.isArray(data.accounts.income)
@@ -2093,31 +2098,7 @@ function openCustomerModal(id) {
 
 function renderProfileTab() {
  const c = state.customers.find(x => x.id === activeCustomerId);
- // =========================
-// 🔄 AUTO-MIGRATE OLD EMPOWERMENT TO NEW ENGINE
-// =========================
-if (
-  c.empowerment &&
-  Array.isArray(c.empowerment.history) &&
-  c.empowerment.history.length > 0 &&
-  !(state.empowerments || []).some(e => e.customerId === c.id)
-) {
-  const totalPrincipal = c.empowerment.history.reduce((s, h) => s + (h.principal || 0), 0);
-  const totalInterest = c.empowerment.history.reduce((s, h) => s + (h.interest || 0), 0);
 
-  state.empowerments = state.empowerments || [];
-  state.empowerments.push({
-    id: "emp_" + crypto.randomUUID(),
-    customerId: c.id,
-    principalGiven: totalPrincipal,
-    principalRepaid: 0,
-    interestRepaid: totalInterest,
-    status: "active",
-    history: c.empowerment.history
-  });
-
-  save();
-}
  if (!c) {
    mBody.innerHTML = `<div class="small muted">Customer not found</div>`;
    return;
@@ -2215,27 +2196,7 @@ const totalBalance = savingsBalance;
    `;
  }
 
- // =========================
- // EMPOWERMENT HISTORY
- // =========================
- if (c.empowerment && c.empowerment.history && c.empowerment.history.length > 0) {
-   html += `
-     <div class="card" style="margin-top:12px">
-       <h4>Empowerment History</h4>
-       ${[...c.empowerment.history]
-         .sort((a, b) => new Date(b.date) - new Date(a.date))
-         .map(h => `
-           <div class="small" style="margin-top:6px">
-             ${new Date(h.date).toLocaleDateString()} —
-             Principal: <b>${fmt(h.principal)}</b>,
-             Interest: <b>${fmt(h.interest)}</b>
-           </div>
-         `)
-         .join("")}
-     </div>
-   `;
- }
-
+ 
  mBody.innerHTML = html;
 
  const btn = document.getElementById("goToApprovalActions");
@@ -3222,61 +3183,42 @@ app.status = action === "approve" ? "approved" : "rejected";
 // =========================
 if (action === "approve" && app.type === "empowerment") {
 
-  cust.empowerment = cust.empowerment || {
-    active: true,
-    balance: 0,
-    interestRate: 0
-  };
+  const principal = Number(app.amount || 0);
+  const interestAmount = Number(app.interest || 0);
 
-  cust.empowerment.active = true;
-  cust.empowerment.interestRate = Number(app.interest || 0);
+  if (isNaN(principal) || isNaN(interestAmount)) {
+    showToast("Invalid empowerment figures");
+    return;
+  }
 
-  const principal = app.amount;
-const interestAmount = app.interest || 0; // already ₦ amount
+  state.empowerments = state.empowerments || [];
 
+  state.empowerments.push({
+    id: "emp_" + uid(),
+    customerId: cust.id,
+    principalGiven: principal,
+    principalRepaid: 0,
+    expectedInterest: interestAmount,
+    interestRepaid: 0,
+    status: "active",
+    createdAt: app.processedAt
+  });
 
-// 🔒 HARD GUARD
-if (isNaN(principal) || isNaN(interestAmount)) {
-  showToast("Invalid empowerment figures");
-  return;
-}
+  // Keep history ONLY for display timeline
+  cust.empowerment = cust.empowerment || {};
+  cust.empowerment.history = cust.empowerment.history || [];
 
-// ✅ TOTAL = principal + flat interest
-const totalLoan = principal + interestAmount;
+  cust.empowerment.history.push({
+    approvalId: app.id,
+    principal,
+    interest: interestAmount,
+    date: app.processedAt,
+    approvedBy: staff.name
+  });
 
-
-// 🧱 Ensure transactions array exists
-if (!Array.isArray(cust.transactions)) {
-  cust.transactions = [];
-}
-
-cust.transactions.push({
-  id: uid("tx"),
-  type: "empowerment",
-  amount: totalLoan,
-  date: app.processedAt,
-  desc: `Empowerment approved — ₦${fmt(principal)} + ₦${fmt(interestAmount)} interest`,
-  actor: staff.name,
-  approvalId: app.id
-});
-
-// 🧱 Ensure empowerment object exists
-cust.empowerment = cust.empowerment || { active: true, balance: 0, interestRate: 0 };
-
-// 🧱 Ensure history array ALWAYS exists
-if (!Array.isArray(cust.empowerment.history)) {
-  cust.empowerment.history = [];
-}
-
-cust.empowerment.history.push({
-  approvalId: app.id,
-  principal: Number(principal) || 0,
-  interest: Number(interestAmount) || 0,
-  total: Number(totalLoan) || 0,
-  date: app.processedAt,
-  approvedBy: staff.name
-});
-
+  save();
+  renderCustomers();
+  if (typeof refreshCustomerProfile === "function") refreshCustomerProfile();
 
 }
 // =========================
@@ -3297,80 +3239,86 @@ if (action === "approve" && app.type === "withdraw") {
   });
 }
 
-    // =========================
-// CREDIT APPROVAL (MANUAL SPLIT)
+ // =========================
+// CREDIT APPROVAL (NEW ENGINE WITH OPTIONAL SPLIT)
 // =========================
-if (app.type === "credit") {
 
-  let creditedToBalance = app.amount;
+let creditedToBalance = app.amount;
 
-  // =========================
-  // SPLIT REPAYMENT IF EMPOWERMENT EXISTS
-  // =========================
-  if (false) // old empowerment engine disabled
-{
-
-
-
-    const allocation = await openCreditAllocationModal(cust, app.amount);
-    if (allocation === null) return;
-
-    if (
-      typeof allocation.emp !== "number" ||
-      typeof allocation.bal !== "number" ||
-      allocation.emp + allocation.bal !== app.amount
-    ) {
-      showToast("Invalid allocation");
-      return;
-    }
-const confirmSplit = await openModalGeneric(
-  "Confirm Credit Allocation",
-  `
-    <div class="small">
-      Total Credit: <b>${fmt(app.amount)}</b><br/>
-      Repay Empowerment: <b>${fmt(allocation.emp)}</b><br/>
-      Credit Balance: <b>${fmt(allocation.bal)}</b>
-    </div>
-  `,
-  "Confirm Allocation"
+// Find active empowerment loan (if any)
+const activeLoan = (state.empowerments || []).find(e =>
+  e.customerId === cust.id && e.status !== "completed"
 );
 
-if (!confirmSplit) {
-  showToast("Credit allocation cancelled");
-  return;
+if (activeLoan) {
+  const allocation = await openCreditAllocationModal(cust, app.amount);
+  if (allocation === null) return;
+
+  if (
+    typeof allocation.emp !== "number" ||
+    typeof allocation.bal !== "number" ||
+    allocation.emp + allocation.bal !== app.amount
+  ) {
+    showToast("Invalid allocation");
+    return;
+  }
+
+  const confirmSplit = await openModalGeneric(
+    "Confirm Credit Allocation",
+    `
+      <div class="small">
+        Total Credit: <b>${fmt(app.amount)}</b><br/>
+        Repay Empowerment: <b>${fmt(allocation.emp)}</b><br/>
+        Credit Balance: <b>${fmt(allocation.bal)}</b>
+      </div>
+    `,
+    "Confirm Allocation"
+  );
+
+  if (!confirmSplit) {
+    showToast("Credit allocation cancelled");
+    return;
+  }
+
+  // 💰 Apply repayment to empowerment loan
+  let empRemaining = allocation.emp;
+
+  const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
+  const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
+
+  const payPrincipal = Math.min(empRemaining, principalLeft);
+  activeLoan.principalRepaid += payPrincipal;
+  empRemaining -= payPrincipal;
+
+  const payInterest = Math.min(empRemaining, interestLeft);
+  activeLoan.interestRepaid += payInterest;
+
+  // Mark completed if fully repaid
+  if (
+    activeLoan.principalRepaid >= activeLoan.principalGiven &&
+    activeLoan.interestRepaid >= activeLoan.expectedInterest
+  ) {
+    activeLoan.status = "completed";
+  }
+
+  creditedToBalance = allocation.bal;
 }
 
-// remainder goes to balance
-creditedToBalance = allocation.bal;
+// 💳 Add remaining credit to customer balance
 cust.balance += creditedToBalance;
 
+// 🧾 Record transaction
 cust.transactions.push({
   id: uid("tx"),
   type: "credit",
   amount: app.amount,
   date: app.processedAt,
-  desc: `Approved credit — ₦${appliedEmp} to empowerment, ₦${creditedToBalance} to balance`,
+  desc: activeLoan
+    ? `Approved credit — ₦${fmt(app.amount - creditedToBalance)} to empowerment, ₦${fmt(creditedToBalance)} to balance`
+    : "Approved credit",
   actor: staff.name,
   approvalId: app.id
 });
-
-  } else {
-    // =========================
-    // NORMAL CREDIT
-    // =========================
-    cust.transactions.push({
-      id: uid("tx"),
-      type: "credit",
-      amount: app.amount,
-      date: app.processedAt,
-      desc: "Approved credit",
-      actor: staff.name,
-      approvalId: app.id
-    });
-  }
-
-  cust.balance += creditedToBalance;
-}
 // ===== AUDIT (ROLE-AWARE, DETAILED) =====
 await pushAudit(
   staff.name,
@@ -4486,6 +4434,27 @@ function calculateEmpowermentPosition() {
   return totalRepaid - capitalGiven;
 }
 
+ function calculateEmpowermentBalance() {
+  const loans = state.empowerments || [];
+
+  let totalGivenOut = 0;
+  let totalReturnedCapital = 0;
+  let totalInterestEarned = 0;
+
+  loans.forEach(l => {
+    totalGivenOut += Number(l.principalGiven || 0);
+    totalReturnedCapital += Number(l.principalRepaid || 0);
+    totalInterestEarned += Number(l.interestRepaid || 0);
+  });
+
+  return {
+    totalGivenOut,
+    totalReturnedCapital,
+    totalInterestEarned,
+    netPosition: totalGivenOut - totalReturnedCapital
+  };
+}
+
 
 function renderEmpowermentBalance() {
   const el = document.getElementById("empowermentPanel");
@@ -4531,10 +4500,12 @@ const totalExpense = sumEntries(
 );
 const net = totalIncome - totalExpense;
 const accountTotals = [];
-const empGiven = sumEmpowermentDisbursed();
-const empRepaid = sumEmpowermentRepaid();
-const empBalance = calculateEmpowermentPosition();
-const empInterest = Math.max(0, empRepaid - empGiven);
+const emp = calculateEmpowermentBalance();
+
+const empGiven = emp.totalGivenOut;
+const empRepaid = emp.totalReturnedCapital;
+const empInterest = emp.totalInterestEarned;
+const empBalance = emp.netPosition;
 
 
 ["income","expense"].forEach(type => {
