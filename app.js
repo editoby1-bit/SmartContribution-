@@ -2139,7 +2139,11 @@ function renderProfileTab() {
 
 if (activeLoan) {
   const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
-  const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
+  const interestLeft = (state.empowerments || []).reduce((sum, e) => {
+  if (e.status === "completed") return sum;
+  const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+  return sum + (remaining > 0 ? remaining : 0);
+}, 0);
   const totalOutstanding = principalLeft + interestLeft;
 
   html += `
@@ -2789,7 +2793,11 @@ function openCreditAllocationModal(cust, amount) {
 
     if (activeLoan) {
       const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
-      const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
+      const interestLeft = (state.empowerments || []).reduce((sum, e) => {
+  if (e.status === "completed") return sum;
+  const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+  return sum + (remaining > 0 ? remaining : 0);
+}, 0);
       maxEmp = principalLeft + interestLeft;
     }
 
@@ -3299,7 +3307,11 @@ if (activeLoan) {
   const repayAmount = allocation.emp;
   creditedToBalance = allocation.bal;
 
-  const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
+  const interestLeft = (state.empowerments || []).reduce((sum, e) => {
+  if (e.status === "completed") return sum;
+  const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+  return sum + (remaining > 0 ? remaining : 0);
+}, 0);
   const interestPay = Math.min(repayAmount, interestLeft);
   activeLoan.interestRepaid += interestPay;
 
