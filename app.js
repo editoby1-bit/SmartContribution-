@@ -4647,9 +4647,10 @@ const interestEarned = (state.empowerments || []).reduce((sum, e) => {
 }, 0);
 const position = calculateEmpowermentPosition();
 const outstandingCapital = (state.empowerments || []).reduce((sum, e) => {
-  const remainingPrincipal = (e.principalGiven || 0) - (e.principalRepaid || 0);
-  return sum + (remainingPrincipal > 0 ? remainingPrincipal : 0);
+  const remaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
+  return sum + (remaining > 0 ? remaining : 0);
 }, 0);
+
 
 // 🔹 NEW — calculate total unpaid interest
 const interestLeft = (state.empowerments || []).reduce((sum, e) => {
