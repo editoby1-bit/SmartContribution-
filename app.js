@@ -1801,49 +1801,23 @@ function initEmpowermentModel(c, config = {}) {
 }
 
 function applyEmpowermentRepayment(c, amount) {
-  let remaining = amount;
+  const activeLoan = state.empowerments.find(e =>
+    e.customerId === c.id && e.status !== "completed"
+  );
 
-  // Get ALL active loans, oldest first
-  const loans = (state.empowerments || [])
-    .filter(e => e.customerId === c.id && e.status !== "completed")
-    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  if (!activeLoan) return amount; // no loan, money goes fully to savings
 
-  if (loans.length === 0) return amount; // no loan, full amount goes to savings
+  const remainingPrincipal = activeLoan.principalGiven - activeLoan.principalRepaid;
+  const repay = Math.min(amount, remainingPrincipal);
 
-  for (const loan of loans) {
-    if (remaining <= 0) break;
+  activeLoan.principalRepaid += repay;
 
-    // =========================
-    // 1️⃣ PAY INTEREST FIRST
-    // =========================
-    const interestDue = (loan.expectedInterest || 0) - (loan.interestRepaid || 0);
-    const interestPayment = Math.min(remaining, Math.max(0, interestDue));
-
-    loan.interestRepaid = (loan.interestRepaid || 0) + interestPayment;
-    remaining -= interestPayment;
-
-    // =========================
-    // 2️⃣ THEN PAY PRINCIPAL
-    // =========================
-    const principalDue = (loan.principalGiven || 0) - (loan.principalRepaid || 0);
-    const principalPayment = Math.min(remaining, Math.max(0, principalDue));
-
-    loan.principalRepaid = (loan.principalRepaid || 0) + principalPayment;
-    remaining -= principalPayment;
-
-    // =========================
-    // 3️⃣ CLOSE LOAN IF FULLY PAID
-    // =========================
-    if (
-      loan.principalRepaid >= loan.principalGiven &&
-      loan.interestRepaid >= loan.expectedInterest
-    ) {
-      loan.status = "completed";
-    }
+  if (activeLoan.principalRepaid >= activeLoan.principalGiven) {
+    activeLoan.status = "completed";
   }
 
   save();
-  return remaining; // leftover still goes to savings
+  return amount - repay; // leftover goes to savings balance
 }
 
 function reject(id) {
@@ -4668,14 +4642,27 @@ el.innerHTML = `
   ${(() => {
     const capitalGiven = sumEmpowermentDisbursed();
 const totalRepaid = sumEmpowermentRepaid();
-const interestEarned = Math.max(0, totalRepaid - capitalGiven);
+const interestEarned = (state.empowerments || []).reduce((sum, e) => {
+  return sum + (e.interestRepaid || 0);
+}, 0);
 const position = calculateEmpowermentPosition();
 const outstanding = capitalGiven - totalRepaid;
 
 // 🔹 NEW — calculate total unpaid interest
 const interestLeft = (state.empowerments || []).reduce((sum, e) => {
-  const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
-  return sum + (remaining > 0 ? remaining : 0);
+  if (e.status === "completed") return sum;
+
+  const principalRemaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
+
+  // If principal still exists, interest is untouched
+  if (principalRemaining > 0) {
+    return sum + (e.expectedInterest || 0);
+  }
+
+  // If principal cleared, interest can now reduce
+  const remainingInterest = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+  return sum + Math.max(0, remainingInterest);
+
 }, 0);
 
     return `
