@@ -4647,11 +4647,7 @@ const interestEarned = (state.empowerments || []).reduce((sum, e) => {
 }, 0);
 const position = calculateEmpowermentPosition();
 const outstandingCapital = (state.empowerments || []).reduce((sum, e) => {
-  if (e.status === "completed") return sum;
-
-  const remainingPrincipal =
-    (e.principalGiven || 0) - (e.principalRepaid || 0);
-
+  const remainingPrincipal = (e.principalGiven || 0) - (e.principalRepaid || 0);
   return sum + (remainingPrincipal > 0 ? remainingPrincipal : 0);
 }, 0);
 
