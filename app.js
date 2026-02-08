@@ -1448,17 +1448,19 @@ if (c.balance < 0) {
 
     if (!activeLoan) return "";
 
-    const remaining = activeLoan.principalGiven - activeLoan.principalRepaid;
+    const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
+const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
+const totalLeft = principalLeft + interestLeft;
 
-    if (remaining <= 0) return "";
+if (totalLeft <= 0) return "";
 
-    return `<span class="badge" style="
-              margin-left:6px;
-              background:#fff3cd;
-              color:#7a5c00
-            ">
-              EMPOWERMENT ${fmt(remaining)}
-            </span>`;
+return `<span class="badge" style="
+          margin-left:6px;
+          background:#fff3cd;
+          color:#7a5c00
+        ">
+          EMPOWERMENT ${fmt(totalLeft)}
+        </span>`;
   })()
 }
   ${
@@ -4681,7 +4683,9 @@ const interestLeft = (state.empowerments || []).reduce((sum, e) => {
       <div>
   Interest Earned:
   <b style="color:green">${fmt(interestEarned)}</b>
-  <span class="small muted">(Interest Left: ${fmt(interestLeft)})</span>
+ <span class="small" style="color:${interestLeft > 0 ? '#b42318' : '#667085'}">
+  (Interest Left: ${fmt(interestLeft)})
+</span>
 </div>
 
       <div style="margin-top:6px;">
