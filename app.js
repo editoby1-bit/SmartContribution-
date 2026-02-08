@@ -3964,6 +3964,194 @@ function openOperationalDrilldown() {
 
 window.openOperationalDrilldown = openOperationalDrilldown;
 
+function openEmpowermentDrilldown() {
+  const emp = calculateEmpowermentBalance();
+
+  const capitalGiven = emp.totalGivenOut;
+  const capitalRepaid = emp.totalReturnedCapital;
+  const interestEarned = emp.totalInterestEarned;
+
+  const interestLeft = (state.empowerments || []).reduce((sum, e) => {
+    const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+    return sum + (remaining > 0 ? remaining : 0);
+  }, 0);
+
+  const outstandingCapital = (state.empowerments || []).reduce((sum, e) => {
+    const remaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
+    return sum + (remaining > 0 ? remaining : 0);
+  }, 0);
+
+  const wrapper = document.createElement("div");
+
+  wrapper.innerHTML = `
+    <div style="margin-bottom:10px">
+      <div><b>Capital Given:</b> ${fmt(capitalGiven)}</div>
+      <div><b>Capital Repaid:</b> ${fmt(capitalRepaid)}</div>
+      <div><b>Interest Earned:</b> <span style="color:green">${fmt(interestEarned)}</span></div>
+      <div><b>Interest Left:</b> <span style="color:${interestLeft>0?'red':'inherit'}">${fmt(interestLeft)}</span></div>
+      <div><b>Outstanding Capital:</b> <span style="color:${outstandingCapital>0?'red':'green'}">${fmt(outstandingCapital)}</span></div>
+    </div>
+
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
+      <button class="btn small solid primary" onclick="setEmpDateFilter('today')">Today</button>
+      <button class="btn small solid primary" onclick="setEmpDateFilter('week')">This Week</button>
+      <button class="btn small solid primary" onclick="setEmpDateFilter('month')">This Month</button>
+      <button class="btn small solid primary" onclick="setEmpDateFilter('year')">This Year</button>
+      <button class="btn small solid primary" onclick="setEmpDateFilter('all')">All Time</button>
+    </div>
+
+    <div style="display:flex; gap:6px; margin-bottom:8px">
+      <input type="date" id="empFromDate" class="input small">
+      <span>to</span>
+      <input type="date" id="empToDate" class="input small">
+      <button class="btn small solid primary" onclick="applyEmpDateRange()">Apply</button>
+    </div>
+
+    <div style="display:flex; gap:6px; margin-bottom:10px">
+      <button class="btn small solid primary" onclick="exportEmpowermentCSV()">Export CSV</button>
+      <button class="btn small solid primary" onclick="printEmpowermentSummary()">Print Summary</button>
+    </div>
+
+    <div id="empTxnList" style="max-height:300px; overflow:auto"></div>
+    <button id="empLoadMore" class="btn small solid primary" style="margin-top:8px">See More</button>
+  `;
+
+  openModalGeneric("Empowerment Transactions", wrapper, null);
+
+  renderEmpowermentTransactions();
+}
+
+function setEmpDateFilter(range) {
+  state.ui.empDateFilter = range;
+  state.ui.empFromDate = null;
+  state.ui.empToDate = null;
+  renderEmpowermentTransactions();
+}
+window.setEmpDateFilter = setEmpDateFilter;
+
+function applyEmpDateRange() {
+  const from = document.getElementById("empFromDate").value;
+  const to = document.getElementById("empToDate").value;
+
+  state.ui.empDateFilter = "custom";
+  state.ui.empFromDate = from ? new Date(from) : null;
+  state.ui.empToDate = to ? new Date(to) : null;
+
+  renderEmpowermentTransactions();
+}
+window.applyEmpDateRange = applyEmpDateRange;
+
+
+function empTxnMatchesFilter(dateStr) {
+  const d = new Date(dateStr);
+  const now = new Date();
+
+  const sameDay = (a,b) =>
+    a.getFullYear()===b.getFullYear() &&
+    a.getMonth()===b.getMonth() &&
+    a.getDate()===b.getDate();
+
+  switch (state.ui.empDateFilter) {
+    case "today":
+      return sameDay(d, now);
+
+    case "week": {
+      const start = new Date(now);
+      start.setDate(now.getDate() - now.getDay());
+      start.setHours(0,0,0,0);
+      return d >= start;
+    }
+
+    case "month":
+      return d.getMonth() === now.getMonth() &&
+             d.getFullYear() === now.getFullYear();
+
+    case "year":
+      return d.getFullYear() === now.getFullYear();
+
+    case "range":
+      if (!state.ui.empFromDate || !state.ui.empToDate) return true;
+      return d >= new Date(state.ui.empFromDate) &&
+             d <= new Date(state.ui.empToDate + "T23:59:59");
+
+    default:
+      return true;
+  }
+}
+
+function exportEmpowermentCSV() {
+  const txns = (state.transactions || [])
+    .filter(t => t.desc?.toLowerCase().includes("empowerment"))
+    .filter(t => empTxnMatchesFilter(t.date));
+
+  let csv = "Date,Amount,Description\n";
+  txns.forEach(t => {
+    csv += `${new Date(t.date).toLocaleString()},${t.amount},"${t.desc || ""}"\n`;
+  });
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "empowerment_transactions.csv";
+  a.click();
+}
+window.exportEmpowermentCSV = exportEmpowermentCSV;
+
+function printEmpowermentSummary() {
+  const txns = (state.transactions || [])
+    .filter(t => t.desc?.toLowerCase().includes("empowerment"))
+    .filter(t => empTxnMatchesFilter(t.date));
+
+  const total = txns.reduce((s, t) => s + t.amount, 0);
+
+  const w = window.open("", "_blank");
+  w.document.write(`
+    <h2>Empowerment Summary</h2>
+    <p>Total Transactions: ${txns.length}</p>
+    <p>Total Amount: ${fmt(total)}</p>
+    <hr>
+    ${txns.map(t => `
+      <div>
+        ${new Date(t.date).toLocaleString()} — ${fmt(t.amount)} — ${t.desc || ""}
+      </div>
+    `).join("")}
+  `);
+  w.print();
+}
+window.printEmpowermentSummary = printEmpowermentSummary;
+
+
+
+let empTxnLimit = 50;
+
+function renderEmpowermentTransactions() {
+  const container = document.getElementById("empTxnList");
+  if (!container) return;
+
+  const txns = (state.transactions || [])
+    .filter(t =>
+      t.type === "credit" &&
+      t.desc?.toLowerCase().includes("empowerment")
+    )
+    .filter(t => empTxnMatchesFilter(t.date))   // 👈 DATE FILTER ADDED HERE
+    .sort((a,b) => new Date(b.date) - new Date(a.date))
+    .slice(0, empTxnLimit);
+
+  container.innerHTML = txns.map(t => `
+    <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
+      ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
+      <span class="muted">${t.desc || ""}</span>
+    </div>
+  `).join("");
+
+  const btn = document.getElementById("empLoadMore");
+  if (btn) {
+    btn.onclick = () => {
+      empTxnLimit += 50;
+      renderEmpowermentTransactions();
+    };
+  }
+}
 
 function openCODDrillDown(staffId, date) {
   const modal = document.getElementById("txModal");
@@ -4702,9 +4890,8 @@ const interestLeft = (state.empowerments || []).reduce((sum, e) => {
         </b>
       </div>
 
-      <div class="muted small" style="margin-top:6px">
-        Click to view empowerment transactions
-      </div>
+     <div class="card" style="margin-bottom:12px; border-left:4px solid #1976d2; cursor:pointer;"
+     onclick="openEmpowermentDrilldown()">
     `;
   })()}
 </div>
@@ -5164,6 +5351,12 @@ state.ui = state.ui || { current: null };
 state.ui.dateFilter = state.ui.dateFilter || "today";
 state.ui.fromDate = state.ui.fromDate || null;
 state.ui.toDate = state.ui.toDate || null;
+
+// ✅ ADD THESE RIGHT HERE
+state.ui.empDateFilter = state.ui.empDateFilter || "today";
+state.ui.empFromDate = state.ui.empFromDate || null;
+state.ui.empToDate = state.ui.empToDate || null;;
+
   if (!Array.isArray(state.approvals)) state.approvals = [];
   if (!Array.isArray(state.audit)) state.audit = [];
   if (!state.ui) state.ui = {};
