@@ -4832,7 +4832,7 @@ el.innerHTML = `
 
 
 <!-- EMPOWERMENT BALANCE -->
-<div class="card" style="margin-bottom:12px; border-left:4px solid #1976d2;">
+<div class="card" style="margin-bottom:12px; border-left:4px solid #1976d2; cursor:pointer;" onclick="openEmpowermentDrilldown()">
   ${(() => {
     const capitalGiven = sumEmpowermentDisbursed();
 const totalRepaid = sumEmpowermentRepaid();
@@ -4890,8 +4890,6 @@ const interestLeft = (state.empowerments || []).reduce((sum, e) => {
         </b>
       </div>
 
-     <div class="card" style="margin-bottom:12px; border-left:4px solid #1976d2; cursor:pointer;"
-     onclick="openEmpowermentDrilldown()">
     `;
   })()}
 </div>
