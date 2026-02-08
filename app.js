@@ -4081,43 +4081,74 @@ function empTxnMatchesFilter(dateStr) {
 }
 
 function exportEmpowermentCSV() {
-  const txns = (state.transactions || [])
-    .filter(t => t.desc?.toLowerCase().includes("empowerment"))
-    .filter(t => empTxnMatchesFilter(t.date));
+  const rows = [["Date","Amount","Description"]];
 
-  let csv = "Date,Amount,Description\n";
-  txns.forEach(t => {
-    csv += `${new Date(t.date).toLocaleString()},${t.amount},"${t.desc || ""}"\n`;
-  });
+(state.empowerments || []).forEach(e => {
+  if (e.principalRepaid > 0) {
+    rows.push([
+      e.updatedAt || e.createdAt,
+      e.principalRepaid,
+      "Principal Repayment"
+    ]);
+  }
+  if (e.interestRepaid > 0) {
+    rows.push([
+      e.updatedAt || e.createdAt,
+      e.interestRepaid,
+      "Interest Repayment"
+    ]);
+  }
+});
 
-  const blob = new Blob([csv], { type: "text/csv" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "empowerment_transactions.csv";
-  a.click();
+const filtered = rows.slice(1).filter(r => empTxnMatchesFilter(r[0]));
+
+const csv = [rows[0], ...filtered].map(r => r.join(",")).join("\n");
+
+const blob = new Blob([csv], { type: "text/csv" });
+const a = document.createElement("a");
+a.href = URL.createObjectURL(blob);
+a.download = "empowerment_transactions.csv";
+a.click();
 }
 window.exportEmpowermentCSV = exportEmpowermentCSV;
 
 function printEmpowermentSummary() {
-  const txns = (state.transactions || [])
-    .filter(t => t.desc?.toLowerCase().includes("empowerment"))
-    .filter(t => empTxnMatchesFilter(t.date));
+  let rows = [];
 
-  const total = txns.reduce((s, t) => s + t.amount, 0);
+(state.empowerments || []).forEach(e => {
+  if (e.principalRepaid > 0) {
+    rows.push({
+      date: e.updatedAt || e.createdAt,
+      amount: e.principalRepaid,
+      desc: "Principal Repayment"
+    });
+  }
+  if (e.interestRepaid > 0) {
+    rows.push({
+      date: e.updatedAt || e.createdAt,
+      amount: e.interestRepaid,
+      desc: "Interest Repayment"
+    });
+  }
+});
 
-  const w = window.open("", "_blank");
-  w.document.write(`
-    <h2>Empowerment Summary</h2>
-    <p>Total Transactions: ${txns.length}</p>
-    <p>Total Amount: ${fmt(total)}</p>
-    <hr>
-    ${txns.map(t => `
-      <div>
-        ${new Date(t.date).toLocaleString()} — ${fmt(t.amount)} — ${t.desc || ""}
-      </div>
-    `).join("")}
-  `);
-  w.print();
+rows = rows.filter(r => empTxnMatchesFilter(r.date));
+
+const total = rows.reduce((s,r) => s + r.amount, 0);
+
+const w = window.open("", "_blank");
+w.document.write(`
+  <h2>Empowerment Summary</h2>
+  <p>Total Transactions: ${rows.length}</p>
+  <p>Total Amount: ${fmt(total)}</p>
+  <hr>
+  ${rows.map(r => `
+    <div>
+      ${new Date(r.date).toLocaleString()} — ${fmt(r.amount)} — ${r.desc}
+    </div>
+  `).join("")}
+`);
+w.print();
 }
 window.printEmpowermentSummary = printEmpowermentSummary;
 
@@ -4129,19 +4160,36 @@ function renderEmpowermentTransactions() {
   const container = document.getElementById("empTxnList");
   if (!container) return;
 
-  const txns = (state.transactions || [])
-    .filter(t =>
-      t.type === "credit" &&
-      t.desc?.toLowerCase().includes("empowerment")
-    )
-    .filter(t => empTxnMatchesFilter(t.date))   // 👈 DATE FILTER ADDED HERE
+  const txns = (state.empowerments || [])
+    .flatMap(e => {
+      const records = [];
+
+      if (e.principalRepaid > 0) {
+        records.push({
+          date: e.updatedAt || e.createdAt,
+          amount: e.principalRepaid,
+          desc: "Principal Repayment"
+        });
+      }
+
+      if (e.interestRepaid > 0) {
+        records.push({
+          date: e.updatedAt || e.createdAt,
+          amount: e.interestRepaid,
+          desc: "Interest Repayment"
+        });
+      }
+
+      return records;
+    })
+    .filter(t => empTxnMatchesFilter(t.date))
     .sort((a,b) => new Date(b.date) - new Date(a.date))
     .slice(0, empTxnLimit);
 
   container.innerHTML = txns.map(t => `
     <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
       ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
-      <span class="muted">${t.desc || ""}</span>
+      <span class="muted">${t.desc}</span>
     </div>
   `).join("");
 
@@ -4153,6 +4201,7 @@ function renderEmpowermentTransactions() {
     };
   }
 }
+
 
 function openCODDrillDown(staffId, date) {
   const modal = document.getElementById("txModal");
