@@ -3307,25 +3307,29 @@ if (activeLoan) {
   const repayAmount = allocation.emp;
   creditedToBalance = allocation.bal;
 
-  const interestLeft = (state.empowerments || []).reduce((sum, e) => {
-  if (e.status === "completed") return sum;
-  const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
-  return sum + (remaining > 0 ? remaining : 0);
-}, 0);
-  const interestPay = Math.min(repayAmount, interestLeft);
+  let remaining = repayAmount;
+
+// 1️⃣ PAY PRINCIPAL FIRST
+const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
+const principalPay = Math.min(remaining, principalLeft);
+activeLoan.principalRepaid += principalPay;
+remaining -= principalPay;
+
+// 2️⃣ ONLY AFTER PRINCIPAL IS CLEARED, PAY INTEREST
+if (principalLeft - principalPay <= 0) {
+  const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
+  const interestPay = Math.min(remaining, interestLeft);
   activeLoan.interestRepaid += interestPay;
+  remaining -= interestPay;
+}
 
-  const remaining = repayAmount - interestPay;
-  const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
-  const principalPay = Math.min(remaining, principalLeft);
-  activeLoan.principalRepaid += principalPay;
-
-  if (
-    activeLoan.principalRepaid >= activeLoan.principalGiven &&
-    activeLoan.interestRepaid >= activeLoan.expectedInterest
-  ) {
-    activeLoan.status = "completed";
-  }
+// 3️⃣ CLOSE LOAN ONLY WHEN BOTH ARE FULLY PAID
+if (
+  activeLoan.principalRepaid >= activeLoan.principalGiven &&
+  activeLoan.interestRepaid >= activeLoan.expectedInterest
+) {
+  activeLoan.status = "completed";
+}
 }
 
   cust.balance += creditedToBalance;
