@@ -4020,6 +4020,7 @@ function openEmpowermentDrilldown() {
 
   renderEmpowermentTransactions();
 }
+window.openEmpowermentDrilldown = openEmpowermentDrilldown;
 
 function setEmpDateFilter(range) {
   state.ui.empDateFilter = range;
