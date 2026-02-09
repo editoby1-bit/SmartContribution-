@@ -4251,13 +4251,13 @@ function renderEmpowermentTransactions() {
     </div>
   `).join("");
 
-  const btn = document.getElementById("empLoadMore");
-  if (btn) {
-    btn.onclick = () => {
-      empTxnLimit += 50;
-      renderEmpowermentTransactions();
-    };
-  }
+  const loadMoreBtn = document.getElementById("empLoadMore");
+if (loadMoreBtn) {
+  loadMoreBtn.onclick = () => {
+    empTxnLimit += 50;
+    renderEmpowermentTransactions();
+  };
+}
 
 
 
