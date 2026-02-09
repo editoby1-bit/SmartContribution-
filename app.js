@@ -4070,45 +4070,47 @@ function empTxnMatchesFilter(dateStr) {
     case "year":
       return d.getFullYear() === now.getFullYear();
 
-    case "range":
-      if (!state.ui.empFromDate || !state.ui.empToDate) return true;
-      return d >= new Date(state.ui.empFromDate) &&
-             d <= new Date(state.ui.empToDate + "T23:59:59");
+    case "custom":
+  if (!state.ui.empFromDate || !state.ui.empToDate) return true;
 
-    default:
-      return true;
+  const from = new Date(state.ui.empFromDate);
+  const to = new Date(state.ui.empToDate);
+  to.setHours(23,59,59,999);
+
+  return d >= from && d <= to;
   }
 }
 
 function exportEmpowermentCSV() {
-  const rows = [["Date","Amount","Description"]];
+  const approvals = (state.approvals || [])
+    .filter(a => a.type === "empowerment" && a.status === "approved")
+    .map(a => ({
+      date: a.processedAt,
+      amount: a.amount,
+      desc: "Empowerment Granted"
+    }));
 
-(state.empowerments || []).forEach(e => {
-  if (e.principalRepaid > 0) {
-    rows.push([
-      e.updatedAt || e.createdAt,
-      e.principalRepaid,
-      "Principal Repayment"
-    ]);
-  }
-  if (e.interestRepaid > 0) {
-    rows.push([
-      e.updatedAt || e.createdAt,
-      e.interestRepaid,
-      "Interest Repayment"
-    ]);
-  }
-});
+  const repayments = (state.transactions || [])
+    .filter(t => t.desc?.toLowerCase().includes("empowerment"));
 
-const filtered = rows.slice(1).filter(r => empTxnMatchesFilter(r[0]));
+  const txns = [...approvals, ...repayments]
+    .filter(t => empTxnMatchesFilter(t.date))
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
 
-const csv = [rows[0], ...filtered].map(r => r.join(",")).join("\n");
+  let csv = "S/N,Date,Amount,Description\n";
 
-const blob = new Blob([csv], { type: "text/csv" });
-const a = document.createElement("a");
-a.href = URL.createObjectURL(blob);
-a.download = "empowerment_transactions.csv";
-a.click();
+  txns.forEach((t, i) => {
+    csv += `${i+1},${new Date(t.date).toLocaleString()},${t.amount},"${t.desc || ""}"\n`;
+  });
+
+  const total = txns.reduce((s,t)=>s+t.amount,0);
+  csv += `\n,,TOTAL,${total}\n`;
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "empowerment_transactions.csv";
+  a.click();
 }
 window.exportEmpowermentCSV = exportEmpowermentCSV;
 
@@ -4139,12 +4141,12 @@ const total = rows.reduce((s,r) => s + r.amount, 0);
 const w = window.open("", "_blank");
 w.document.write(`
   <h2>Empowerment Summary</h2>
-  <p>Total Transactions: ${rows.length}</p>
+  <p>Total Transactions: ${txns.length}</p>
   <p>Total Amount: ${fmt(total)}</p>
   <hr>
-  ${rows.map(r => `
+  ${txns.map((t,i) => `
     <div>
-      ${new Date(r.date).toLocaleString()} — ${fmt(r.amount)} — ${r.desc}
+      ${i+1}. ${new Date(t.date).toLocaleString()} — ${fmt(t.amount)} — ${t.desc || ""}
     </div>
   `).join("")}
 `);
