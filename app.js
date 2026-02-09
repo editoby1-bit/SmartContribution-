@@ -4220,43 +4220,29 @@ function renderEmpowermentTransactions() {
   if (!container) return;
 
   const txns = (state.transactions || [])
-  .filter(t =>
-    t.type === "empowerment_disbursement" ||
-    t.type === "empowerment_repayment_principal" ||
-    t.type === "empowerment_repayment_interest"
-  )
-  .filter(t => empTxnMatchesFilter(t.date))
-  .sort((a,b) => new Date(b.date) - new Date(a.date))
-  .slice(0, empTxnLimit);
-      }
-
-      if (e.interestRepaid > 0) {
-        records.push({
-          date: e.updatedAt || e.createdAt,
-          amount: e.interestRepaid,
-          desc: "Interest Repayment"
-        });
-      }
-
-      return records;
-    })
+    .filter(t =>
+      t.type === "empowerment_disbursement" ||
+      t.type === "empowerment_repayment_principal" ||
+      t.type === "empowerment_repayment_interest"
+    )
     .filter(t => empTxnMatchesFilter(t.date))
-    .sort((a,b) => new Date(b.date) - new Date(a.date))
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, empTxnLimit);
 
   container.innerHTML = txns.map(t => `
     <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
       ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
-      <span class="muted">${t.desc}</span>
+      <span class="muted">${t.desc || ""}</span>
     </div>
   `).join("");
 
   const loadMoreBtn = document.getElementById("empLoadMore");
-if (loadMoreBtn) {
-  loadMoreBtn.onclick = () => {
-    empTxnLimit += 50;
-    renderEmpowermentTransactions();
-  };
+  if (loadMoreBtn) {
+    loadMoreBtn.onclick = () => {
+      empTxnLimit += 50;
+      renderEmpowermentTransactions();
+    };
+  }
 }
 
 
@@ -5629,4 +5615,5 @@ window.openEmpowermentModal = openEmpowermentModal;
 window.openEditCustomer = openEditCustomer;
 window.processApproval = processApproval;
 
-)();
+
+})();
