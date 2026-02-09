@@ -3473,6 +3473,52 @@ renderAudit();
     chartWeek.update();
   }
 
+
+  function getFilteredEmpowermentRecords() {
+  const loans = state.empowerments || [];
+  const records = [];
+
+  loans.forEach(e => {
+    const created = new Date(e.createdAt || e.date);
+
+    // Disbursement
+    if (empTxnMatchesFilter(created)) {
+      records.push({
+        date: created,
+        amount: e.principalGiven,
+        desc: "Empowerment Granted"
+      });
+    }
+
+    // Principal repaid
+    if (e.principalRepaid > 0) {
+      const repaidDate = new Date(e.updatedAt || e.createdAt);
+      if (empTxnMatchesFilter(repaidDate)) {
+        records.push({
+          date: repaidDate,
+          amount: e.principalRepaid,
+          desc: "Principal Repayment"
+        });
+      }
+    }
+
+    // Interest repaid
+    if (e.interestRepaid > 0) {
+      const repaidDate = new Date(e.updatedAt || e.createdAt);
+      if (empTxnMatchesFilter(repaidDate)) {
+        records.push({
+          date: repaidDate,
+          amount: e.interestRepaid,
+          desc: "Interest Repayment"
+        });
+      }
+    }
+  });
+
+  return records.sort((a,b)=> new Date(a.date) - new Date(b.date));
+}
+
+
   function printStatement(id) {
     const c = state.customers.find((x) => x.id === id) || state.customers[0];
     if (!c) return showToast("No customer");
@@ -4000,14 +4046,19 @@ function openEmpowermentDrilldown() {
   if (!state.ui.empDateFilter) {
   state.ui.empDateFilter = "today";
 }
-  const totals = calculateFilteredEmpowermentTotals();
+  const records = getFilteredEmpowermentRecords();
 
-const capitalGiven = totals.capitalGiven;
-const capitalRepaid = totals.principalRepaid;
-const interestEarned = totals.interestEarned;
-const outstandingCapital = totals.outstandingCapital;
+let capitalGiven = 0;
+let capitalRepaid = 0;
+let interestEarned = 0;
 
-// Interest left = expected interest from disbursed loans minus interest earned
+records.forEach(r => {
+  if (r.desc === "Empowerment Granted") capitalGiven += r.amount;
+  if (r.desc === "Principal Repayment") capitalRepaid += r.amount;
+  if (r.desc === "Interest Repayment") interestEarned += r.amount;
+});
+
+const outstandingCapital = capitalGiven - capitalRepaid;
 const interestLeft = (state.empowerments || []).reduce((sum, e) => {
   const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
   return sum + (remaining > 0 ? remaining : 0);
@@ -4118,37 +4169,16 @@ function empTxnMatchesFilter(dateStr) {
 }
 
 function exportEmpowermentCSV() {
-  const approvals = (state.approvals || [])
-    .filter(a => a.type === "empowerment" && a.status === "approved")
-    .map(a => ({
-  date: a.processedAt || a.date || a.createdAt || a.requestedAt,
-  amount: a.amount,
-  desc: "Empowerment Granted"
-}));
-
-  const repayments = (state.transactions || [])
-  .filter(t =>
-    t.type === "empowerment_repayment_principal" ||
-    t.type === "empowerment_repayment_interest"
-  )
-  .map(t => ({
-    date: t.date,
-    amount: t.amount,
-    desc: t.desc
-  }));
-
-  const txns = [...approvals, ...repayments]
-    .filter(t => empTxnMatchesFilter(t.date))
-    .sort((a,b) => new Date(a.date) - new Date(b.date));
+  const records = getFilteredEmpowermentRecords();
 
   let csv = "S/N,Date,Amount,Description\n";
 
-  txns.forEach((t, i) => {
-    csv += `${i+1},${new Date(t.date).toLocaleString()},${t.amount},"${t.desc || ""}"\n`;
+  records.forEach((r, i) => {
+    csv += `${i+1},${new Date(r.date).toLocaleString()},${r.amount},"${r.desc}"\n`;
   });
 
-  const total = txns.reduce((s,t)=>s+t.amount,0);
-  csv += `\n,,TOTAL,${Number(total)}\n`;
+  const total = records.reduce((s,r)=>s+r.amount,0);
+  csv += `\n,,TOTAL,${total}\n`;
 
   const blob = new Blob([csv], { type: "text/csv" });
   const a = document.createElement("a");
@@ -4159,56 +4189,19 @@ function exportEmpowermentCSV() {
 window.exportEmpowermentCSV = exportEmpowermentCSV;
 
 function printEmpowermentSummary() {
-  const repayments = (state.transactions || [])
-    .filter(t => t.type === "credit" && t.desc?.toLowerCase().includes("empowerment"))
-    .map(t => ({
-      date: t.date,
-      amount: t.amount,
-      desc: t.desc
-    }));
-
-  const approvals = (state.approvals || [])
-    .filter(a => a.type === "empowerment" && a.status === "approved")
-    .map(a => ({
-      date: a.processedAt || a.date || a.createdAt || a.requestedAt,
-      amount: a.amount,
-      desc: "Empowerment Granted"
-    }));
-
-  const txns = [...approvals, ...repayments]
-    .filter(t => empTxnMatchesFilter(t.date))
-    .sort((a,b) => new Date(b.date) - new Date(a.date));
-
-  const total = txns.reduce((s, t) => s + t.amount, 0);
+  const records = getFilteredEmpowermentRecords();
+  const total = records.reduce((s,r)=>s+r.amount,0);
 
   const w = window.open("", "_blank");
-  if (!w) return alert("Popup blocked. Allow popups to print.");
-
   w.document.write(`
-    <html>
-    <head>
-      <title>Empowerment Summary</title>
-      <style>
-        body { font-family: Arial; padding:20px }
-        h2 { margin-bottom:5px }
-        .row { margin-bottom:4px; font-size:14px }
-      </style>
-    </head>
-    <body>
-      <h2>Empowerment Summary</h2>
-      <p>Total Transactions: ${txns.length}</p>
-      <p>Total Amount: ${fmt(total)}</p>
-      <hr>
-      ${txns.map((t,i) => `
-        <div class="row">
-          ${i+1}. ${new Date(t.date).toLocaleString()} — ${fmt(t.amount)} — ${t.desc}
-        </div>
-      `).join("")}
-    </body>
-    </html>
+    <h2>Empowerment Summary</h2>
+    <p>Total Transactions: ${records.length}</p>
+    <p>Total Amount: ${fmt(total)}</p>
+    <hr>
+    ${records.map((r,i)=>`
+      <div>${i+1}. ${new Date(r.date).toLocaleString()} — ${fmt(r.amount)} — ${r.desc}</div>
+    `).join("")}
   `);
-
-  w.document.close();
   w.print();
 }
 window.printEmpowermentSummary = printEmpowermentSummary;
