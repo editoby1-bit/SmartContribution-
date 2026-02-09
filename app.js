@@ -4067,7 +4067,7 @@ function applyEmpDateRange() {
   const from = document.getElementById("empFromDate").value;
   const to = document.getElementById("empToDate").value;
 
-  state.ui.empDateFilter = "custom";
+  state.ui.empDateFilter = "range";
   state.ui.empFromDate = from;
   state.ui.empToDate = to;
 
@@ -4228,12 +4228,28 @@ function renderEmpowermentTransactions() {
   const container = document.getElementById("empTxnList");
   if (!container) return;
 
-  const txns = (state.transactions || [])
+  const approvals = (state.approvals || [])
+    .filter(a => a.type === "empowerment" && a.status === "approved")
+    .map(a => ({
+      date: a.processedAt || a.date || a.createdAt,
+      amount: Number(a.amount || 0),
+      desc: "Empowerment Granted"
+    }));
+
+  const repayments = (state.transactions || [])
     .filter(t =>
-      t.type === "empowerment_disbursement" ||
       t.type === "empowerment_repayment_principal" ||
       t.type === "empowerment_repayment_interest"
     )
+    .map(t => ({
+      date: t.date,
+      amount: Number(t.amount || 0),
+      desc: t.type === "empowerment_repayment_interest"
+        ? "Interest Repayment"
+        : "Principal Repayment"
+    }));
+
+  const txns = [...approvals, ...repayments]
     .filter(t => empTxnMatchesFilter(t.date))
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, empTxnLimit);
@@ -4241,7 +4257,7 @@ function renderEmpowermentTransactions() {
   container.innerHTML = txns.map(t => `
     <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
       ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
-      <span class="muted">${t.desc || ""}</span>
+      <span class="muted">${t.desc}</span>
     </div>
   `).join("");
 
@@ -4253,6 +4269,7 @@ function renderEmpowermentTransactions() {
     };
   }
 }
+
 
 
 
@@ -4766,32 +4783,44 @@ function calculateEmpowermentPosition() {
 }
 
 function calculateFilteredEmpowermentTotals() {
-  const loans = state.empowerments || [];
+  const approvals = (state.approvals || [])
+    .filter(a => a.type === "empowerment" && a.status === "approved")
+    .map(a => ({
+      date: a.processedAt || a.date || a.createdAt,
+      principal: Number(a.amount || 0),
+      interest: Number(a.interest || 0),
+      type: "disbursement"
+    }));
+
+  const repayments = (state.transactions || [])
+    .filter(t =>
+      t.type === "empowerment_repayment_principal" ||
+      t.type === "empowerment_repayment_interest"
+    )
+    .map(t => ({
+      date: t.date,
+      principal: t.type === "empowerment_repayment_principal" ? Number(t.amount) : 0,
+      interest: t.type === "empowerment_repayment_interest" ? Number(t.amount) : 0,
+      type: "repayment"
+    }));
+
+  const all = [...approvals, ...repayments]
+    .filter(t => empTxnMatchesFilter(t.date));
 
   let capitalGiven = 0;
   let principalRepaid = 0;
   let interestEarned = 0;
-  let outstandingCapital = 0;
 
-  loans.forEach(e => {
-    const created = new Date(e.createdAt || e.date);
-    const repaidDate = new Date(e.updatedAt || e.createdAt);
-
-    // Loan disbursement counts when filter includes its date
-    if (empTxnMatchesFilter(created)) {
-      capitalGiven += Number(e.principalGiven || 0);
+  all.forEach(t => {
+    if (t.type === "disbursement") {
+      capitalGiven += t.principal;
+    } else {
+      principalRepaid += t.principal;
+      interestEarned += t.interest;
     }
-
-    // Principal repayment counts when filter includes repayment date
-    if (empTxnMatchesFilter(repaidDate)) {
-      principalRepaid += Number(e.principalRepaid || 0);
-      interestEarned += Number(e.interestRepaid || 0);
-    }
-
-    // Outstanding principal (as of that loan)
-    const remaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
-    if (remaining > 0) outstandingCapital += remaining;
   });
+
+  const outstandingCapital = Math.max(0, capitalGiven - principalRepaid);
 
   return {
     capitalGiven,
