@@ -4258,7 +4258,7 @@ function renderEmpowermentTransactions() {
       renderEmpowermentTransactions();
     };
   }
-}
+
 
 
 function openCODDrillDown(staffId, date) {
