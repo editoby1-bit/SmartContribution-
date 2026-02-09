@@ -5629,5 +5629,4 @@ window.openEmpowermentModal = openEmpowermentModal;
 window.openEditCustomer = openEditCustomer;
 window.processApproval = processApproval;
 
-
-})();
+)();
