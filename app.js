@@ -3473,52 +3473,6 @@ renderAudit();
     chartWeek.update();
   }
 
-
-  function getFilteredEmpowermentRecords() {
-  const loans = state.empowerments || [];
-  const records = [];
-
-  loans.forEach(e => {
-    const created = new Date(e.createdAt || e.date);
-
-    // Disbursement
-    if (empTxnMatchesFilter(created)) {
-      records.push({
-        date: created,
-        amount: e.principalGiven,
-        desc: "Empowerment Granted"
-      });
-    }
-
-    // Principal repaid
-    if (e.principalRepaid > 0) {
-      const repaidDate = new Date(e.updatedAt || e.createdAt);
-      if (empTxnMatchesFilter(repaidDate)) {
-        records.push({
-          date: repaidDate,
-          amount: e.principalRepaid,
-          desc: "Principal Repayment"
-        });
-      }
-    }
-
-    // Interest repaid
-    if (e.interestRepaid > 0) {
-      const repaidDate = new Date(e.updatedAt || e.createdAt);
-      if (empTxnMatchesFilter(repaidDate)) {
-        records.push({
-          date: repaidDate,
-          amount: e.interestRepaid,
-          desc: "Interest Repayment"
-        });
-      }
-    }
-  });
-
-  return records.sort((a,b)=> new Date(a.date) - new Date(b.date));
-}
-
-
   function printStatement(id) {
     const c = state.customers.find((x) => x.id === id) || state.customers[0];
     if (!c) return showToast("No customer");
@@ -4046,19 +4000,14 @@ function openEmpowermentDrilldown() {
   if (!state.ui.empDateFilter) {
   state.ui.empDateFilter = "today";
 }
-  const records = getFilteredEmpowermentRecords();
+  const totals = calculateFilteredEmpowermentTotals();
 
-let capitalGiven = 0;
-let capitalRepaid = 0;
-let interestEarned = 0;
+const capitalGiven = totals.capitalGiven;
+const capitalRepaid = totals.principalRepaid;
+const interestEarned = totals.interestEarned;
+const outstandingCapital = totals.outstandingCapital;
 
-records.forEach(r => {
-  if (r.desc === "Empowerment Granted") capitalGiven += r.amount;
-  if (r.desc === "Principal Repayment") capitalRepaid += r.amount;
-  if (r.desc === "Interest Repayment") interestEarned += r.amount;
-});
-
-const outstandingCapital = capitalGiven - capitalRepaid;
+// Interest left = expected interest from disbursed loans minus interest earned
 const interestLeft = (state.empowerments || []).reduce((sum, e) => {
   const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
   return sum + (remaining > 0 ? remaining : 0);
@@ -4119,8 +4068,8 @@ function applyEmpDateRange() {
   const to = document.getElementById("empToDate").value;
 
   state.ui.empDateFilter = "custom";
-  state.ui.empFromDate = from || null;
-state.ui.empToDate = to || null;
+  state.ui.empFromDate = from;
+  state.ui.empToDate = to;
 
   renderEmpowermentTransactions();
 }
@@ -4128,57 +4077,84 @@ window.applyEmpDateRange = applyEmpDateRange;
 
 
 function empTxnMatchesFilter(dateStr) {
+  if (!dateStr) return false;
+
   const d = new Date(dateStr);
+  if (isNaN(d)) return false;
+
   const now = new Date();
+  const filter = state.ui.empDateFilter || "today";
 
-  const sameDay = (a,b) =>
-    a.getFullYear()===b.getFullYear() &&
-    a.getMonth()===b.getMonth() &&
-    a.getDate()===b.getDate();
+  // Normalize times
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = new Date(startOfToday);
+  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
 
-  switch (state.ui.empDateFilter) {
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+  switch (filter) {
     case "today":
-      return sameDay(d, now);
+      return d >= startOfToday;
 
-    case "week": {
-      const start = new Date(now);
-      start.setDate(now.getDate() - now.getDay());
-      start.setHours(0,0,0,0);
-      return d >= start;
-    }
+    case "week":
+      return d >= startOfWeek;
 
     case "month":
-      return d.getMonth() === now.getMonth() &&
-             d.getFullYear() === now.getFullYear();
+      return d >= startOfMonth;
 
     case "year":
-      return d.getFullYear() === now.getFullYear();
+      return d >= startOfYear;
 
-      case "all":
-  return true;
+    case "all":
+      return true;
 
     case "custom":
-  if (!state.ui.empFromDate || !state.ui.empToDate) return true;
+      if (!state.ui.empFromDate || !state.ui.empToDate) return true;
 
-  const fromDate = new Date(state.ui.empFromDate);
-  const toDate = new Date(state.ui.empToDate);
-  toDate.setHours(23,59,59,999);
+      const from = new Date(state.ui.empFromDate);
+      const to = new Date(state.ui.empToDate);
+      to.setHours(23,59,59,999);
 
-  return d >= fromDate && d <= toDate;
+      return d >= from && d <= to;
+
+    default:
+      return true;
   }
 }
 
 function exportEmpowermentCSV() {
-  const records = getFilteredEmpowermentRecords();
+  const approvals = (state.approvals || [])
+    .filter(a => a.type === "empowerment" && a.status === "approved")
+    .map(a => ({
+  date: a.processedAt || a.date || a.createdAt || a.requestedAt,
+  amount: a.amount,
+  desc: "Empowerment Granted"
+}));
+
+  const repayments = (state.transactions || [])
+  .filter(t =>
+    t.type === "empowerment_repayment_principal" ||
+    t.type === "empowerment_repayment_interest"
+  )
+  .map(t => ({
+    date: t.date,
+    amount: t.amount,
+    desc: t.desc
+  }));
+
+  const txns = [...approvals, ...repayments]
+    .filter(t => empTxnMatchesFilter(t.date))
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
 
   let csv = "S/N,Date,Amount,Description\n";
 
-  records.forEach((r, i) => {
-    csv += `${i+1},${new Date(r.date).toLocaleString()},${r.amount},"${r.desc}"\n`;
+  txns.forEach((t, i) => {
+    csv += `${i+1},${new Date(t.date).toLocaleString()},${t.amount},"${t.desc || ""}"\n`;
   });
 
-  const total = records.reduce((s,r)=>s+r.amount,0);
-  csv += `\n,,TOTAL,${total}\n`;
+  const total = txns.reduce((s,t)=>s+t.amount,0);
+  csv += `\n,,TOTAL,${Number(total)}\n`;
 
   const blob = new Blob([csv], { type: "text/csv" });
   const a = document.createElement("a");
@@ -4189,19 +4165,56 @@ function exportEmpowermentCSV() {
 window.exportEmpowermentCSV = exportEmpowermentCSV;
 
 function printEmpowermentSummary() {
-  const records = getFilteredEmpowermentRecords();
-  const total = records.reduce((s,r)=>s+r.amount,0);
+  const repayments = (state.transactions || [])
+    .filter(t => t.type === "credit" && t.desc?.toLowerCase().includes("empowerment"))
+    .map(t => ({
+      date: t.date,
+      amount: t.amount,
+      desc: t.desc
+    }));
+
+  const approvals = (state.approvals || [])
+    .filter(a => a.type === "empowerment" && a.status === "approved")
+    .map(a => ({
+      date: a.processedAt || a.date || a.createdAt || a.requestedAt,
+      amount: a.amount,
+      desc: "Empowerment Granted"
+    }));
+
+  const txns = [...approvals, ...repayments]
+    .filter(t => empTxnMatchesFilter(t.date))
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const total = txns.reduce((s, t) => s + t.amount, 0);
 
   const w = window.open("", "_blank");
+  if (!w) return alert("Popup blocked. Allow popups to print.");
+
   w.document.write(`
-    <h2>Empowerment Summary</h2>
-    <p>Total Transactions: ${records.length}</p>
-    <p>Total Amount: ${fmt(total)}</p>
-    <hr>
-    ${records.map((r,i)=>`
-      <div>${i+1}. ${new Date(r.date).toLocaleString()} — ${fmt(r.amount)} — ${r.desc}</div>
-    `).join("")}
+    <html>
+    <head>
+      <title>Empowerment Summary</title>
+      <style>
+        body { font-family: Arial; padding:20px }
+        h2 { margin-bottom:5px }
+        .row { margin-bottom:4px; font-size:14px }
+      </style>
+    </head>
+    <body>
+      <h2>Empowerment Summary</h2>
+      <p>Total Transactions: ${txns.length}</p>
+      <p>Total Amount: ${fmt(total)}</p>
+      <hr>
+      ${txns.map((t,i) => `
+        <div class="row">
+          ${i+1}. ${new Date(t.date).toLocaleString()} — ${fmt(t.amount)} — ${t.desc}
+        </div>
+      `).join("")}
+    </body>
+    </html>
   `);
+
+  w.document.close();
   w.print();
 }
 window.printEmpowermentSummary = printEmpowermentSummary;
