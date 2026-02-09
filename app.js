@@ -3243,17 +3243,7 @@ if (action === "approve" && app.type === "empowerment") {
     status: "active",
     createdAt: app.processedAt
   });
-  // Record empowerment disbursement as transaction for reporting
-state.transactions = state.transactions || [];
-state.transactions.push({
-  id: uid("tx"),
-  type: "empowerment_disbursement",
-  amount: principal,
-  date: app.processedAt,
-  desc: "Empowerment Granted",
-  customerId: cust.id
-});
-
+  
   // Keep history ONLY for display timeline
   cust.empowerment = cust.empowerment || {};
   cust.empowerment.history = cust.empowerment.history || [];
@@ -3265,6 +3255,16 @@ state.transactions.push({
     date: app.processedAt,
     approvedBy: staff.name
   });
+  // Record empowerment disbursement as transaction for reporting
+state.transactions = state.transactions || [];
+state.transactions.push({
+  id: uid("tx"),
+  type: "empowerment_disbursement",
+  amount: principal,
+  date: app.processedAt,
+  desc: "Empowerment Granted",
+  customerId: cust.id
+});
 
   save();
   renderCustomers();
