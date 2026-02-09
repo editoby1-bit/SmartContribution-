@@ -2141,7 +2141,7 @@ function renderProfileTab() {
 
 if (activeLoan) {
   const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
-  const interestLeft = (state.empowerments || []).reduce((sum, e) => {
+  const interestLeft = loans.reduce((sum, e) => {
   if (e.status === "completed") return sum;
   const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
   return sum + (remaining > 0 ? remaining : 0);
@@ -3965,6 +3965,9 @@ function openOperationalDrilldown() {
 window.openOperationalDrilldown = openOperationalDrilldown;
 
 function openEmpowermentDrilldown() {
+  if (!state.ui.empDateFilter) {
+  state.ui.empDateFilter = "today";
+}
   const emp = calculateEmpowermentBalance();
 
   const capitalGiven = emp.totalGivenOut;
@@ -4070,6 +4073,9 @@ function empTxnMatchesFilter(dateStr) {
     case "year":
       return d.getFullYear() === now.getFullYear();
 
+      case "all":
+  return true;
+
     case "custom":
   if (!state.ui.empFromDate || !state.ui.empToDate) return true;
 
@@ -4085,10 +4091,10 @@ function exportEmpowermentCSV() {
   const approvals = (state.approvals || [])
     .filter(a => a.type === "empowerment" && a.status === "approved")
     .map(a => ({
-      date: a.processedAt,
-      amount: a.amount,
-      desc: "Empowerment Granted"
-    }));
+  date: a.processedAt || a.date || a.createdAt || a.requestedAt,
+  amount: a.amount,
+  desc: "Empowerment Granted"
+}));
 
   const repayments = (state.transactions || [])
     .filter(t => t.desc?.toLowerCase().includes("empowerment"));
@@ -4104,7 +4110,7 @@ function exportEmpowermentCSV() {
   });
 
   const total = txns.reduce((s,t)=>s+t.amount,0);
-  csv += `\n,,TOTAL,${total}\n`;
+  csv += `\n,,TOTAL,${Number(total)}\n`;
 
   const blob = new Blob([csv], { type: "text/csv" });
   const a = document.createElement("a");
