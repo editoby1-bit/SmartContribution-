@@ -3243,6 +3243,16 @@ if (action === "approve" && app.type === "empowerment") {
     status: "active",
     createdAt: app.processedAt
   });
+  // Record empowerment disbursement as transaction for reporting
+state.transactions = state.transactions || [];
+state.transactions.push({
+  id: uid("tx"),
+  type: "empowerment_disbursement",
+  amount: principal,
+  date: app.processedAt,
+  desc: "Empowerment Granted",
+  customerId: cust.id
+});
 
   // Keep history ONLY for display timeline
   cust.empowerment = cust.empowerment || {};
@@ -4038,8 +4048,8 @@ function applyEmpDateRange() {
   const to = document.getElementById("empToDate").value;
 
   state.ui.empDateFilter = "custom";
-  state.ui.empFromDate = from ? new Date(from) : null;
-  state.ui.empToDate = to ? new Date(to) : null;
+  state.ui.empFromDate = from || null;
+state.ui.empToDate = to || null;
 
   renderEmpowermentTransactions();
 }
@@ -4079,11 +4089,11 @@ function empTxnMatchesFilter(dateStr) {
     case "custom":
   if (!state.ui.empFromDate || !state.ui.empToDate) return true;
 
-  const from = new Date(state.ui.empFromDate);
-  const to = new Date(state.ui.empToDate);
-  to.setHours(23,59,59,999);
+  const fromDate = new Date(state.ui.empFromDate);
+  const toDate = new Date(state.ui.empToDate);
+  toDate.setHours(23,59,59,999);
 
-  return d >= from && d <= to;
+  return d >= fromDate && d <= toDate;
   }
 }
 
@@ -4121,44 +4131,60 @@ function exportEmpowermentCSV() {
 window.exportEmpowermentCSV = exportEmpowermentCSV;
 
 function printEmpowermentSummary() {
-  let rows = [];
+  const repayments = (state.transactions || [])
+    .filter(t => t.type === "credit" && t.desc?.toLowerCase().includes("empowerment"))
+    .map(t => ({
+      date: t.date,
+      amount: t.amount,
+      desc: t.desc
+    }));
 
-(state.empowerments || []).forEach(e => {
-  if (e.principalRepaid > 0) {
-    rows.push({
-      date: e.updatedAt || e.createdAt,
-      amount: e.principalRepaid,
-      desc: "Principal Repayment"
-    });
-  }
-  if (e.interestRepaid > 0) {
-    rows.push({
-      date: e.updatedAt || e.createdAt,
-      amount: e.interestRepaid,
-      desc: "Interest Repayment"
-    });
-  }
-});
+  const approvals = (state.approvals || [])
+    .filter(a => a.type === "empowerment" && a.status === "approved")
+    .map(a => ({
+      date: a.processedAt || a.date || a.createdAt || a.requestedAt,
+      amount: a.amount,
+      desc: "Empowerment Granted"
+    }));
 
-rows = rows.filter(r => empTxnMatchesFilter(r.date));
+  const txns = [...approvals, ...repayments]
+    .filter(t => empTxnMatchesFilter(t.date))
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
 
-const total = rows.reduce((s,r) => s + r.amount, 0);
+  const total = txns.reduce((s, t) => s + t.amount, 0);
 
-const w = window.open("", "_blank");
-w.document.write(`
-  <h2>Empowerment Summary</h2>
-  <p>Total Transactions: ${txns.length}</p>
-  <p>Total Amount: ${fmt(total)}</p>
-  <hr>
-  ${txns.map((t,i) => `
-    <div>
-      ${i+1}. ${new Date(t.date).toLocaleString()} — ${fmt(t.amount)} — ${t.desc || ""}
-    </div>
-  `).join("")}
-`);
-w.print();
+  const w = window.open("", "_blank");
+  if (!w) return alert("Popup blocked. Allow popups to print.");
+
+  w.document.write(`
+    <html>
+    <head>
+      <title>Empowerment Summary</title>
+      <style>
+        body { font-family: Arial; padding:20px }
+        h2 { margin-bottom:5px }
+        .row { margin-bottom:4px; font-size:14px }
+      </style>
+    </head>
+    <body>
+      <h2>Empowerment Summary</h2>
+      <p>Total Transactions: ${txns.length}</p>
+      <p>Total Amount: ${fmt(total)}</p>
+      <hr>
+      ${txns.map((t,i) => `
+        <div class="row">
+          ${i+1}. ${new Date(t.date).toLocaleString()} — ${fmt(t.amount)} — ${t.desc}
+        </div>
+      `).join("")}
+    </body>
+    </html>
+  `);
+
+  w.document.close();
+  w.print();
 }
 window.printEmpowermentSummary = printEmpowermentSummary;
+
 
 
 
