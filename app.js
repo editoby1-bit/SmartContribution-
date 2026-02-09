@@ -4008,7 +4008,10 @@ const interestEarned = totals.interestEarned;
 const outstandingCapital = totals.outstandingCapital;
 
 // Interest left = expected interest from disbursed loans minus interest earned
-const interestLeft = Math.max(0, capitalGiven * 0 + (interestEarned ? 0 : 0)); 
+const interestLeft = (state.empowerments || []).reduce((sum, e) => {
+  const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+  return sum + (remaining > 0 ? remaining : 0);
+}, 0);
 // (We leave interestLeft display based on loan engine elsewhere — drilldown focuses on transactions history)
 
   const wrapper = document.createElement("div");
@@ -4757,29 +4760,38 @@ function calculateEmpowermentPosition() {
 }
 
 function calculateFilteredEmpowermentTotals() {
-  const txns = (state.transactions || []).filter(t =>
-    (
-      t.type === "empowerment_disbursement" ||
-      t.type === "empowerment_repayment_principal" ||
-      t.type === "empowerment_repayment_interest"
-    ) && empTxnMatchesFilter(t.date)
-  );
+  const loans = state.empowerments || [];
 
   let capitalGiven = 0;
   let principalRepaid = 0;
   let interestEarned = 0;
+  let outstandingCapital = 0;
 
-  txns.forEach(t => {
-    if (t.type === "empowerment_disbursement") capitalGiven += t.amount;
-    if (t.type === "empowerment_repayment_principal") principalRepaid += t.amount;
-    if (t.type === "empowerment_repayment_interest") interestEarned += t.amount;
+  loans.forEach(e => {
+    const created = new Date(e.createdAt || e.date);
+    const repaidDate = new Date(e.updatedAt || e.createdAt);
+
+    // Loan disbursement counts when filter includes its date
+    if (empTxnMatchesFilter(created)) {
+      capitalGiven += Number(e.principalGiven || 0);
+    }
+
+    // Principal repayment counts when filter includes repayment date
+    if (empTxnMatchesFilter(repaidDate)) {
+      principalRepaid += Number(e.principalRepaid || 0);
+      interestEarned += Number(e.interestRepaid || 0);
+    }
+
+    // Outstanding principal (as of that loan)
+    const remaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
+    if (remaining > 0) outstandingCapital += remaining;
   });
 
   return {
     capitalGiven,
     principalRepaid,
     interestEarned,
-    outstandingCapital: Math.max(0, capitalGiven - principalRepaid)
+    outstandingCapital
   };
 }
 
