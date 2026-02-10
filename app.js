@@ -4074,11 +4074,13 @@ const interestLeft = (state.empowerments || []).reduce((sum, e) => {
     </div>
 
     <div style="display:flex; gap:6px; margin-bottom:8px">
-      <input type="date" id="empFromDate" class="input small">
-      <span>to</span>
-      <input type="date" id="empToDate" class="input small">
-      <button class="btn small solid primary" onclick="applyEmpDateRange()">Apply</button>
-    </div>
+  <input type="date" id="empFromDate" class="input small">
+  <span>to</span>
+  <input type="date" id="empToDate" class="input small">
+  <button class="btn small solid primary" onclick="applyEmpDateRange()">Apply</button>
+  <button class="btn small solid" onclick="clearEmpDateRange()">Clear</button>
+</div>
+
 
     <div style="display:flex; gap:6px; margin-bottom:10px">
       <button class="btn small solid primary" onclick="exportEmpowermentCSV()">Export CSV</button>
@@ -4114,6 +4116,18 @@ function applyEmpDateRange() {
   renderEmpowermentTransactions();
 }
 window.applyEmpDateRange = applyEmpDateRange;
+
+function clearEmpDateRange() {
+  state.ui.empDateFilter = "today";
+  state.ui.empFromDate = null;
+  state.ui.empToDate = null;
+
+  document.getElementById("empFromDate").value = "";
+  document.getElementById("empToDate").value = "";
+
+  renderEmpowermentTransactions();
+}
+window.clearEmpDateRange = clearEmpDateRange;
 
 
 function empTxnMatchesFilter(dateStr) {
@@ -4830,30 +4844,26 @@ window.calculateEmpowermentPosition = calculateEmpowermentPosition;
 window.calculateEmpowermentBalance = calculateEmpowermentBalance;
 
 function calculateFilteredEmpowermentTotals() {
- const txns = (state.transactions || []).filter(t =>
-   t.type === "empowerment_disbursement" ||
-   t.type === "empowerment_repayment_principal" ||
-   t.type === "empowerment_repayment_interest"
- ).filter(t => empTxnMatchesFilter(t.date));
+  const txns = (state.transactions || [])
+    .filter(t => t.type.startsWith("empowerment"))
+    .filter(t => empTxnMatchesFilter(t.date));
 
- let capitalGiven = 0;
- let principalRepaid = 0;
- let interestEarned = 0;
+  let capitalGiven = 0;
+  let principalRepaid = 0;
+  let interestEarned = 0;
 
- txns.forEach(t => {
-   if (t.type === "empowerment_disbursement") capitalGiven += t.amount;
-   if (t.type === "empowerment_repayment_principal") principalRepaid += t.amount;
-   if (t.type === "empowerment_repayment_interest") interestEarned += t.amount;
- });
+  txns.forEach(t => {
+    if (t.type === "empowerment_disbursement") capitalGiven += t.amount;
+    if (t.type === "empowerment_repayment_principal") principalRepaid += t.amount;
+    if (t.type === "empowerment_repayment_interest") interestEarned += t.amount;
+  });
 
- const outstandingCapital = capitalGiven - principalRepaid;
-
- return {
-   capitalGiven,
-   principalRepaid,
-   interestEarned,
-   outstandingCapital
- };
+  return {
+    capitalGiven,
+    principalRepaid,
+    interestEarned,
+    outstandingCapital: Math.max(0, capitalGiven - principalRepaid)
+  };
 }
 window.calculateFilteredEmpowermentTotals = calculateFilteredEmpowermentTotals;
 
