@@ -1803,23 +1803,60 @@ function initEmpowermentModel(c, config = {}) {
 }
 
 function applyEmpowermentRepayment(c, amount) {
-  const activeLoan = state.empowerments.find(e =>
-    e.customerId === c.id && e.status !== "completed"
-  );
+ const activeLoan = (state.empowerments || []).find(e =>
+   e.customerId === c.id && e.status !== "completed"
+ );
 
-  if (!activeLoan) return amount; // no loan, money goes fully to savings
+ if (!activeLoan) return amount;
 
-  const remainingPrincipal = activeLoan.principalGiven - activeLoan.principalRepaid;
-  const repay = Math.min(amount, remainingPrincipal);
+ let remainingAmount = amount;
 
-  activeLoan.principalRepaid += repay;
+ // ===== PAY PRINCIPAL FIRST =====
+ const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
+ const principalPay = Math.min(remainingAmount, principalLeft);
 
-  if (activeLoan.principalRepaid >= activeLoan.principalGiven) {
-    activeLoan.status = "completed";
-  }
+ if (principalPay > 0) {
+   activeLoan.principalRepaid += principalPay;
+   remainingAmount -= principalPay;
 
-  save();
-  return amount - repay; // leftover goes to savings balance
+   state.transactions.push({
+     id: uid("tx"),
+     type: "empowerment_repayment_principal",
+     amount: principalPay,
+     date: new Date().toISOString(),
+     desc: "Empowerment Principal Repayment",
+     customerId: c.id
+   });
+ }
+
+ // ===== THEN PAY INTEREST =====
+ const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
+ const interestPay = Math.min(remainingAmount, interestLeft);
+
+ if (interestPay > 0) {
+   activeLoan.interestRepaid += interestPay;
+   remainingAmount -= interestPay;
+
+   state.transactions.push({
+     id: uid("tx"),
+     type: "empowerment_repayment_interest",
+     amount: interestPay,
+     date: new Date().toISOString(),
+     desc: "Empowerment Interest Repayment",
+     customerId: c.id
+   });
+ }
+
+ // ===== COMPLETE LOAN =====
+ if (
+   activeLoan.principalRepaid >= activeLoan.principalGiven &&
+   activeLoan.interestRepaid >= activeLoan.expectedInterest
+ ) {
+   activeLoan.status = "completed";
+ }
+
+ save();
+ return remainingAmount;
 }
 window.applyEmpowermentRepayment = applyEmpowermentRepayment;
 
@@ -4111,14 +4148,16 @@ function empTxnMatchesFilter(dateStr) {
     case "all":
       return true;
 
-    case "custom":
-      if (!state.ui.empFromDate || !state.ui.empToDate) return true;
+    case "range":
+ if (!state.ui.empFromDate || !state.ui.empToDate) return true;
 
-      const from = new Date(state.ui.empFromDate);
-      const to = new Date(state.ui.empToDate);
-      to.setHours(23,59,59,999);
+ const from = new Date(state.ui.empFromDate);
+ from.setHours(0,0,0,0);
 
-      return d >= from && d <= to;
+ const to = new Date(state.ui.empToDate);
+ to.setHours(23,59,59,999);
+
+ return d >= from && d <= to;
 
     default:
       return true;
@@ -4790,30 +4829,30 @@ window.calculateEmpowermentPosition = calculateEmpowermentPosition;
 window.calculateEmpowermentBalance = calculateEmpowermentBalance;
 
 function calculateFilteredEmpowermentTotals() {
-  const approvals = (state.transactions || [])
-    .filter(t => t.type === "empowerment_disbursement")
-    .filter(t => empTxnMatchesFilter(t.date));
+ const txns = (state.transactions || []).filter(t =>
+   t.type === "empowerment_disbursement" ||
+   t.type === "empowerment_repayment_principal" ||
+   t.type === "empowerment_repayment_interest"
+ ).filter(t => empTxnMatchesFilter(t.date));
 
-  const principalRepayments = (state.transactions || [])
-    .filter(t => t.type === "empowerment_repayment_principal")
-    .filter(t => empTxnMatchesFilter(t.date));
+ let capitalGiven = 0;
+ let principalRepaid = 0;
+ let interestEarned = 0;
 
-  const interestRepayments = (state.transactions || [])
-    .filter(t => t.type === "empowerment_repayment_interest")
-    .filter(t => empTxnMatchesFilter(t.date));
+ txns.forEach(t => {
+   if (t.type === "empowerment_disbursement") capitalGiven += t.amount;
+   if (t.type === "empowerment_repayment_principal") principalRepaid += t.amount;
+   if (t.type === "empowerment_repayment_interest") interestEarned += t.amount;
+ });
 
-  const capitalGiven = approvals.reduce((s, t) => s + t.amount, 0);
-  const principalRepaid = principalRepayments.reduce((s, t) => s + t.amount, 0);
-  const interestEarned = interestRepayments.reduce((s, t) => s + t.amount, 0);
+ const outstandingCapital = capitalGiven - principalRepaid;
 
-  const outstandingCapital = Math.max(0, capitalGiven - principalRepaid);
-
-  return {
-    capitalGiven,
-    principalRepaid,
-    interestEarned,
-    outstandingCapital
-  };
+ return {
+   capitalGiven,
+   principalRepaid,
+   interestEarned,
+   outstandingCapital
+ };
 }
 window.calculateFilteredEmpowermentTotals = calculateFilteredEmpowermentTotals;
 
