@@ -5080,57 +5080,51 @@ el.innerHTML = `
 <div class="card" style="margin-bottom:12px; border-left:4px solid #1976d2; cursor:pointer;" onclick="openEmpowermentDrilldown()">
   ${(() => {
     const capitalGiven = sumEmpowermentDisbursed();
-const totalRepaid = sumEmpowermentRepaid();
-const interestEarned = (state.empowerments || []).reduce((sum, e) => {
-  return sum + (e.interestRepaid || 0);
-}, 0);
-const position = calculateEmpowermentPosition();
-const outstandingCapital = (state.empowerments || []).reduce((sum, e) => {
-  const remaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
-  return sum + (remaining > 0 ? remaining : 0);
-}, 0);
+    const totalRepaid = sumEmpowermentRepaid();
 
+    const interestEarned = (state.empowerments || []).reduce((sum, e) => {
+      return sum + (e.interestRepaid || 0);
+    }, 0);
 
-// 🔹 NEW — calculate total unpaid interest
-${(() => {
-  const interestLeft = (state.empowerments || []).reduce((sum, e) => {
-    if (e.status === "completed") return sum;
+    const outstandingCapital = (state.empowerments || []).reduce((sum, e) => {
+      const remaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
+      return sum + (remaining > 0 ? remaining : 0);
+    }, 0);
 
-    const principalRemaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
+    const interestLeft = (state.empowerments || []).reduce((sum, e) => {
+      if (e.status === "completed") return sum;
 
-    if (principalRemaining > 0) {
-      return sum + (e.expectedInterest || 0);
-    }
+      const principalRemaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
 
-    const remainingInterest = (e.expectedInterest || 0) - (e.interestRepaid || 0);
-    return sum + Math.max(0, remainingInterest);
-  }, 0);
+      if (principalRemaining > 0) {
+        return sum + (e.expectedInterest || 0);
+      }
 
-  return `
-    <span class="small" style="color:${interestLeft > 0 ? '#b42318' : '#667085'}">
-      (Interest Left: ${fmt(interestLeft)})
-    </span>
-  `;
-})()}
+      const remainingInterest = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+      return sum + Math.max(0, remainingInterest);
+    }, 0);
+
+    const position = calculateEmpowermentPosition();
 
     return `
       <div class="small muted">Empowerment Balance</div>
 
       <div>Capital Given: <b>${fmt(capitalGiven)}</b></div>
       <div>Total Repaid: <b>${fmt(totalRepaid)}</b></div>
+
       <div>
-  Interest Earned:
-  <b style="color:green">${fmt(interestEarned)}</b>
- <span class="small" style="color:${interestLeft > 0 ? '#b42318' : '#667085'}">
-  (Interest Left: ${fmt(interestLeft)})
-</span>
-</div>
+        Interest Earned:
+        <b style="color:green">${fmt(interestEarned)}</b>
+        <span class="small" style="color:${interestLeft > 0 ? '#b42318' : '#667085'}">
+          (Interest Left: ${fmt(interestLeft)})
+        </span>
+      </div>
 
       <div style="margin-top:6px;">
         Outstanding Capital:
         <b style="color:${outstandingCapital > 0 ? 'red' : 'green'}">
-  ${fmt(outstandingCapital)}
-</b>
+          ${fmt(outstandingCapital)}
+        </b>
       </div>
 
       <div style="margin-top:6px;">
@@ -5139,7 +5133,6 @@ ${(() => {
           ${fmt(position)}
         </b>
       </div>
-
     `;
   })()}
 </div>
