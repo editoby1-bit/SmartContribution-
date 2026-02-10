@@ -4845,7 +4845,11 @@ window.calculateEmpowermentBalance = calculateEmpowermentBalance;
 
 function calculateFilteredEmpowermentTotals() {
   const txns = (state.transactions || [])
-    .filter(t => t.type.startsWith("empowerment"))
+    .filter(t =>
+      t.type === "empowerment_disbursement" ||
+      t.type === "empowerment_repayment_principal" ||
+      t.type === "empowerment_repayment_interest"
+    )
     .filter(t => empTxnMatchesFilter(t.date));
 
   let capitalGiven = 0;
@@ -4853,9 +4857,15 @@ function calculateFilteredEmpowermentTotals() {
   let interestEarned = 0;
 
   txns.forEach(t => {
-    if (t.type === "empowerment_disbursement") capitalGiven += t.amount;
-    if (t.type === "empowerment_repayment_principal") principalRepaid += t.amount;
-    if (t.type === "empowerment_repayment_interest") interestEarned += t.amount;
+    if (t.type === "empowerment_disbursement") {
+      capitalGiven += Number(t.amount || 0);
+    }
+    if (t.type === "empowerment_repayment_principal") {
+      principalRepaid += Number(t.amount || 0);
+    }
+    if (t.type === "empowerment_repayment_interest") {
+      interestEarned += Number(t.amount || 0);
+    }
   });
 
   return {
