@@ -1852,7 +1852,9 @@ function applyEmpowermentRepayment(c, amount) {
     remainingAmount -= interestPay;
   }
 
-  activeLoan.updatedAt = new Date().toISOString();
+  const now = new Date().toISOString();
+activeLoan.updatedAt = now;
+activeLoan.lastPaymentAt = now; // 🔹 ensures history always has a valid timestamp
 
   if (
     activeLoan.principalRepaid >= activeLoan.principalGiven &&
@@ -4310,43 +4312,24 @@ function renderEmpowermentTransactions() {
   const container = document.getElementById("empTxnList");
   if (!container) return;
 
-  const approvals = (state.approvals || [])
-    .filter(a => a.type === "empowerment" && a.status === "approved")
-    .map(a => ({
-      date: a.processedAt || a.date || a.createdAt,
-      amount: Number(a.amount || 0),
-      desc: "Empowerment Granted"
-    }));
-
-  const repayments = (state.transactions || [])
-    .filter(t =>
-      t.type === "empowerment_repayment_principal" ||
-      t.type === "empowerment_repayment_interest"
-    )
-    .map(t => ({
-      date: t.date,
-      amount: Number(t.amount || 0),
-      desc: t.type === "empowerment_repayment_interest"
-        ? "Interest Repayment"
-        : "Principal Repayment"
-    }));
-
-  const txns = [...approvals, ...repayments]
+  const txns = (state.transactions || [])
+    .filter(t => t.type && t.type.startsWith("empowerment_"))
     .filter(t => empTxnMatchesFilter(t.date))
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, empTxnLimit);
 
   container.innerHTML = txns.map(t => {
-  const cust = (state.customers || []).find(c => c.id === t.customerId);
+    const customer = (state.customers || []).find(c => c.id === t.customerId);
+    const name = customer ? customer.name : "Unknown Customer";
 
-  return `
-    <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
-      ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
-      <span class="muted">${cust ? cust.name : ""}</span><br>
-      <span class="muted">${t.desc || ""}</span>
-    </div>
-  `;
-}).join("");
+    return `
+      <div class="small" style="margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:6px">
+        <b>${name}</b> — ${fmt(t.amount)}<br>
+        <span class="muted">${t.desc || ""}</span><br>
+        <span class="muted">${new Date(t.date).toLocaleString()}</span>
+      </div>
+    `;
+  }).join("");
 
   const loadMoreBtn = document.getElementById("empLoadMore");
   if (loadMoreBtn) {
@@ -4356,6 +4339,7 @@ function renderEmpowermentTransactions() {
     };
   }
 }
+
 window.renderEmpowermentTransactions = renderEmpowermentTransactions;
 
 
