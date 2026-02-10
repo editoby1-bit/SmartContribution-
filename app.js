@@ -1809,12 +1809,14 @@ function applyEmpowermentRepayment(c, amount) {
 
   if (!activeLoan) return amount;
 
+  state.transactions = state.transactions || [];
+
   let remainingAmount = amount;
 
   const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
   const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
 
-  // 🔹 PAY PRINCIPAL FIRST
+  // PAY PRINCIPAL
   const principalPay = Math.min(remainingAmount, principalLeft);
   if (principalPay > 0) {
     activeLoan.principalRepaid += principalPay;
@@ -1831,11 +1833,10 @@ function applyEmpowermentRepayment(c, amount) {
     remainingAmount -= principalPay;
   }
 
-  // 🔹 THEN PAY INTEREST
+  // PAY INTEREST
   const interestPay = Math.min(remainingAmount, interestLeft);
   if (interestPay > 0) {
     activeLoan.interestRepaid += interestPay;
-    
 
     state.transactions.push({
       id: uid("tx"),
@@ -1847,13 +1848,10 @@ function applyEmpowermentRepayment(c, amount) {
     });
 
     remainingAmount -= interestPay;
-
-    activeLoan.updatedAt = new Date().toISOString();
-
-    
   }
 
-  // 🔹 MARK COMPLETED ONLY WHEN BOTH ARE PAID
+  activeLoan.updatedAt = new Date().toISOString();
+
   if (
     activeLoan.principalRepaid >= activeLoan.principalGiven &&
     activeLoan.interestRepaid >= activeLoan.expectedInterest
@@ -1863,34 +1861,8 @@ function applyEmpowermentRepayment(c, amount) {
 
   save();
   return remainingAmount;
-  state.transactions = state.transactions || [];
-
-// Principal part
-if (principalPaid > 0) {
-  state.transactions.push({
-    id: uid("tx"),
-    type: "empowerment_repayment_principal",
-    amount: principalPaid,
-    date: new Date(),
-    desc: "Principal Repayment",
-    customerId: customer.id
-  });
 }
 
-// Interest part
-if (interestPaid > 0) {
-  state.transactions.push({
-    id: uid("tx"),
-    type: "empowerment_repayment_interest",
-    amount: interestPaid,
-    date: new Date(),
-    desc: "Interest Repayment",
-    customerId: customer.id
-  });
-}
-
-save();   // ⚠️ MUST BE AFTER PUSHING TRANSACTIONS
-}
 window.applyEmpowermentRepayment = applyEmpowermentRepayment;
 
 
@@ -5187,6 +5159,11 @@ const interestLeft = (state.empowerments || []).reduce((sum, e) => {
 }
 window.renderAccounts = renderAccounts;
 
+function fmt(n) {
+  const val = Number(n) || 0;
+  const clean = Math.abs(val) < 1 ? 0 : val;
+  return "₦" + clean.toLocaleString();
+}
 
 function filterAccounts(query) {
   query = query.toLowerCase().trim();
