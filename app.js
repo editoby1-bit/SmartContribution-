@@ -4314,23 +4314,35 @@ function renderEmpowermentTransactions() {
   if (!container) return;
 
   const txns = (state.transactions || [])
-    .filter(t => t.type && t.type.startsWith("empowerment_"))
+    .filter(t =>
+      // accept ALL known empowerment-related records safely
+      t &&
+      (
+        (t.type && t.type.startsWith("empowerment_")) ||
+        (t.desc && t.desc.toLowerCase().includes("empowerment"))
+      )
+    )
+    .filter(t => t.date && !isNaN(new Date(t.date))) // only valid dates
     .filter(t => empTxnMatchesFilter(t.date))
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, empTxnLimit);
 
-  container.innerHTML = txns.map(t => {
-    const customer = (state.customers || []).find(c => c.id === t.customerId);
-    const name = customer ? customer.name : "Unknown Customer";
+  if (txns.length === 0) {
+    container.innerHTML = `<div class="small muted">No empowerment transactions in this range</div>`;
+  } else {
+    container.innerHTML = txns.map(t => {
+      const customer = (state.customers || []).find(c => c.id === t.customerId);
+      const name = customer ? customer.name : "Unknown Customer";
 
-    return `
-      <div class="small" style="margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:6px">
-        <b>${name}</b> — ${fmt(t.amount)}<br>
-        <span class="muted">${t.desc || ""}</span><br>
-        <span class="muted">${new Date(t.date).toLocaleString()}</span>
-      </div>
-    `;
-  }).join("");
+      return `
+        <div class="small" style="margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:6px">
+          <b>${name}</b> — ${fmt(t.amount || 0)}<br>
+          <span class="muted">${t.desc || ""}</span><br>
+          <span class="muted">${new Date(t.date).toLocaleString()}</span>
+        </div>
+      `;
+    }).join("");
+  }
 
   const loadMoreBtn = document.getElementById("empLoadMore");
   if (loadMoreBtn) {
