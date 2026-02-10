@@ -2719,6 +2719,15 @@ function printStatement(id) {
   showToast("Freeze action sent for approval");
 }
 
+function refreshEmpowermentDrilldownHeader() {
+  const totals = calculateFilteredEmpowermentTotals();
+
+  document.getElementById("empCapGiven").textContent = fmt(totals.capitalGiven);
+  document.getElementById("empCapRepaid").textContent = fmt(totals.principalRepaid);
+  document.getElementById("empIntEarned").textContent = fmt(totals.interestEarned);
+  document.getElementById("empOutstanding").textContent = fmt(totals.outstandingCapital);
+}
+window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
 
   async function openEmpowermentModal() {
   const c = state.customers.find(x => x.id === activeCustomerId);
@@ -4061,11 +4070,10 @@ const interestLeft = (state.empowerments || []).reduce((sum, e) => {
 
   wrapper.innerHTML = `
     <div style="margin-bottom:10px">
-      <div><b>Capital Given:</b> ${fmt(capitalGiven)}</div>
-      <div><b>Capital Repaid:</b> ${fmt(capitalRepaid)}</div>
-      <div><b>Interest Earned:</b> <span style="color:green">${fmt(interestEarned)}</span></div>
-      <div><b>Interest Left:</b> <span style="color:${interestLeft>0?'red':'inherit'}">${fmt(interestLeft)}</span></div>
-      <div><b>Outstanding Capital:</b> <span style="color:${outstandingCapital>0?'red':'green'}">${fmt(outstandingCapital)}</span></div>
+      <div><b>Capital Given:</b> <span id="empCapGiven">${fmt(capitalGiven)}</span></div>
+<div><b>Capital Repaid:</b> <span id="empCapRepaid">${fmt(capitalRepaid)}</span></div>
+<div><b>Interest Earned:</b> <span id="empIntEarned" style="color:green">${fmt(interestEarned)}</span></div>
+<div><b>Outstanding Capital:</b> <span id="empOutstanding" style="color:${outstandingCapital>0?'red':'green'}">${fmt(outstandingCapital)}</span></div>
     </div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
@@ -4104,9 +4112,11 @@ function setEmpDateFilter(range) {
   state.ui.empDateFilter = range;
   state.ui.empFromDate = null;
   state.ui.empToDate = null;
+
+  refreshEmpowermentDrilldownHeader();   // ⭐ ADD THIS
   renderEmpowermentTransactions();
-}
 window.setEmpDateFilter = setEmpDateFilter;
+
 
 function applyEmpDateRange() {
   const from = document.getElementById("empFromDate").value;
