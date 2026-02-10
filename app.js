@@ -4761,6 +4761,7 @@ function calculateEmpowermentPosition() {
   const totalRepaid = sumEmpowermentRepaid();
   return totalRepaid - capitalGiven;
 }
+window.calculateEmpowermentPosition = calculateEmpowermentPosition;
 
  function calculateEmpowermentBalance() {
   const loans = state.empowerments || [];
@@ -4782,6 +4783,7 @@ function calculateEmpowermentPosition() {
     netPosition: totalGivenOut - totalReturnedCapital
   };
 }
+window.calculateEmpowermentBalance = calculateEmpowermentBalance;
 
 function calculateFilteredEmpowermentTotals() {
   const approvals = (state.transactions || [])
@@ -4809,6 +4811,7 @@ function calculateFilteredEmpowermentTotals() {
     outstandingCapital
   };
 }
+window.calculateFilteredEmpowermentTotals = calculateFilteredEmpowermentTotals;
 
 
 function renderEmpowermentBalance() {
