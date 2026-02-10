@@ -4066,12 +4066,6 @@ const capitalRepaid = totals.principalRepaid;
 const interestEarned = totals.interestEarned;
 const outstandingCapital = totals.outstandingCapital;
 
-const interestLeft = (() => {
-  return (state.empowerments || []).reduce((sum, e) => {
-    const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
-    return sum + (remaining > 0 ? remaining : 0);
-  }, 0);
-})();
 
 // Interest left = expected interest from disbursed loans minus interest earned
 const interestLeft = (state.empowerments || []).reduce((sum, e) => {
