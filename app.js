@@ -2890,6 +2890,7 @@ function openCreditAllocationModal(cust, amount) {
     balInput.addEventListener("input", syncFromBal);
   });
 }
+window.openCreditAllocationModal = openCreditAllocationModal;
 
 
 function openEmpowermentSummaryModal() {
@@ -4123,6 +4124,8 @@ function empTxnMatchesFilter(dateStr) {
       return true;
   }
 }
+window.empTxnMatchesFilter = empTxnMatchesFilter;
+
 
 function exportEmpowermentCSV() {
   const approvals = (state.approvals || [])
@@ -4270,6 +4273,7 @@ function renderEmpowermentTransactions() {
     };
   }
 }
+window.renderEmpowermentTransactions = renderEmpowermentTransactions;
 
 
 
