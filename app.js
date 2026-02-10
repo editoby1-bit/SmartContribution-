@@ -1821,6 +1821,8 @@ function applyEmpowermentRepayment(c, amount) {
   save();
   return amount - repay; // leftover goes to savings balance
 }
+window.applyEmpowermentRepayment = applyEmpowermentRepayment;
+
 
 function reject(id) {
   const a = state.approvals.find(x => x.id === id);
