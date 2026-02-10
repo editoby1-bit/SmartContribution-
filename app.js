@@ -4115,6 +4115,8 @@ function setEmpDateFilter(range) {
 
   refreshEmpowermentDrilldownHeader();   // ⭐ ADD THIS
   renderEmpowermentTransactions();
+}
+
 window.setEmpDateFilter = setEmpDateFilter;
 
 
