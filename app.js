@@ -1849,6 +1849,8 @@ function applyEmpowermentRepayment(c, amount) {
     remainingAmount -= interestPay;
 
     activeLoan.updatedAt = new Date().toISOString();
+
+    
   }
 
   // 🔹 MARK COMPLETED ONLY WHEN BOTH ARE PAID
@@ -1861,6 +1863,33 @@ function applyEmpowermentRepayment(c, amount) {
 
   save();
   return remainingAmount;
+  state.transactions = state.transactions || [];
+
+// Principal part
+if (principalPaid > 0) {
+  state.transactions.push({
+    id: uid("tx"),
+    type: "empowerment_repayment_principal",
+    amount: principalPaid,
+    date: new Date(),
+    desc: "Principal Repayment",
+    customerId: customer.id
+  });
+}
+
+// Interest part
+if (interestPaid > 0) {
+  state.transactions.push({
+    id: uid("tx"),
+    type: "empowerment_repayment_interest",
+    amount: interestPaid,
+    date: new Date(),
+    desc: "Interest Repayment",
+    customerId: customer.id
+  });
+}
+
+save();   // ⚠️ MUST BE AFTER PUSHING TRANSACTIONS
 }
 window.applyEmpowermentRepayment = applyEmpowermentRepayment;
 
@@ -4059,6 +4088,9 @@ const capitalRepaid = totals.principalRepaid;
 const interestEarned = totals.interestEarned;
 const outstandingCapital = totals.outstandingCapital;
 
+const interestLeft = (state.empowerments || [])
+  .reduce((sum,e)=> sum + Math.max(0,(e.expectedInterest||0)-(e.interestRepaid||0)),0);
+
 // Interest left = expected interest from disbursed loans minus interest earned
 const interestLeft = (state.empowerments || []).reduce((sum, e) => {
   const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
@@ -4073,7 +4105,8 @@ const interestLeft = (state.empowerments || []).reduce((sum, e) => {
       <div><b>Capital Given:</b> <span id="empCapGiven">${fmt(capitalGiven)}</span></div>
 <div><b>Capital Repaid:</b> <span id="empCapRepaid">${fmt(capitalRepaid)}</span></div>
 <div><b>Interest Earned:</b> <span id="empIntEarned" style="color:green">${fmt(interestEarned)}</span></div>
-<div><b>Outstanding Capital:</b> <span id="empOutstanding" style="color:${outstandingCapital>0?'red':'green'}">${fmt(outstandingCapital)}</span></div>
+<div><b>Interest Left:</b> <span style="color:red">${fmt(interestLeft)}</span></div>
+<div><b>Outstanding Capital:</b> <span id="empOutstanding">${fmt(outstandingCapital)}</span></div>
     </div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
@@ -4113,10 +4146,9 @@ function setEmpDateFilter(range) {
   state.ui.empFromDate = null;
   state.ui.empToDate = null;
 
-  refreshEmpowermentDrilldownHeader();   // ⭐ ADD THIS
+  updateEmpowermentHeaderTotals();  // ⭐
   renderEmpowermentTransactions();
 }
-
 window.setEmpDateFilter = setEmpDateFilter;
 
 
@@ -4125,9 +4157,10 @@ function applyEmpDateRange() {
   const to = document.getElementById("empToDate").value;
 
   state.ui.empDateFilter = "range";
-  state.ui.empFromDate = from;
-  state.ui.empToDate = to;
+  state.ui.empFromDate = from ? new Date(from) : null;
+  state.ui.empToDate = to ? new Date(to) : null;
 
+  updateEmpowermentHeaderTotals();  // ⭐
   renderEmpowermentTransactions();
 }
 window.applyEmpDateRange = applyEmpDateRange;
@@ -4327,12 +4360,17 @@ function renderEmpowermentTransactions() {
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, empTxnLimit);
 
-  container.innerHTML = txns.map(t => `
+  container.innerHTML = txns.map(t => {
+  const cust = (state.customers || []).find(c => c.id === t.customerId);
+
+  return `
     <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
       ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
-      <span class="muted">${t.desc}</span>
+      <span class="muted">${cust ? cust.name : ""}</span><br>
+      <span class="muted">${t.desc || ""}</span>
     </div>
-  `).join("");
+  `;
+}).join("");
 
   const loadMoreBtn = document.getElementById("empLoadMore");
   if (loadMoreBtn) {
@@ -4864,30 +4902,33 @@ function calculateFilteredEmpowermentTotals() {
   let capitalGiven = 0;
   let principalRepaid = 0;
   let interestEarned = 0;
+  let outstandingCapital = 0;
 
   loans.forEach(e => {
-    const created = new Date(e.createdAt);
-    const updated = new Date(e.updatedAt || e.createdAt);
+    const disbursedDate = new Date(e.createdAt);
+    const repaidDate = new Date(e.updatedAt || e.createdAt);
 
-    // Capital given counts if disbursement date passes filter
-    if (empTxnMatchesFilter(created)) {
+    // CAPITAL GIVEN
+    if (empTxnMatchesFilter(disbursedDate)) {
       capitalGiven += Number(e.principalGiven || 0);
     }
 
-    // Repayments count if repayment happened within filter window
-    if (empTxnMatchesFilter(updated)) {
+    // REPAYMENTS
+    if (empTxnMatchesFilter(repaidDate)) {
       principalRepaid += Number(e.principalRepaid || 0);
       interestEarned += Number(e.interestRepaid || 0);
     }
+
+    // OUTSTANDING AS OF FILTER RANGE
+    const remaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
+    if (remaining > 0 && empTxnMatchesFilter(disbursedDate)) {
+      outstandingCapital += remaining;
+    }
   });
 
-  return {
-    capitalGiven,
-    principalRepaid,
-    interestEarned,
-    outstandingCapital: Math.max(0, capitalGiven - principalRepaid)
-  };
+  return { capitalGiven, principalRepaid, interestEarned, outstandingCapital };
 }
+
 window.calculateFilteredEmpowermentTotals = calculateFilteredEmpowermentTotals;
 
 
@@ -4935,7 +4976,7 @@ const totalExpense = sumEntries(
 );
 const net = totalIncome - totalExpense;
 const accountTotals = [];
-const emp = calculateEmpowermentBalance();
+const emp = calculateFilteredEmpowermentTotals();
 
 const empGiven = emp.totalGivenOut;
 const empRepaid = emp.totalReturnedCapital;
@@ -5158,6 +5199,15 @@ function filterAccounts(query) {
 
 window.filterAccounts = filterAccounts;
 
+function updateEmpowermentHeaderTotals() {
+  const t = calculateFilteredEmpowermentTotals();
+
+  document.getElementById("empCapGiven").textContent = fmt(t.capitalGiven);
+  document.getElementById("empCapRepaid").textContent = fmt(t.principalRepaid);
+  document.getElementById("empIntEarned").textContent = fmt(t.interestEarned);
+  document.getElementById("empOutstanding").textContent = fmt(t.outstandingCapital);
+}
+window.updateEmpowermentHeaderTotals = updateEmpowermentHeaderTotals;
 
 function calculateBusinessBalance() {
   // Approved system money IN
