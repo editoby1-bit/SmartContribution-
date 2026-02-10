@@ -2187,12 +2187,16 @@ function renderProfileTab() {
 
 if (activeLoan) {
   const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
-  const interestLeft = loans.reduce((sum, e) => {
-  if (e.status === "completed") return sum;
-  const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
-  return sum + (remaining > 0 ? remaining : 0);
-}, 0);
-  const totalOutstanding = principalLeft + interestLeft;
+
+  const totalInterestLeft = (() => {
+    return loans.reduce((sum, e) => {
+      if (e.status === "completed") return sum;
+      const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+      return sum + (remaining > 0 ? remaining : 0);
+    }, 0);
+  })();
+
+  const totalOutstanding = principalLeft + totalInterestLeft;
 
   html += `
     <div class="kv" style="margin-top:6px">
@@ -4062,8 +4066,12 @@ const capitalRepaid = totals.principalRepaid;
 const interestEarned = totals.interestEarned;
 const outstandingCapital = totals.outstandingCapital;
 
-const interestLeft = (state.empowerments || [])
-  .reduce((sum,e)=> sum + Math.max(0,(e.expectedInterest||0)-(e.interestRepaid||0)),0);
+const interestLeft = (() => {
+  return (state.empowerments || []).reduce((sum, e) => {
+    const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+    return sum + (remaining > 0 ? remaining : 0);
+  }, 0);
+})();
 
 // Interest left = expected interest from disbursed loans minus interest earned
 const interestLeft = (state.empowerments || []).reduce((sum, e) => {
@@ -5090,21 +5098,26 @@ const outstandingCapital = (state.empowerments || []).reduce((sum, e) => {
 
 
 // 🔹 NEW — calculate total unpaid interest
-const interestLeft = (state.empowerments || []).reduce((sum, e) => {
-  if (e.status === "completed") return sum;
+${(() => {
+  const interestLeft = (state.empowerments || []).reduce((sum, e) => {
+    if (e.status === "completed") return sum;
 
-  const principalRemaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
+    const principalRemaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
 
-  // If principal still exists, interest is untouched
-  if (principalRemaining > 0) {
-    return sum + (e.expectedInterest || 0);
-  }
+    if (principalRemaining > 0) {
+      return sum + (e.expectedInterest || 0);
+    }
 
-  // If principal cleared, interest can now reduce
-  const remainingInterest = (e.expectedInterest || 0) - (e.interestRepaid || 0);
-  return sum + Math.max(0, remainingInterest);
+    const remainingInterest = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+    return sum + Math.max(0, remainingInterest);
+  }, 0);
 
-}, 0);
+  return `
+    <span class="small" style="color:${interestLeft > 0 ? '#b42318' : '#667085'}">
+      (Interest Left: ${fmt(interestLeft)})
+    </span>
+  `;
+})()}
 
     return `
       <div class="small muted">Empowerment Balance</div>
