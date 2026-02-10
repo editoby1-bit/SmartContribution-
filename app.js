@@ -1856,6 +1856,7 @@ function applyEmpowermentRepayment(c, amount) {
 activeLoan.updatedAt = now;
 activeLoan.lastPaymentAt = now; // 🔹 ensures history always has a valid timestamp
 
+
   if (
     activeLoan.principalRepaid >= activeLoan.principalGiven &&
     activeLoan.interestRepaid >= activeLoan.expectedInterest
@@ -4339,10 +4340,7 @@ function renderEmpowermentTransactions() {
     };
   }
 }
-
 window.renderEmpowermentTransactions = renderEmpowermentTransactions;
-
-
 
 
 function openCODDrillDown(staffId, date) {
