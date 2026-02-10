@@ -1803,60 +1803,61 @@ function initEmpowermentModel(c, config = {}) {
 }
 
 function applyEmpowermentRepayment(c, amount) {
- const activeLoan = (state.empowerments || []).find(e =>
-   e.customerId === c.id && e.status !== "completed"
- );
+  const activeLoan = state.empowerments.find(e =>
+    e.customerId === c.id && e.status !== "completed"
+  );
 
- if (!activeLoan) return amount;
+  if (!activeLoan) return amount;
 
- let remainingAmount = amount;
+  let remainingAmount = amount;
 
- // ===== PAY PRINCIPAL FIRST =====
- const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
- const principalPay = Math.min(remainingAmount, principalLeft);
+  const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
+  const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
 
- if (principalPay > 0) {
-   activeLoan.principalRepaid += principalPay;
-   remainingAmount -= principalPay;
+  // 🔹 PAY PRINCIPAL FIRST
+  const principalPay = Math.min(remainingAmount, principalLeft);
+  if (principalPay > 0) {
+    activeLoan.principalRepaid += principalPay;
 
-   state.transactions.push({
-     id: uid("tx"),
-     type: "empowerment_repayment_principal",
-     amount: principalPay,
-     date: new Date().toISOString(),
-     desc: "Empowerment Principal Repayment",
-     customerId: c.id
-   });
- }
+    state.transactions.push({
+      id: uid("tx"),
+      type: "empowerment_repayment_principal",
+      amount: principalPay,
+      date: new Date().toISOString(),
+      desc: "Empowerment Principal Repayment",
+      customerId: c.id
+    });
 
- // ===== THEN PAY INTEREST =====
- const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
- const interestPay = Math.min(remainingAmount, interestLeft);
+    remainingAmount -= principalPay;
+  }
 
- if (interestPay > 0) {
-   activeLoan.interestRepaid += interestPay;
-   remainingAmount -= interestPay;
+  // 🔹 THEN PAY INTEREST
+  const interestPay = Math.min(remainingAmount, interestLeft);
+  if (interestPay > 0) {
+    activeLoan.interestRepaid += interestPay;
 
-   state.transactions.push({
-     id: uid("tx"),
-     type: "empowerment_repayment_interest",
-     amount: interestPay,
-     date: new Date().toISOString(),
-     desc: "Empowerment Interest Repayment",
-     customerId: c.id
-   });
- }
+    state.transactions.push({
+      id: uid("tx"),
+      type: "empowerment_repayment_interest",
+      amount: interestPay,
+      date: new Date().toISOString(),
+      desc: "Empowerment Interest Repayment",
+      customerId: c.id
+    });
 
- // ===== COMPLETE LOAN =====
- if (
-   activeLoan.principalRepaid >= activeLoan.principalGiven &&
-   activeLoan.interestRepaid >= activeLoan.expectedInterest
- ) {
-   activeLoan.status = "completed";
- }
+    remainingAmount -= interestPay;
+  }
 
- save();
- return remainingAmount;
+  // 🔹 MARK COMPLETED ONLY WHEN BOTH ARE PAID
+  if (
+    activeLoan.principalRepaid >= activeLoan.principalGiven &&
+    activeLoan.interestRepaid >= activeLoan.expectedInterest
+  ) {
+    activeLoan.status = "completed";
+  }
+
+  save();
+  return remainingAmount;
 }
 window.applyEmpowermentRepayment = applyEmpowermentRepayment;
 
