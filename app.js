@@ -1835,6 +1835,7 @@ function applyEmpowermentRepayment(c, amount) {
   const interestPay = Math.min(remainingAmount, interestLeft);
   if (interestPay > 0) {
     activeLoan.interestRepaid += interestPay;
+    
 
     state.transactions.push({
       id: uid("tx"),
@@ -1846,6 +1847,8 @@ function applyEmpowermentRepayment(c, amount) {
     });
 
     remainingAmount -= interestPay;
+
+    activeLoan.updatedAt = new Date().toISOString();
   }
 
   // 🔹 MARK COMPLETED ONLY WHEN BOTH ARE PAID
@@ -4844,27 +4847,25 @@ window.calculateEmpowermentPosition = calculateEmpowermentPosition;
 window.calculateEmpowermentBalance = calculateEmpowermentBalance;
 
 function calculateFilteredEmpowermentTotals() {
-  const txns = (state.transactions || [])
-    .filter(t =>
-      t.type === "empowerment_disbursement" ||
-      t.type === "empowerment_repayment_principal" ||
-      t.type === "empowerment_repayment_interest"
-    )
-    .filter(t => empTxnMatchesFilter(t.date));
+  const loans = state.empowerments || [];
 
   let capitalGiven = 0;
   let principalRepaid = 0;
   let interestEarned = 0;
 
-  txns.forEach(t => {
-    if (t.type === "empowerment_disbursement") {
-      capitalGiven += Number(t.amount || 0);
+  loans.forEach(e => {
+    const created = new Date(e.createdAt);
+    const updated = new Date(e.updatedAt || e.createdAt);
+
+    // Capital given counts if disbursement date passes filter
+    if (empTxnMatchesFilter(created)) {
+      capitalGiven += Number(e.principalGiven || 0);
     }
-    if (t.type === "empowerment_repayment_principal") {
-      principalRepaid += Number(t.amount || 0);
-    }
-    if (t.type === "empowerment_repayment_interest") {
-      interestEarned += Number(t.amount || 0);
+
+    // Repayments count if repayment happened within filter window
+    if (empTxnMatchesFilter(updated)) {
+      principalRepaid += Number(e.principalRepaid || 0);
+      interestEarned += Number(e.interestRepaid || 0);
     }
   });
 
