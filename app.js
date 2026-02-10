@@ -1816,11 +1816,7 @@ function applyEmpowermentRepayment(c, amount) {
   const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
   const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
 
-<<<<<<< HEAD
   // PAY PRINCIPAL FIRST
-=======
-  // PAY PRINCIPAL
->>>>>>> 2bc1575ba00f7ffe6d1b103246e9e554aab4fcfe
   const principalPay = Math.min(remainingAmount, principalLeft);
   if (principalPay > 0) {
     activeLoan.principalRepaid += principalPay;
@@ -1837,15 +1833,10 @@ function applyEmpowermentRepayment(c, amount) {
     remainingAmount -= principalPay;
   }
 
-<<<<<<< HEAD
   // PAY INTEREST AFTER PRINCIPAL
   const interestRemaining = activeLoan.expectedInterest - activeLoan.interestRepaid;
   const interestPay = Math.min(remainingAmount, interestRemaining);
 
-=======
-  // PAY INTEREST
-  const interestPay = Math.min(remainingAmount, interestLeft);
->>>>>>> 2bc1575ba00f7ffe6d1b103246e9e554aab4fcfe
   if (interestPay > 0) {
     activeLoan.interestRepaid += interestPay;
 
@@ -5170,11 +5161,6 @@ const interestLeft = (state.empowerments || []).reduce((sum, e) => {
 }
 window.renderAccounts = renderAccounts;
 
-function fmt(n) {
-  const val = Number(n) || 0;
-  const clean = Math.abs(val) < 1 ? 0 : val;
-  return "₦" + clean.toLocaleString();
-}
 
 function filterAccounts(query) {
   query = query.toLowerCase().trim();
