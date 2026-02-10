@@ -3997,9 +3997,8 @@ function openOperationalDrilldown() {
 window.openOperationalDrilldown = openOperationalDrilldown;
 
 function openEmpowermentDrilldown() {
-  if (!state.ui.empDateFilter) {
-  state.ui.empDateFilter = "today";
-}
+  state.ui.empDateFilter = state.ui.empDateFilter || "today";
+empTxnLimit = 50;
   const totals = calculateFilteredEmpowermentTotals();
 
 const capitalGiven = totals.capitalGiven;
@@ -4783,42 +4782,21 @@ function calculateEmpowermentPosition() {
 }
 
 function calculateFilteredEmpowermentTotals() {
-  const approvals = (state.approvals || [])
-    .filter(a => a.type === "empowerment" && a.status === "approved")
-    .map(a => ({
-      date: a.processedAt || a.date || a.createdAt,
-      principal: Number(a.amount || 0),
-      interest: Number(a.interest || 0),
-      type: "disbursement"
-    }));
-
-  const repayments = (state.transactions || [])
-    .filter(t =>
-      t.type === "empowerment_repayment_principal" ||
-      t.type === "empowerment_repayment_interest"
-    )
-    .map(t => ({
-      date: t.date,
-      principal: t.type === "empowerment_repayment_principal" ? Number(t.amount) : 0,
-      interest: t.type === "empowerment_repayment_interest" ? Number(t.amount) : 0,
-      type: "repayment"
-    }));
-
-  const all = [...approvals, ...repayments]
+  const approvals = (state.transactions || [])
+    .filter(t => t.type === "empowerment_disbursement")
     .filter(t => empTxnMatchesFilter(t.date));
 
-  let capitalGiven = 0;
-  let principalRepaid = 0;
-  let interestEarned = 0;
+  const principalRepayments = (state.transactions || [])
+    .filter(t => t.type === "empowerment_repayment_principal")
+    .filter(t => empTxnMatchesFilter(t.date));
 
-  all.forEach(t => {
-    if (t.type === "disbursement") {
-      capitalGiven += t.principal;
-    } else {
-      principalRepaid += t.principal;
-      interestEarned += t.interest;
-    }
-  });
+  const interestRepayments = (state.transactions || [])
+    .filter(t => t.type === "empowerment_repayment_interest")
+    .filter(t => empTxnMatchesFilter(t.date));
+
+  const capitalGiven = approvals.reduce((s, t) => s + t.amount, 0);
+  const principalRepaid = principalRepayments.reduce((s, t) => s + t.amount, 0);
+  const interestEarned = interestRepayments.reduce((s, t) => s + t.amount, 0);
 
   const outstandingCapital = Math.max(0, capitalGiven - principalRepaid);
 
@@ -4829,6 +4807,7 @@ function calculateFilteredEmpowermentTotals() {
     outstandingCapital
   };
 }
+
 
 function renderEmpowermentBalance() {
   const el = document.getElementById("empowermentPanel");
