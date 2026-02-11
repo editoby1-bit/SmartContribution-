@@ -5729,6 +5729,24 @@ function resetCODDraftForStaffDate(staffId, dateStr) {
 }
 window.resetCODDraftForStaffDate = resetCODDraftForStaffDate;
 
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+
+    // Re-apply current staff role permissions
+    if (state.currentStaffId && state.staff) {
+      const staff = state.staff.find(s => s.id === state.currentStaffId);
+      if (staff) {
+        state.currentUserRole = staff.role;   // reattach role
+      }
+    }
+
+    // Re-render correct UI for role
+    if (typeof renderDashboard === "function") renderDashboard();
+    if (typeof renderAccounts === "function") renderAccounts();
+    if (typeof renderCustomers === "function") renderCustomers();
+    if (typeof renderApprovals === "function") renderApprovals();
+  }
+});
 
 // =========================
 // EXPOSE FOR DEBUG
