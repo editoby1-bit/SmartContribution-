@@ -4520,25 +4520,22 @@ function renderBusinessTransactions() {
   if (!container) return;
 
   const txns = (state.transactions || [])
-    .filter(t =>
-      (t.type === "business_credit" || t.type === "business_withdrawal") &&
-      bizTxnMatchesFilter(t.date)
-    )
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .filter(t => (t.type === "credit" || t.type === "withdraw"))
+    .filter(t => bizTxnMatchesFilter(t.date))
+    .sort((a,b) => new Date(b.date) - new Date(a.date))
     .slice(0, bizTxnLimit);
 
   container.innerHTML = txns.map(t => {
-    const customer = state.customers.find(c => c.id === t.customerId);
-
+    const cust = state.customers.find(c => c.id === t.customerId);
     return `
       <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
         ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
-        <span class="muted">
-          ${customer ? customer.name : "Unknown Customer"} • ${t.type === "business_credit" ? "Credit" : "Withdrawal"}
-        </span>
+        <span class="muted">${cust ? cust.name : "Unknown"} • ${t.type === "credit" ? "Credit" : "Withdrawal"}</span>
       </div>
     `;
   }).join("");
+
+  updateBusinessHeaderTotals(); // ⭐ ALWAYS REFRESH HEADER
 
   const btn = document.getElementById("bizLoadMore");
   if (btn) {
@@ -4639,6 +4636,24 @@ const totals = {
   renderBusinessTransactions();
 }
 window.openBusinessDrilldown = openBusinessDrilldown;
+
+function updateBusinessHeaderTotals() {
+  const t = calculateFilteredBusinessTotals();
+
+  const c = document.getElementById("bizCredit");
+  const w = document.getElementById("bizWithdrawal");
+  const n = document.getElementById("bizNet");
+
+  if (c) c.textContent = fmt(t.income);
+  if (w) w.textContent = fmt(t.expense);
+
+  if (n) {
+    n.textContent = fmt(t.net);
+    n.style.color = t.net >= 0 ? "green" : "red";
+  }
+}
+window.updateBusinessHeaderTotals = updateBusinessHeaderTotals;
+
 
 function exportBusinessCSV() {
   const txns = (state.transactions || [])
