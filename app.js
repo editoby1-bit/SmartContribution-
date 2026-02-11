@@ -4406,6 +4406,22 @@ function setBizDateFilter(range) {
   state.ui.bizFromDate = null;
   state.ui.bizToDate = null;
   renderBusinessTransactions();
+  
+  <div style="margin-bottom:10px">
+  <div><b>Total Credit:</b> 
+    <span id="bizCredit" style="color:green">${fmt(totals.income)}</span>
+  </div>
+
+  <div><b>Total Withdrawal:</b> 
+    <span id="bizWithdrawal" style="color:#b42318">${fmt(totals.expense)}</span>
+  </div>
+
+  <div><b>Net Business Balance:</b>
+    <span id="bizNet" style="color:${totals.net>=0?'green':'red'}">
+      ${fmt(totals.net)}
+    </span>
+  </div>
+</div>
 }
 window.setBizDateFilter = setBizDateFilter;
 
@@ -4414,6 +4430,22 @@ function applyBizDateRange() {
   state.ui.bizFromDate = document.getElementById("bizFromDate").value;
   state.ui.bizToDate = document.getElementById("bizToDate").value;
   renderBusinessTransactions();
+
+  <div style="margin-bottom:10px">
+  <div><b>Total Credit:</b> 
+    <span id="bizCredit" style="color:green">${fmt(totals.income)}</span>
+  </div>
+
+  <div><b>Total Withdrawal:</b> 
+    <span id="bizWithdrawal" style="color:#b42318">${fmt(totals.expense)}</span>
+  </div>
+
+  <div><b>Net Business Balance:</b>
+    <span id="bizNet" style="color:${totals.net>=0?'green':'red'}">
+      ${fmt(totals.net)}
+    </span>
+  </div>
+</div>
 }
 window.applyBizDateRange = applyBizDateRange;
 
@@ -4422,6 +4454,22 @@ function clearBizDateRange() {
   state.ui.bizFromDate = null;
   state.ui.bizToDate = null;
   renderBusinessTransactions();
+
+  <div style="margin-bottom:10px">
+  <div><b>Total Credit:</b> 
+    <span id="bizCredit" style="color:green">${fmt(totals.income)}</span>
+  </div>
+
+  <div><b>Total Withdrawal:</b> 
+    <span id="bizWithdrawal" style="color:#b42318">${fmt(totals.expense)}</span>
+  </div>
+
+  <div><b>Net Business Balance:</b>
+    <span id="bizNet" style="color:${totals.net>=0?'green':'red'}">
+      ${fmt(totals.net)}
+    </span>
+  </div>
+</div>
 }
 window.clearBizDateRange = clearBizDateRange;
 
@@ -4498,12 +4546,20 @@ function openBusinessDrilldown() {
 
   wrapper.innerHTML = `
     <div style="margin-bottom:10px">
-      <div><b>Total Income:</b> ${fmt(totals.income)}</div>
-      <div><b>Total Expense:</b> ${fmt(totals.expense)}</div>
-      <div><b>Net Business Balance:</b>
-        <span style="color:${totals.net>=0?'green':'red'}">${fmt(totals.net)}</span>
-      </div>
-    </div>
+  <div><b>Total Credit:</b> 
+    <span id="bizCredit" style="color:green">${fmt(totals.income)}</span>
+  </div>
+
+  <div><b>Total Withdrawal:</b> 
+    <span id="bizWithdrawal" style="color:#b42318">${fmt(totals.expense)}</span>
+  </div>
+
+  <div><b>Net Business Balance:</b>
+    <span id="bizNet" style="color:${totals.net>=0?'green':'red'}">
+      ${fmt(totals.net)}
+    </span>
+  </div>
+</div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
       <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="setBizDateFilter('today')">Today</button>
