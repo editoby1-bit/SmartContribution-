@@ -4575,7 +4575,30 @@ function openBusinessDrilldown() {
   state.ui.bizDateFilter = state.ui.bizDateFilter || "today";
   bizTxnLimit = 50;
 
-  const totals = calculateFilteredBusinessTotals();
+ const bizTxns = (state.transactions || []).filter(t =>
+  (t.type === "business_credit" || t.type === "business_withdrawal") &&
+  bizTxnMatchesFilter(t.date)
+);
+
+let totalCredit = 0;
+let totalWithdrawal = 0;
+
+bizTxns.forEach(t => {
+  if (t.type === "business_credit") totalCredit += Number(t.amount || 0);
+  if (t.type === "business_withdrawal") totalWithdrawal += Number(t.amount || 0);
+});
+
+let net = totalCredit - totalWithdrawal;
+
+if (state.business?.includeEmpowerment) {
+  net += calculateEmpowermentPosition();
+}
+
+const totals = {
+  income: totalCredit,
+  expense: totalWithdrawal,
+  net
+};
 
   const wrapper = document.createElement("div");
 
