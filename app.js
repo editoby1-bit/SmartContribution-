@@ -4521,6 +4521,16 @@ function openBusinessDrilldown() {
       <button class="btn small solid" onclick="clearBizDateRange()">Clear</button>
     </div>
 
+    <div style="display:flex; gap:6px; margin-bottom:10px">
+  <button class="btn small solid"
+          style="background:#6a1b9a; border-color:#6a1b9a"
+          onclick="exportBusinessCSV()">Export CSV</button>
+
+  <button class="btn small solid"
+          style="background:#6a1b9a; border-color:#6a1b9a"
+          onclick="printBusinessSummary()">Print Summary</button>
+</div>
+
     <div id="bizTxnList" style="max-height:300px; overflow:auto"></div>
     <button id="bizLoadMore" class="btn small solid" style="margin-top:8px;background:#6a1b9a;color:white">See More</button>
   `;
@@ -4530,6 +4540,99 @@ function openBusinessDrilldown() {
 }
 window.openBusinessDrilldown = openBusinessDrilldown;
 
+function exportBusinessCSV() {
+  const txns = (state.transactions || [])
+    .filter(t =>
+      (t.type === "approved_credit" || t.type === "approved_withdrawal") &&
+      bizTxnMatchesFilter(t.date)
+    )
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  let csv = "S/N,Date,Customer,Amount,Type,Description\n";
+
+  txns.forEach((t, i) => {
+    const cust = state.customers.find(c => c.id === t.customerId);
+    const type = t.type === "approved_credit" ? "Credit" : "Withdrawal";
+
+    csv += `${i+1},${new Date(t.date).toLocaleString()},${cust?.name || ""},${t.amount},${type},"${t.desc || ""}"\n`;
+  });
+
+  const total = txns.reduce((s, t) =>
+    s + (t.type === "approved_credit" ? t.amount : -t.amount), 0);
+
+  csv += `\n,,NET TOTAL,${total}\n`;
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "business_transactions.csv";
+  a.click();
+}
+window.exportBusinessCSV = exportBusinessCSV;
+
+function printBusinessSummary() {
+  const txns = (state.transactions || [])
+    .filter(t =>
+      (t.type === "approved_credit" || t.type === "approved_withdrawal") &&
+      bizTxnMatchesFilter(t.date)
+    )
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const net = txns.reduce((s, t) =>
+    s + (t.type === "approved_credit" ? t.amount : -t.amount), 0);
+
+  const win = window.open("", "_blank");
+
+  win.document.write(`
+    <html>
+      <head>
+        <title>Business Summary</title>
+        <style>
+          body { font-family: Arial; padding:20px }
+          table { border-collapse: collapse; width:100% }
+          th, td { border:1px solid #ccc; padding:6px; font-size:12px }
+          th { background:#6a1b9a; color:white }
+        </style>
+      </head>
+      <body>
+        <h2>Business Transaction Summary</h2>
+        <table>
+          <tr>
+            <th>#</th>
+            <th>Date</th>
+            <th>Customer</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Description</th>
+          </tr>
+          ${txns.map((t, i) => {
+            const cust = state.customers.find(c => c.id === t.customerId);
+            const type = t.type === "approved_credit" ? "Credit" : "Withdrawal";
+
+            return `
+              <tr>
+                <td>${i+1}</td>
+                <td>${new Date(t.date).toLocaleString()}</td>
+                <td>${cust?.name || ""}</td>
+                <td>${type}</td>
+                <td>${t.amount}</td>
+                <td>${t.desc || ""}</td>
+              </tr>
+            `;
+          }).join("")}
+        </table>
+
+        <h3 style="margin-top:20px">
+          Net Business Change: ${fmt(net)}
+        </h3>
+      </body>
+    </html>
+  `);
+
+  win.document.close();
+  win.print();
+}
+window.printBusinessSummary = printBusinessSummary;
 
 
 function openCODDrillDown(staffId, date) {
