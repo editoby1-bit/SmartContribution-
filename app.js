@@ -4520,34 +4520,33 @@ function renderBusinessTransactions() {
   const container = document.getElementById("bizTxnList");
   if (!container) return;
 
-  const allTxns = (state.transactions || [])
-    .filter(t =>
-      (t.type === "credit" || t.type === "withdraw") &&
-      bizTxnMatchesFilter(t.date)
-    )
-    .sort((a,b) => new Date(b.date) - new Date(a.date));
+  const txns = (state.transactions || [])
+    .filter(t => t.type === "credit" || t.type === "withdraw")
+    .filter(t => bizTxnMatchesFilter(t.date))
+    .sort((a,b) => new Date(a.date) - new Date(b.date)) // oldest → newest for running balance
+    .slice(0, bizTxnLimit);
 
-  const visible = allTxns.slice(0, bizTxnLimit);
+  let running = 0;
 
-  container.innerHTML = visible.map(t => {
-    const cust = state.customers.find(c => c.id === t.customerId);
-    const name = cust ? cust.name : "Unknown";
+  container.innerHTML = txns.map(t => {
+    if (t.type === "credit") running += Number(t.amount || 0);
+    if (t.type === "withdraw") running -= Number(t.amount || 0);
 
-    const typeLabel = t.type === "credit"
-      ? `<span style="color:green">(Credit)</span>`
-      : `<span style="color:#b42318">(Withdrawal)</span>`;
+    const customer = state.customers.find(c => c.id === t.customerId);
 
     return `
-      <div class="small" style="margin-bottom:8px;border-bottom:1px solid #eee;padding-bottom:6px">
-        ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b> ${typeLabel}<br>
-        <span class="muted">${name}</span>
+      <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
+        ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
+        <span class="muted">${customer ? customer.name : ""} • ${t.type.toUpperCase()}</span><br>
+        <span class="muted">Running Balance: 
+          <b style="color:${running>=0?'green':'red'}">${fmt(running)}</b>
+        </span>
       </div>
     `;
   }).join("");
 
   const btn = document.getElementById("bizLoadMore");
   if (btn) {
-    btn.style.display = allTxns.length > bizTxnLimit ? "block" : "none";
     btn.onclick = () => {
       bizTxnLimit += 50;
       renderBusinessTransactions();
