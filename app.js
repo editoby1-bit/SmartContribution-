@@ -4504,6 +4504,11 @@ function renderBusinessTransactions() {
 
   const txns = (state.accountEntries || [])
     .filter(e => bizTxnMatchesFilter(e.date))
+    .filter(e => {
+      const isIncome = state.accounts.income.some(a => a.id === e.accountId);
+      const isExpense = state.accounts.expense.some(a => a.id === e.accountId);
+      return isIncome || isExpense;
+    })
     .sort((a,b) => new Date(b.date) - new Date(a.date))
     .slice(0, bizTxnLimit);
 
@@ -4511,13 +4516,31 @@ function renderBusinessTransactions() {
     const acc = [...state.accounts.income, ...state.accounts.expense]
       .find(a => a.id === e.accountId);
 
+    const isIncome = state.accounts.income.some(a => a.id === e.accountId);
+    const label = isIncome ? "Credit" : "Withdrawal";
+    const color = isIncome ? "green" : "#b42318";
+
     return `
-      <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
-        ${new Date(e.date).toLocaleString()} — <b>${fmt(e.amount)}</b><br>
-        <span class="muted">${acc ? acc.name : "Unknown Account"}</span>
+      <div class="small" style="margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:6px">
+        <b style="color:${color}">${fmt(e.amount)}</b> — ${label}<br>
+        <span class="muted">${acc ? acc.name : "Unknown Account"}</span><br>
+        <span class="muted">${new Date(e.date).toLocaleString()}</span>
       </div>
     `;
   }).join("");
+
+  // 🔹 Update header totals LIVE
+  const totals = calculateFilteredBusinessTotals();
+  const c = document.getElementById("bizCredit");
+  const w = document.getElementById("bizWithdrawal");
+  const n = document.getElementById("bizNet");
+
+  if (c) c.textContent = fmt(totals.income);
+  if (w) w.textContent = fmt(totals.expense);
+  if (n) {
+    n.textContent = fmt(totals.net);
+    n.style.color = totals.net >= 0 ? "green" : "red";
+  }
 
   const btn = document.getElementById("bizLoadMore");
   if (btn) {
@@ -4528,6 +4551,16 @@ function renderBusinessTransactions() {
   }
 }
 window.renderBusinessTransactions = renderBusinessTransactions;
+
+
+
+function loadMoreBusinessTransactions() {
+  bizTxnLimit += 50;
+  renderBusinessTransactions();
+}
+window.loadMoreBusinessTransactions = loadMoreBusinessTransactions;
+
+
 
 
 function openBusinessDrilldown() {
@@ -4582,7 +4615,11 @@ function openBusinessDrilldown() {
 </div>
 
     <div id="bizTxnList" style="max-height:300px; overflow:auto"></div>
-    <button id="bizLoadMore" class="btn small solid" style="margin-top:8px;background:#6a1b9a;color:white">See More</button>
+    <button id="bizLoadMore" class="btn small solid"
+  style="margin-top:8px;background:#6a1b9a;color:white"
+  onclick="loadMoreBusinessTransactions()">
+  See More
+</button>
   `;
 
   openModalGeneric("Business Transactions", wrapper, null);
