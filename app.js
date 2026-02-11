@@ -5639,7 +5639,8 @@ function calculateBusinessBalance() {
 
   return net;
 }
-window.calculateBusinessBalance = calculateBusinessBalance; 
+window.calculateBusinessBalance = calculateBusinessBalance;
+
 
 function toggleEmpowermentImpact(val) {
   state.business.includeEmpowerment = val;
