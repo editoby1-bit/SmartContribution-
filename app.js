@@ -4581,7 +4581,9 @@ window.loadMoreBusinessTransactions = loadMoreBusinessTransactions;
 
 
 function openBusinessDrilldown() {
-  state.ui.bizDateFilter = state.ui.bizDateFilter || "today";
+ state.ui.bizDateFilter = "today";
+state.ui.bizFromDate = null;
+state.ui.bizToDate = null;
   bizTxnLimit = 50;
 
  const bizTxns = (state.transactions || []).filter(t =>
@@ -5596,26 +5598,18 @@ function updateEmpowermentHeaderTotals() {
 window.updateEmpowermentHeaderTotals = updateEmpowermentHeaderTotals;
 
 function calculateBusinessBalance() {
-  // Approved system money IN
-  const approvedCredits = (state.approvals || [])
-    .filter(a => a.type === "credit" && a.status === "approved")
-    .reduce((sum, a) => sum + Number(a.amount || 0), 0);
+  const t = calculateFilteredBusinessTotals();
 
-  // Approved system money OUT
-  const approvedWithdrawals = (state.approvals || [])
-    .filter(a => a.type === "withdraw" && a.status === "approved")
-    .reduce((sum, a) => sum + Number(a.amount || 0), 0);
+  // Card should always show ALL TIME totals
+  let net = t.income - t.expense;
 
-  let balance = approvedCredits - approvedWithdrawals;
+  if (state.business?.includeEmpowerment) {
+    net += calculateEmpowermentPosition();
+  }
 
-  // 🔥 Empowerment impact (correct financial model)
-if (state.business.includeEmpowerment) {
-  const empowermentPosition = calculateEmpowermentPosition();
-  balance += empowermentPosition;
+  return net;
 }
-
-  return balance; 
-}
+window.calculateBusinessBalance = calculateBusinessBalance; 
 
 function toggleEmpowermentImpact(val) {
   state.business.includeEmpowerment = val;
