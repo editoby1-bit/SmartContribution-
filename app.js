@@ -4508,8 +4508,7 @@ function renderBusinessTransactions() {
 
   const txns = (state.transactions || [])
     .filter(t =>
-      (t.type === "credit" || t.type === "withdrawal") &&
-      t.status === "approved" &&
+      (t.type === "credit_approved" || t.type === "withdrawal_approved") &&
       bizTxnMatchesFilter(t.date)
     )
     .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -4522,7 +4521,7 @@ function renderBusinessTransactions() {
       <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
         ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
         <span class="muted">
-          ${customer ? customer.name : "Unknown Customer"} • ${t.type === "credit" ? "Credit" : "Withdrawal"}
+          ${customer ? customer.name : "Unknown Customer"} • ${t.type.replace("_", " ")}
         </span>
       </div>
     `;
@@ -4536,6 +4535,7 @@ function renderBusinessTransactions() {
     };
   }
 }
+
 window.renderBusinessTransactions = renderBusinessTransactions;
 
 
