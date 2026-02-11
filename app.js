@@ -4423,70 +4423,52 @@ function bizTxnMatchesFilter(dateStr) {
 }
 window.bizTxnMatchesFilter = bizTxnMatchesFilter;
 
+function refreshBusinessHeaderTotals() {
+ const t = calculateFilteredBusinessTotals();
+
+ const c = document.getElementById("bizCredit");
+ const w = document.getElementById("bizWithdrawal");
+ const n = document.getElementById("bizNet");
+
+ if (c) c.textContent = fmt(t.income);
+ if (w) w.textContent = fmt(t.expense);
+
+ if (n) {
+   n.textContent = fmt(t.net);
+   n.style.color = t.net >= 0 ? "green" : "red";
+ }
+}
+window.refreshBusinessHeaderTotals = refreshBusinessHeaderTotals;
 
 function setBizDateFilter(range) {
-  state.ui.bizDateFilter = range;
-  state.ui.bizFromDate = null;
-  state.ui.bizToDate = null;
-  renderBusinessTransactions();
+ state.ui.bizDateFilter = range;
+ state.ui.bizFromDate = null;
+ state.ui.bizToDate = null;
 
-  const t = calculateFilteredBusinessTotals();
-
-const c = document.getElementById("bizCredit");
-const w = document.getElementById("bizWithdrawal");
-const n = document.getElementById("bizNet");
-
-if (c) c.textContent = fmt(t.income);
-if (w) w.textContent = fmt(t.expense);
-
-if (n) {
-  n.textContent = fmt(t.net);
-  n.style.color = t.net >= 0 ? "green" : "red";
-}
+ renderBusinessTransactions();
+ refreshBusinessHeaderTotals(); // 🔥 NEW
 }
 window.setBizDateFilter = setBizDateFilter;
 
+
 function applyBizDateRange() {
-  state.ui.bizDateFilter = "custom";
-  state.ui.bizFromDate = document.getElementById("bizFromDate").value;
-  state.ui.bizToDate = document.getElementById("bizToDate").value;
-  renderBusinessTransactions();
+ state.ui.bizDateFilter = "custom";
+ state.ui.bizFromDate = document.getElementById("bizFromDate").value;
+ state.ui.bizToDate = document.getElementById("bizToDate").value;
 
-  const t = calculateFilteredBusinessTotals();
-
-const c = document.getElementById("bizCredit");
-const w = document.getElementById("bizWithdrawal");
-const n = document.getElementById("bizNet");
-
-if (c) c.textContent = fmt(t.income);
-if (w) w.textContent = fmt(t.expense);
-
-if (n) {
-  n.textContent = fmt(t.net);
-  n.style.color = t.net >= 0 ? "green" : "red";
-}
+ renderBusinessTransactions();
+ refreshBusinessHeaderTotals(); // 🔥 NEW
 }
 window.applyBizDateRange = applyBizDateRange;
 
+
 function clearBizDateRange() {
-  state.ui.bizDateFilter = "today";
-  state.ui.bizFromDate = null;
-  state.ui.bizToDate = null;
-  renderBusinessTransactions();
+ state.ui.bizDateFilter = "today";
+ state.ui.bizFromDate = null;
+ state.ui.bizToDate = null;
 
- const t = calculateFilteredBusinessTotals();
-
-const c = document.getElementById("bizCredit");
-const w = document.getElementById("bizWithdrawal");
-const n = document.getElementById("bizNet");
-
-if (c) c.textContent = fmt(t.income);
-if (w) w.textContent = fmt(t.expense);
-
-if (n) {
-  n.textContent = fmt(t.net);
-  n.style.color = t.net >= 0 ? "green" : "red";
-}
+ renderBusinessTransactions();
+ refreshBusinessHeaderTotals(); // 🔥 NEW
 }
 window.clearBizDateRange = clearBizDateRange;
 
