@@ -4063,7 +4063,11 @@ function openOperationalDrilldown() {
 window.openOperationalDrilldown = openOperationalDrilldown;
 
 function openEmpowermentDrilldown() {
-  state.ui.empDateFilter = state.ui.empDateFilter || "today";
+  // Always start drilldown on TODAY
+state.ui.empDateFilter = "today";
+state.ui.empFromDate = null;
+state.ui.empToDate = null;
+
 empTxnLimit = 50;
   const totals = calculateFilteredEmpowermentTotals();
 
