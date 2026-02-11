@@ -4469,29 +4469,33 @@ window.clearBizDateRange = clearBizDateRange;
 
 
 function calculateFilteredBusinessTotals() {
-  const entries = (state.accountEntries || []).filter(e =>
-    bizTxnMatchesFilter(e.date)
-  );
+  const txns = (state.transactions || [])
+    .filter(t =>
+      (t.type === "credit" || t.type === "withdrawal") &&
+      t.status === "approved" &&
+      bizTxnMatchesFilter(t.date)
+    );
 
-  let income = 0;
-  let expense = 0;
+  let totalCredit = 0;
+  let totalWithdrawal = 0;
 
-  entries.forEach(e => {
-    const isIncome = state.accounts.income.some(a => a.id === e.accountId);
-    const isExpense = state.accounts.expense.some(a => a.id === e.accountId);
-
-    if (isIncome) income += Number(e.amount || 0);
-    if (isExpense) expense += Number(e.amount || 0);
+  txns.forEach(t => {
+    if (t.type === "credit") totalCredit += Number(t.amount || 0);
+    if (t.type === "withdrawal") totalWithdrawal += Number(t.amount || 0);
   });
 
-  let net = income - expense;
+  let net = totalCredit - totalWithdrawal;
 
-  // 🔹 Respect "Include Empowerment"
+  // Include Empowerment if toggle is on
   if (state.business?.includeEmpowerment) {
     net += calculateEmpowermentPosition();
   }
 
-  return { income, expense, net };
+  return {
+    income: totalCredit,
+    expense: totalWithdrawal,
+    net
+  };
 }
 window.calculateFilteredBusinessTotals = calculateFilteredBusinessTotals;
 
@@ -4502,45 +4506,27 @@ function renderBusinessTransactions() {
   const container = document.getElementById("bizTxnList");
   if (!container) return;
 
-  const txns = (state.accountEntries || [])
-    .filter(e => bizTxnMatchesFilter(e.date))
-    .filter(e => {
-      const isIncome = state.accounts.income.some(a => a.id === e.accountId);
-      const isExpense = state.accounts.expense.some(a => a.id === e.accountId);
-      return isIncome || isExpense;
-    })
-    .sort((a,b) => new Date(b.date) - new Date(a.date))
+  const txns = (state.transactions || [])
+    .filter(t =>
+      (t.type === "credit" || t.type === "withdrawal") &&
+      t.status === "approved" &&
+      bizTxnMatchesFilter(t.date)
+    )
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, bizTxnLimit);
 
-  container.innerHTML = txns.map(e => {
-    const acc = [...state.accounts.income, ...state.accounts.expense]
-      .find(a => a.id === e.accountId);
-
-    const isIncome = state.accounts.income.some(a => a.id === e.accountId);
-    const label = isIncome ? "Credit" : "Withdrawal";
-    const color = isIncome ? "green" : "#b42318";
+  container.innerHTML = txns.map(t => {
+    const customer = state.customers.find(c => c.id === t.customerId);
 
     return `
-      <div class="small" style="margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:6px">
-        <b style="color:${color}">${fmt(e.amount)}</b> — ${label}<br>
-        <span class="muted">${acc ? acc.name : "Unknown Account"}</span><br>
-        <span class="muted">${new Date(e.date).toLocaleString()}</span>
+      <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
+        ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
+        <span class="muted">
+          ${customer ? customer.name : "Unknown Customer"} • ${t.type === "credit" ? "Credit" : "Withdrawal"}
+        </span>
       </div>
     `;
   }).join("");
-
-  // 🔹 Update header totals LIVE
-  const totals = calculateFilteredBusinessTotals();
-  const c = document.getElementById("bizCredit");
-  const w = document.getElementById("bizWithdrawal");
-  const n = document.getElementById("bizNet");
-
-  if (c) c.textContent = fmt(totals.income);
-  if (w) w.textContent = fmt(totals.expense);
-  if (n) {
-    n.textContent = fmt(totals.net);
-    n.style.color = totals.net >= 0 ? "green" : "red";
-  }
 
   const btn = document.getElementById("bizLoadMore");
   if (btn) {
@@ -4573,18 +4559,11 @@ function openBusinessDrilldown() {
 
   wrapper.innerHTML = `
     <div style="margin-bottom:10px">
-  <div><b>Total Credit:</b> 
-    <span id="bizCredit" style="color:green">${fmt(totals.income)}</span>
-  </div>
-
-  <div><b>Total Withdrawal:</b> 
-    <span id="bizWithdrawal" style="color:#b42318">${fmt(totals.expense)}</span>
-  </div>
-
-  <div><b>Net Business Balance:</b>
-    <span id="bizNet" style="color:${totals.net>=0?'green':'red'}">
-      ${fmt(totals.net)}
-    </span>
+  <div><b>Total Credit:</b> <span id="bizCredit">${fmt(totals.income)}</span></div>
+<div><b>Total Withdrawal:</b> <span id="bizWithdrawal">${fmt(totals.expense)}</span></div>
+<div><b>Net Business Balance:</b>
+  <span id="bizNet" style="color:${totals.net>=0?'green':'red'}">${fmt(totals.net)}</span>
+</div>
   </div>
 </div>
 
@@ -5232,41 +5211,6 @@ window.calculateEmpowermentPosition = calculateEmpowermentPosition;
   };
 }
 window.calculateEmpowermentBalance = calculateEmpowermentBalance;
-
-function calculateFilteredEmpowermentTotals() {
-  const loans = state.empowerments || [];
-
-  let capitalGiven = 0;
-  let principalRepaid = 0;
-  let interestEarned = 0;
-  let outstandingCapital = 0;
-
-  loans.forEach(e => {
-    const disbursedDate = new Date(e.createdAt);
-    const repaidDate = new Date(e.updatedAt || e.createdAt);
-
-    // CAPITAL GIVEN
-    if (empTxnMatchesFilter(disbursedDate)) {
-      capitalGiven += Number(e.principalGiven || 0);
-    }
-
-    // REPAYMENTS
-    if (empTxnMatchesFilter(repaidDate)) {
-      principalRepaid += Number(e.principalRepaid || 0);
-      interestEarned += Number(e.interestRepaid || 0);
-    }
-
-    // OUTSTANDING AS OF FILTER RANGE
-    const remaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
-    if (remaining > 0 && empTxnMatchesFilter(disbursedDate)) {
-      outstandingCapital += remaining;
-    }
-  });
-
-  return { capitalGiven, principalRepaid, interestEarned, outstandingCapital };
-}
-
-window.calculateFilteredEmpowermentTotals = calculateFilteredEmpowermentTotals;
 
 
 function renderEmpowermentBalance() {
