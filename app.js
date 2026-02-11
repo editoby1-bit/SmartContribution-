@@ -124,7 +124,7 @@ state.transactions = Array.isArray(data.transactions) ? data.transactions : [];
 
     state.ui = data.ui || {};
     state.ui.dateFilter = state.ui.dateFilter || "today";
-    
+
     // 🔁 Restore UI role-based visibility after loading
 setTimeout(syncDashboardVisibility, 50);
 
@@ -4364,6 +4364,173 @@ function renderEmpowermentTransactions() {
 }
 window.renderEmpowermentTransactions = renderEmpowermentTransactions;
 
+function bizTxnMatchesFilter(dateStr) {
+  const d = new Date(dateStr);
+  const now = new Date();
+
+  const sameDay = (a,b) =>
+    a.getFullYear()===b.getFullYear() &&
+    a.getMonth()===b.getMonth() &&
+    a.getDate()===b.getDate();
+
+  switch (state.ui.bizDateFilter) {
+    case "today": return sameDay(d, now);
+
+    case "week": {
+      const start = new Date(now);
+      start.setDate(now.getDate() - now.getDay());
+      start.setHours(0,0,0,0);
+      return d >= start;
+    }
+
+    case "month":
+      return d.getMonth()===now.getMonth() &&
+             d.getFullYear()===now.getFullYear();
+
+    case "year":
+      return d.getFullYear()===now.getFullYear();
+
+    case "custom":
+      if (!state.ui.bizFromDate || !state.ui.bizToDate) return true;
+      return d >= new Date(state.ui.bizFromDate) &&
+             d <= new Date(state.ui.bizToDate + "T23:59:59");
+
+    default: return true;
+  }
+}
+window.bizTxnMatchesFilter = bizTxnMatchesFilter;
+
+
+function setBizDateFilter(range) {
+  state.ui.bizDateFilter = range;
+  state.ui.bizFromDate = null;
+  state.ui.bizToDate = null;
+  renderBusinessTransactions();
+}
+window.setBizDateFilter = setBizDateFilter;
+
+function applyBizDateRange() {
+  state.ui.bizDateFilter = "custom";
+  state.ui.bizFromDate = document.getElementById("bizFromDate").value;
+  state.ui.bizToDate = document.getElementById("bizToDate").value;
+  renderBusinessTransactions();
+}
+window.applyBizDateRange = applyBizDateRange;
+
+function clearBizDateRange() {
+  state.ui.bizDateFilter = "today";
+  state.ui.bizFromDate = null;
+  state.ui.bizToDate = null;
+  renderBusinessTransactions();
+}
+window.clearBizDateRange = clearBizDateRange;
+
+
+function calculateFilteredBusinessTotals() {
+  const entries = (state.accountEntries || []).filter(e =>
+    bizTxnMatchesFilter(e.date)
+  );
+
+  let income = 0;
+  let expense = 0;
+
+  entries.forEach(e => {
+    const isIncome = state.accounts.income.some(a => a.id === e.accountId);
+    const isExpense = state.accounts.expense.some(a => a.id === e.accountId);
+
+    if (isIncome) income += Number(e.amount || 0);
+    if (isExpense) expense += Number(e.amount || 0);
+  });
+
+  let net = income - expense;
+
+  // 🔹 Respect "Include Empowerment"
+  if (state.business?.includeEmpowerment) {
+    net += calculateEmpowermentPosition();
+  }
+
+  return { income, expense, net };
+}
+window.calculateFilteredBusinessTotals = calculateFilteredBusinessTotals;
+
+
+let bizTxnLimit = 50;
+
+function renderBusinessTransactions() {
+  const container = document.getElementById("bizTxnList");
+  if (!container) return;
+
+  const txns = (state.accountEntries || [])
+    .filter(e => bizTxnMatchesFilter(e.date))
+    .sort((a,b) => new Date(b.date) - new Date(a.date))
+    .slice(0, bizTxnLimit);
+
+  container.innerHTML = txns.map(e => {
+    const acc = [...state.accounts.income, ...state.accounts.expense]
+      .find(a => a.id === e.accountId);
+
+    return `
+      <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
+        ${new Date(e.date).toLocaleString()} — <b>${fmt(e.amount)}</b><br>
+        <span class="muted">${acc ? acc.name : "Unknown Account"}</span>
+      </div>
+    `;
+  }).join("");
+
+  const btn = document.getElementById("bizLoadMore");
+  if (btn) {
+    btn.onclick = () => {
+      bizTxnLimit += 50;
+      renderBusinessTransactions();
+    };
+  }
+}
+window.renderBusinessTransactions = renderBusinessTransactions;
+
+
+function openBusinessDrilldown() {
+  state.ui.bizDateFilter = state.ui.bizDateFilter || "today";
+  bizTxnLimit = 50;
+
+  const totals = calculateFilteredBusinessTotals();
+
+  const wrapper = document.createElement("div");
+
+  wrapper.innerHTML = `
+    <div style="margin-bottom:10px">
+      <div><b>Total Income:</b> ${fmt(totals.income)}</div>
+      <div><b>Total Expense:</b> ${fmt(totals.expense)}</div>
+      <div><b>Net Business Balance:</b>
+        <span style="color:${totals.net>=0?'green':'red'}">${fmt(totals.net)}</span>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
+      <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="setBizDateFilter('today')">Today</button>
+      <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="setBizDateFilter('week')">This Week</button>
+      <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="setBizDateFilter('month')">This Month</button>
+      <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="setBizDateFilter('year')">This Year</button>
+      <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="setBizDateFilter('all')">All Time</button>
+    </div>
+
+    <div style="display:flex; gap:6px; margin-bottom:8px">
+      <input type="date" id="bizFromDate" class="input small">
+      <span>to</span>
+      <input type="date" id="bizToDate" class="input small">
+      <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="applyBizDateRange()">Apply</button>
+      <button class="btn small solid" onclick="clearBizDateRange()">Clear</button>
+    </div>
+
+    <div id="bizTxnList" style="max-height:300px; overflow:auto"></div>
+    <button id="bizLoadMore" class="btn small solid" style="margin-top:8px;background:#6a1b9a;color:white">See More</button>
+  `;
+
+  openModalGeneric("Business Transactions", wrapper, null);
+  renderBusinessTransactions();
+}
+window.openBusinessDrilldown = openBusinessDrilldown;
+
+
 
 function openCODDrillDown(staffId, date) {
   const modal = document.getElementById("txModal");
@@ -5143,7 +5310,8 @@ el.innerHTML = `
 
 
 <!-- BUSINESS BALANCE -->
-<div class="card" style="margin-bottom:12px; border-left:4px solid #6a1b9a;">
+<div class="card" style="margin-bottom:12px; border-left:4px solid #6a1b9a; cursor:pointer;"
+     onclick="openBusinessDrilldown()">
   <div style="display:flex; flex-direction:column; gap:10px">
     <div>
       <div class="small muted">Business Balance</div>
@@ -5610,6 +5778,11 @@ state.ui.toDate = state.ui.toDate || null;
 state.ui.empDateFilter = state.ui.empDateFilter || "today";
 state.ui.empFromDate = state.ui.empFromDate || null;
 state.ui.empToDate = state.ui.empToDate || null;;
+
+// 🟣 Business drilldown filters
+state.ui.bizDateFilter = state.ui.bizDateFilter || "today";
+state.ui.bizFromDate = state.ui.bizFromDate || null;
+state.ui.bizToDate = state.ui.bizToDate || null;
 
   if (!Array.isArray(state.approvals)) state.approvals = [];
   if (!Array.isArray(state.audit)) state.audit = [];
