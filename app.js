@@ -4488,21 +4488,10 @@ window.clearBizDateRange = clearBizDateRange;
 
 function calculateFilteredBusinessTotals() {
 
-  // 🔹 1. New system transactions
-  const globalTxns = (state.transactions || []).filter(t =>
+  const txns = (state.transactions || []).filter(t =>
     (t.type === "credit" || t.type === "withdraw") &&
     bizTxnMatchesFilter(t.date)
   );
-
-  // 🔹 2. Old customer transaction history
-  const legacyTxns = (state.customers || []).flatMap(c =>
-    (c.transactions || []).filter(t =>
-      (t.type === "credit" || t.type === "withdraw") &&
-      bizTxnMatchesFilter(t.date)
-    )
-  );
-
-  const txns = [...globalTxns, ...legacyTxns];
 
   let credit = 0;
   let withdrawal = 0;
@@ -4514,6 +4503,7 @@ function calculateFilteredBusinessTotals() {
 
   let net = credit - withdrawal;
 
+  // Include empowerment toggle
   if (state.business?.includeEmpowerment) {
     net += calculateEmpowermentPosition();
   }
