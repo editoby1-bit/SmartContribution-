@@ -4530,44 +4530,41 @@ function renderBusinessTransactions() {
   const container = document.getElementById("bizTxnList");
   if (!container) return;
 
-  const globalTxns = (state.transactions || []).filter(t =>
-    (t.type === "credit" || t.type === "withdraw") &&
-    bizTxnMatchesFilter(t.date)
-  );
-
-  const legacyTxns = (state.customers || []).flatMap(c =>
-    (c.transactions || []).filter(t =>
+  const allTxns = (state.transactions || [])
+    .filter(t =>
       (t.type === "credit" || t.type === "withdraw") &&
       bizTxnMatchesFilter(t.date)
-    ).map(t => ({
-      ...t,
-      customerName: c.name
-    }))
-  );
+    )
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  const txns = [...globalTxns, ...legacyTxns]
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, bizTxnLimit);
+  const visible = allTxns.slice(0, bizTxnLimit);
 
-  container.innerHTML = txns.map(t => `
-    <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
-      ${new Date(t.date).toLocaleString()} — 
-      <b>${fmt(t.amount)}</b>
-      <span style="color:${t.type==='credit'?'green':'red'}">
-        (${t.type === "credit" ? "Credit" : "Withdrawal"})
-      </span><br>
-      <span class="muted">${t.customerName || ""}</span>
-    </div>
-  `).join("");
+  container.innerHTML = visible.map(t => {
+    const cust = state.customers.find(c => c.id === t.customerId);
+    const name = cust ? cust.name : "Unknown";
+
+    const typeLabel = t.type === "credit"
+      ? `<span style="color:green">(Credit)</span>`
+      : `<span style="color:#b42318">(Withdrawal)</span>`;
+
+    return `
+      <div class="small" style="margin-bottom:8px;border-bottom:1px solid #eee;padding-bottom:6px">
+        ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b> ${typeLabel}<br>
+        <span class="muted">${name}</span>
+      </div>
+    `;
+  }).join("");
 
   const btn = document.getElementById("bizLoadMore");
   if (btn) {
+    btn.style.display = allTxns.length > bizTxnLimit ? "block" : "none";
     btn.onclick = () => {
       bizTxnLimit += 50;
       renderBusinessTransactions();
     };
   }
 }
+
 window.renderBusinessTransactions = renderBusinessTransactions;
 
 
@@ -4581,10 +4578,10 @@ window.loadMoreBusinessTransactions = loadMoreBusinessTransactions;
 
 
 function openBusinessDrilldown() {
- state.ui.bizDateFilter = "today";
+state.ui.bizDateFilter = "today";
 state.ui.bizFromDate = null;
 state.ui.bizToDate = null;
-  bizTxnLimit = 50;
+bizTxnLimit = 50;
 
  const bizTxns = (state.transactions || []).filter(t =>
   (t.type === "business_credit" || t.type === "business_withdrawal") &&
@@ -4619,6 +4616,12 @@ const totals = {
 <div><b>Total Withdrawal:</b> <span id="bizWithdrawal">${fmt(totals.expense)}</span></div>
 <div><b>Net Business Balance:</b>
   <span id="bizNet" style="color:${totals.net>=0?'green':'red'}">${fmt(totals.net)}</span>
+  <label style="font-size:12px; display:flex; gap:6px; align-items:center; margin-top:6px;">
+  <input type="checkbox"
+    ${state.business.includeEmpowerment ? "checked" : ""}
+    onchange="toggleBizEmpowerment(this.checked)">
+  Include Empowerment Position
+</label>
 </div>
 </div>
 
@@ -4677,6 +4680,24 @@ function updateBusinessHeaderTotals() {
   }
 }
 window.updateBusinessHeaderTotals = updateBusinessHeaderTotals;
+
+function toggleBizEmpowerment(val) {
+  state.business.includeEmpowerment = val;
+  save();
+
+  // Recalculate header
+  const t = calculateFilteredBusinessTotals();
+  const n = document.getElementById("bizNet");
+
+  if (n) {
+    n.textContent = fmt(t.net);
+    n.style.color = t.net >= 0 ? "green" : "red";
+  }
+
+  // Update card too
+  renderAccounts();
+}
+window.toggleBizEmpowerment = toggleBizEmpowerment;
 
 
 function exportBusinessCSV() {
@@ -5598,10 +5619,19 @@ function updateEmpowermentHeaderTotals() {
 window.updateEmpowermentHeaderTotals = updateEmpowermentHeaderTotals;
 
 function calculateBusinessBalance() {
-  const t = calculateFilteredBusinessTotals();
+  const txns = (state.transactions || []).filter(t =>
+    t.type === "credit" || t.type === "withdraw"
+  );
 
-  // Card should always show ALL TIME totals
-  let net = t.income - t.expense;
+  let credit = 0;
+  let withdrawal = 0;
+
+  txns.forEach(t => {
+    if (t.type === "credit") credit += Number(t.amount || 0);
+    if (t.type === "withdraw") withdrawal += Number(t.amount || 0);
+  });
+
+  let net = credit - withdrawal;
 
   if (state.business?.includeEmpowerment) {
     net += calculateEmpowermentPosition();
