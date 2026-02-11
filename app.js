@@ -3469,6 +3469,19 @@ state.transactions.push({
     actor: staff.name,
     approvalId: app.id
   });
+
+  state.transactions = state.transactions || [];
+
+state.transactions.push({
+  id: uid("tx"),
+  type: "credit",
+  amount: app.amount,
+  date: app.processedAt,
+  desc: "Business Credit",
+  customerId: cust.id,
+  actor: staff.name,
+  approvalId: app.id
+});
 }
 
 // ===== AUDIT (ROLE-AWARE, DETAILED) =====
