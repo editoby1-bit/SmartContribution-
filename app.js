@@ -4406,22 +4406,20 @@ function setBizDateFilter(range) {
   state.ui.bizFromDate = null;
   state.ui.bizToDate = null;
   renderBusinessTransactions();
-  
-  <div style="margin-bottom:10px">
-  <div><b>Total Credit:</b> 
-    <span id="bizCredit" style="color:green">${fmt(totals.income)}</span>
-  </div>
 
-  <div><b>Total Withdrawal:</b> 
-    <span id="bizWithdrawal" style="color:#b42318">${fmt(totals.expense)}</span>
-  </div>
+  const t = calculateFilteredBusinessTotals();
 
-  <div><b>Net Business Balance:</b>
-    <span id="bizNet" style="color:${totals.net>=0?'green':'red'}">
-      ${fmt(totals.net)}
-    </span>
-  </div>
-</div>
+const c = document.getElementById("bizCredit");
+const w = document.getElementById("bizWithdrawal");
+const n = document.getElementById("bizNet");
+
+if (c) c.textContent = fmt(t.income);
+if (w) w.textContent = fmt(t.expense);
+
+if (n) {
+  n.textContent = fmt(t.net);
+  n.style.color = t.net >= 0 ? "green" : "red";
+}
 }
 window.setBizDateFilter = setBizDateFilter;
 
@@ -4431,21 +4429,19 @@ function applyBizDateRange() {
   state.ui.bizToDate = document.getElementById("bizToDate").value;
   renderBusinessTransactions();
 
-  <div style="margin-bottom:10px">
-  <div><b>Total Credit:</b> 
-    <span id="bizCredit" style="color:green">${fmt(totals.income)}</span>
-  </div>
+  const t = calculateFilteredBusinessTotals();
 
-  <div><b>Total Withdrawal:</b> 
-    <span id="bizWithdrawal" style="color:#b42318">${fmt(totals.expense)}</span>
-  </div>
+const c = document.getElementById("bizCredit");
+const w = document.getElementById("bizWithdrawal");
+const n = document.getElementById("bizNet");
 
-  <div><b>Net Business Balance:</b>
-    <span id="bizNet" style="color:${totals.net>=0?'green':'red'}">
-      ${fmt(totals.net)}
-    </span>
-  </div>
-</div>
+if (c) c.textContent = fmt(t.income);
+if (w) w.textContent = fmt(t.expense);
+
+if (n) {
+  n.textContent = fmt(t.net);
+  n.style.color = t.net >= 0 ? "green" : "red";
+}
 }
 window.applyBizDateRange = applyBizDateRange;
 
@@ -4455,21 +4451,19 @@ function clearBizDateRange() {
   state.ui.bizToDate = null;
   renderBusinessTransactions();
 
-  <div style="margin-bottom:10px">
-  <div><b>Total Credit:</b> 
-    <span id="bizCredit" style="color:green">${fmt(totals.income)}</span>
-  </div>
+ const t = calculateFilteredBusinessTotals();
 
-  <div><b>Total Withdrawal:</b> 
-    <span id="bizWithdrawal" style="color:#b42318">${fmt(totals.expense)}</span>
-  </div>
+const c = document.getElementById("bizCredit");
+const w = document.getElementById("bizWithdrawal");
+const n = document.getElementById("bizNet");
 
-  <div><b>Net Business Balance:</b>
-    <span id="bizNet" style="color:${totals.net>=0?'green':'red'}">
-      ${fmt(totals.net)}
-    </span>
-  </div>
-</div>
+if (c) c.textContent = fmt(t.income);
+if (w) w.textContent = fmt(t.expense);
+
+if (n) {
+  n.textContent = fmt(t.net);
+  n.style.color = t.net >= 0 ? "green" : "red";
+}
 }
 window.clearBizDateRange = clearBizDateRange;
 
