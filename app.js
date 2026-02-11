@@ -4564,7 +4564,6 @@ function openBusinessDrilldown() {
 <div><b>Net Business Balance:</b>
   <span id="bizNet" style="color:${totals.net>=0?'green':'red'}">${fmt(totals.net)}</span>
 </div>
-  </div>
 </div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
@@ -5211,6 +5210,41 @@ window.calculateEmpowermentPosition = calculateEmpowermentPosition;
   };
 }
 window.calculateEmpowermentBalance = calculateEmpowermentBalance;
+
+function calculateFilteredEmpowermentTotals() {
+  const loans = state.empowerments || [];
+
+  let capitalGiven = 0;
+  let principalRepaid = 0;
+  let interestEarned = 0;
+  let outstandingCapital = 0;
+
+  loans.forEach(e => {
+    const disbursedDate = new Date(e.createdAt);
+    const repaidDate = new Date(e.updatedAt || e.createdAt);
+
+    // CAPITAL GIVEN
+    if (empTxnMatchesFilter(disbursedDate)) {
+      capitalGiven += Number(e.principalGiven || 0);
+    }
+
+    // REPAYMENTS
+    if (empTxnMatchesFilter(repaidDate)) {
+      principalRepaid += Number(e.principalRepaid || 0);
+      interestEarned += Number(e.interestRepaid || 0);
+    }
+
+    // OUTSTANDING AS OF FILTER RANGE
+    const remaining = (e.principalGiven || 0) - (e.principalRepaid || 0);
+    if (remaining > 0 && empTxnMatchesFilter(disbursedDate)) {
+      outstandingCapital += remaining;
+    }
+  });
+
+  return { capitalGiven, principalRepaid, interestEarned, outstandingCapital };
+}
+
+window.calculateFilteredEmpowermentTotals = calculateFilteredEmpowermentTotals;
 
 
 function renderEmpowermentBalance() {
