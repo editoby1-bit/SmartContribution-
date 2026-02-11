@@ -5747,22 +5747,32 @@ window.openEmpowermentModal = openEmpowermentModal;
 window.openEditCustomer = openEditCustomer;
 window.processApproval = processApproval;
 
+// 🔹 Restore logged-in staff session when returning to tab
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
+  if (document.visibilityState !== "visible") return;
 
-    // Re-apply current staff role permissions
-    if (state.currentStaffId && state.staff) {
-      const staff = state.staff.find(s => s.id === state.currentStaffId);
-      if (staff) {
-        state.currentUserRole = staff.role;   // reattach role
+  try {
+    const raw = localStorage.getItem(CONFIG?.STORAGE || "sc_pro_b_v2");
+    if (!raw) return;
+
+    const saved = JSON.parse(raw);
+
+    if (saved.currentStaffId && saved.staff) {
+      const active = saved.staff.find(s => s.id === saved.currentStaffId);
+      if (active) {
+        state.currentStaffId = active.id;
+        state.currentUserRole = active.role;
       }
     }
 
-    // Re-render correct UI for role
-    if (typeof renderDashboard === "function") renderDashboard();
-    if (typeof renderAccounts === "function") renderAccounts();
-    if (typeof renderCustomers === "function") renderCustomers();
-    if (typeof renderApprovals === "function") renderApprovals();
+    // Now redraw correct UI for that role
+    renderDashboard?.();
+    renderCustomers?.();
+    renderAccounts?.();
+    renderApprovals?.();
+
+  } catch (e) {
+    console.warn("Session restore failed", e);
   }
 });
 
