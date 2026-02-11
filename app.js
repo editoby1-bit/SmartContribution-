@@ -3355,6 +3355,17 @@ if (action === "approve" && app.type === "withdraw") {
     actor: staff.name,
     approvalId: app.id
   });
+  state.transactions = state.transactions || [];
+
+state.transactions.push({
+  id: uid("tx"),
+  type: "business_withdrawal",
+  amount: app.amount,
+  date: app.processedAt,
+  customerId: cust.id,
+  desc: "Customer Withdrawal (Business Outflow)"
+});
+
 }
 
  // =========================
@@ -3436,6 +3447,18 @@ if (
 }
 
   cust.balance += creditedToBalance;
+
+  state.transactions = state.transactions || [];
+
+state.transactions.push({
+  id: uid("tx"),
+  type: "business_credit",
+  amount: creditedToBalance,
+  date: app.processedAt,
+  customerId: cust.id,
+  desc: "Customer Credit (Business Inflow)"
+});
+
 
   cust.transactions.push({
     id: uid("tx"),
@@ -4508,7 +4531,7 @@ function renderBusinessTransactions() {
 
   const txns = (state.transactions || [])
     .filter(t =>
-      (t.type === "credit_approved" || t.type === "withdrawal_approved") &&
+      (t.type === "business_credit" || t.type === "business_withdrawal") &&
       bizTxnMatchesFilter(t.date)
     )
     .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -4521,7 +4544,7 @@ function renderBusinessTransactions() {
       <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
         ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
         <span class="muted">
-          ${customer ? customer.name : "Unknown Customer"} • ${t.type.replace("_", " ")}
+          ${customer ? customer.name : "Unknown Customer"} • ${t.type === "business_credit" ? "Credit" : "Withdrawal"}
         </span>
       </div>
     `;
@@ -4537,7 +4560,6 @@ function renderBusinessTransactions() {
 }
 
 window.renderBusinessTransactions = renderBusinessTransactions;
-
 
 
 function loadMoreBusinessTransactions() {
