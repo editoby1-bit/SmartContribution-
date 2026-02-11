@@ -4487,27 +4487,38 @@ window.clearBizDateRange = clearBizDateRange;
 
 
 function calculateFilteredBusinessTotals() {
- const txns = (state.transactions || []).filter(t =>
-   (t.type === "credit" || t.type === "withdraw") &&
-   bizTxnMatchesFilter(t.date)
- );
 
- let credit = 0;
- let withdrawal = 0;
+  // 🔹 1. New system transactions
+  const globalTxns = (state.transactions || []).filter(t =>
+    (t.type === "credit" || t.type === "withdraw") &&
+    bizTxnMatchesFilter(t.date)
+  );
 
- txns.forEach(t => {
-   if (t.type === "credit") credit += Number(t.amount || 0);
-   if (t.type === "withdraw") withdrawal += Number(t.amount || 0);
- });
+  // 🔹 2. Old customer transaction history
+  const legacyTxns = (state.customers || []).flatMap(c =>
+    (c.transactions || []).filter(t =>
+      (t.type === "credit" || t.type === "withdraw") &&
+      bizTxnMatchesFilter(t.date)
+    )
+  );
 
- let net = credit - withdrawal;
+  const txns = [...globalTxns, ...legacyTxns];
 
- // Respect "Include Empowerment" toggle
- if (state.business?.includeEmpowerment) {
-   net += calculateEmpowermentPosition();
- }
+  let credit = 0;
+  let withdrawal = 0;
 
- return { income: credit, expense: withdrawal, net };
+  txns.forEach(t => {
+    if (t.type === "credit") credit += Number(t.amount || 0);
+    if (t.type === "withdraw") withdrawal += Number(t.amount || 0);
+  });
+
+  let net = credit - withdrawal;
+
+  if (state.business?.includeEmpowerment) {
+    net += calculateEmpowermentPosition();
+  }
+
+  return { income: credit, expense: withdrawal, net };
 }
 window.calculateFilteredBusinessTotals = calculateFilteredBusinessTotals;
 
@@ -4519,23 +4530,35 @@ function renderBusinessTransactions() {
   const container = document.getElementById("bizTxnList");
   if (!container) return;
 
-  const txns = (state.transactions || [])
-    .filter(t => (t.type === "credit" || t.type === "withdraw"))
-    .filter(t => bizTxnMatchesFilter(t.date))
-    .sort((a,b) => new Date(b.date) - new Date(a.date))
+  const globalTxns = (state.transactions || []).filter(t =>
+    (t.type === "credit" || t.type === "withdraw") &&
+    bizTxnMatchesFilter(t.date)
+  );
+
+  const legacyTxns = (state.customers || []).flatMap(c =>
+    (c.transactions || []).filter(t =>
+      (t.type === "credit" || t.type === "withdraw") &&
+      bizTxnMatchesFilter(t.date)
+    ).map(t => ({
+      ...t,
+      customerName: c.name
+    }))
+  );
+
+  const txns = [...globalTxns, ...legacyTxns]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, bizTxnLimit);
 
-  container.innerHTML = txns.map(t => {
-    const cust = state.customers.find(c => c.id === t.customerId);
-    return `
-      <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
-        ${new Date(t.date).toLocaleString()} — <b>${fmt(t.amount)}</b><br>
-        <span class="muted">${cust ? cust.name : "Unknown"} • ${t.type === "credit" ? "Credit" : "Withdrawal"}</span>
-      </div>
-    `;
-  }).join("");
-
-  updateBusinessHeaderTotals(); // ⭐ ALWAYS REFRESH HEADER
+  container.innerHTML = txns.map(t => `
+    <div class="small" style="margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px">
+      ${new Date(t.date).toLocaleString()} — 
+      <b>${fmt(t.amount)}</b>
+      <span style="color:${t.type==='credit'?'green':'red'}">
+        (${t.type === "credit" ? "Credit" : "Withdrawal"})
+      </span><br>
+      <span class="muted">${t.customerName || ""}</span>
+    </div>
+  `).join("");
 
   const btn = document.getElementById("bizLoadMore");
   if (btn) {
@@ -4545,7 +4568,6 @@ function renderBusinessTransactions() {
     };
   }
 }
-
 window.renderBusinessTransactions = renderBusinessTransactions;
 
 
