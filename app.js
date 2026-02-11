@@ -4474,35 +4474,30 @@ window.clearBizDateRange = clearBizDateRange;
 
 
 function calculateFilteredBusinessTotals() {
-  const txns = (state.transactions || [])
-    .filter(t =>
-      (t.type === "credit" || t.type === "withdrawal") &&
-      t.status === "approved" &&
-      bizTxnMatchesFilter(t.date)
-    );
+ const txns = (state.transactions || []).filter(t =>
+   (t.type === "credit" || t.type === "withdraw") &&
+   bizTxnMatchesFilter(t.date)
+ );
 
-  let totalCredit = 0;
-  let totalWithdrawal = 0;
+ let credit = 0;
+ let withdrawal = 0;
 
-  txns.forEach(t => {
-    if (t.type === "credit") totalCredit += Number(t.amount || 0);
-    if (t.type === "withdrawal") totalWithdrawal += Number(t.amount || 0);
-  });
+ txns.forEach(t => {
+   if (t.type === "credit") credit += Number(t.amount || 0);
+   if (t.type === "withdraw") withdrawal += Number(t.amount || 0);
+ });
 
-  let net = totalCredit - totalWithdrawal;
+ let net = credit - withdrawal;
 
-  // Include Empowerment if toggle is on
-  if (state.business?.includeEmpowerment) {
-    net += calculateEmpowermentPosition();
-  }
+ // Respect "Include Empowerment" toggle
+ if (state.business?.includeEmpowerment) {
+   net += calculateEmpowermentPosition();
+ }
 
-  return {
-    income: totalCredit,
-    expense: totalWithdrawal,
-    net
-  };
+ return { income: credit, expense: withdrawal, net };
 }
 window.calculateFilteredBusinessTotals = calculateFilteredBusinessTotals;
+
 
 
 let bizTxnLimit = 50;
