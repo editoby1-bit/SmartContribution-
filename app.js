@@ -5729,14 +5729,6 @@ function resetCODDraftForStaffDate(staffId, dateStr) {
 }
 window.resetCODDraftForStaffDate = resetCODDraftForStaffDate;
 
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    // Re-render main panels safely when returning to tab
-    if (typeof renderAccounts === "function") renderAccounts();
-    if (typeof renderCustomers === "function") renderCustomers();
-    if (typeof refreshCustomerProfile === "function") refreshCustomerProfile();
-  }
-});
 
 // =========================
 // EXPOSE FOR DEBUG
