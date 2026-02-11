@@ -124,6 +124,9 @@ state.transactions = Array.isArray(data.transactions) ? data.transactions : [];
 
     state.ui = data.ui || {};
     state.ui.dateFilter = state.ui.dateFilter || "today";
+    
+    // 🔁 Restore UI role-based visibility after loading
+setTimeout(syncDashboardVisibility, 50);
 
   } catch (e) {
     console.warn("Load failed, using fresh state", e);
@@ -5747,33 +5750,8 @@ window.openEmpowermentModal = openEmpowermentModal;
 window.openEditCustomer = openEditCustomer;
 window.processApproval = processApproval;
 
-// 🔹 Restore logged-in staff session when returning to tab
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "visible") return;
-
-  try {
-    const raw = localStorage.getItem(CONFIG?.STORAGE || "sc_pro_b_v2");
-    if (!raw) return;
-
-    const saved = JSON.parse(raw);
-
-    if (saved.currentStaffId && saved.staff) {
-      const active = saved.staff.find(s => s.id === saved.currentStaffId);
-      if (active) {
-        state.currentStaffId = active.id;
-        state.currentUserRole = active.role;
-      }
-    }
-
-    // Now redraw correct UI for that role
-    renderDashboard?.();
-    renderCustomers?.();
-    renderAccounts?.();
-    renderApprovals?.();
-
-  } catch (e) {
-    console.warn("Session restore failed", e);
-  }
+window.addEventListener("focus", () => {
+  syncDashboardVisibility();
 });
 
 })();
