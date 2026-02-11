@@ -102,7 +102,10 @@ state.empowerments = state.empowerments || [];
     state.audit = Array.isArray(data.audit) ? data.audit : [];
     state.cod = Array.isArray(data.cod) ? data.cod : [];
     state.codDrafts = data.codDrafts || {};
-    state.empowerments = Array.isArray(data.empowerments) ? data.empowerments : [];
+state.empowerments = Array.isArray(data.empowerments) ? data.empowerments : [];
+
+// 🔥 RESTORE EMPOWERMENT TRANSACTIONS
+state.transactions = Array.isArray(data.transactions) ? data.transactions : [];
 
 
     if (data.accounts) {
