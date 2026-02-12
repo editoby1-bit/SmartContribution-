@@ -4054,6 +4054,7 @@ function renderManagerCODSummary(dateStr) {
 
 window.renderManagerCODSummary = renderManagerCODSummary;
 
+
 function calculateFilteredOperationalTotals() {
 
   const entries = (state.accountEntries || []).filter(e =>
@@ -4071,12 +4072,18 @@ function calculateFilteredOperationalTotals() {
     if (isExpense) expense += Number(e.amount || 0);
   });
 
-  const net = income - expense;
+  let net = income - expense;
+
+  // 🔹 ADD THIS
+  if (state.operational?.includeEmpowerment) {
+    net += calculateEmpowermentPosition();
+  }
 
   return { income, expense, net };
 }
 
 window.calculateFilteredOperationalTotals = calculateFilteredOperationalTotals;
+
 
 
 function calculateOperationalBalance() {
@@ -4086,7 +4093,13 @@ function calculateOperationalBalance() {
 
 window.calculateOperationalBalance = calculateOperationalBalance;
 
+function toggleOperationalEmpowerment(val) {
+  state.operational.includeEmpowerment = val;
+  save();
+  renderAccounts();
+}
 
+window.toggleOperationalEmpowerment = toggleOperationalEmpowerment;
 
 function openOperationalDrilldown() {
 
@@ -5492,22 +5505,27 @@ ${renderMiniBar(
 el.innerHTML = `
 
 <!-- OPERATIONAL BALANCE -->
-<div class="card" style="margin-bottom:12px; border-left:4px solid #0f766e; cursor:pointer"
-     onclick="openOperationalDrilldown()">
+<div class="card" style="margin-bottom:12px; border-left:4px solid #0f766e;">
 
-  <div style="display:flex; flex-direction:column; gap:6px">
-    <div class="small muted">Operational Balance</div>
+  <div class="small muted">Operational Balance</div>
 
-    <div style="font-size:22px; font-weight:bold;">
-      ${fmt(calculateOperationalBalance())}
-    </div>
-
-    <div class="small muted">
-      Income: ${fmt(calculateFilteredOperationalTotals().income)}
-      |
-      Expense: ${fmt(calculateFilteredOperationalTotals().expense)}
-    </div>
+  <div style="font-size:22px; font-weight:bold;">
+    ${fmt(calculateOperationalBalance())}
   </div>
+
+  <label style="font-size:12px;">
+    <input type="checkbox"
+      ${state.operational?.includeEmpowerment ? "checked" : ""}
+      onchange="toggleOperationalEmpowerment(this.checked)">
+    Include Empowerment Position
+  </label>
+
+  <div style="margin-top:10px">
+    <button class="btn small solid" onclick="openOperationalDrilldown()">
+      View Details
+    </button>
+  </div>
+
 </div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -6097,6 +6115,9 @@ state.ui.empToDate = state.ui.empToDate || null;;
 state.ui.bizDateFilter = state.ui.bizDateFilter || "today";
 state.ui.bizFromDate = state.ui.bizFromDate || null;
 state.ui.bizToDate = state.ui.bizToDate || null;
+
+state.operational = state.operational || {};
+state.operational.includeEmpowerment = state.operational.includeEmpowerment || false;
 
   if (!Array.isArray(state.approvals)) state.approvals = [];
   if (!Array.isArray(state.audit)) state.audit = [];
