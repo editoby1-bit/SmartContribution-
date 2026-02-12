@@ -4695,29 +4695,38 @@ function exportBusinessCSV() {
     .filter(t => bizTxnMatchesFilter(t.date))
     .sort((a,b) => new Date(a.date) - new Date(b.date));
 
-  let csv = "S/N,Date,Customer,Amount,Type,Description\n";
+  let csv = "S/N,Date,Time,Customer,Amount,Type,Description\n";
 
   txns.forEach((t, i) => {
     const customer = state.customers.find(c => c.id === t.customerId);
+
+    const d = new Date(t.date);
+    const date = d.toLocaleDateString();
+    const time = d.toLocaleTimeString();
+
     csv += [
       i + 1,
-      new Date(t.date).toLocaleString(),
+      date,
+      time,
       customer ? customer.name : "",
-      t.amount,
-      t.type,
+      Number(t.amount).toFixed(2),
+      t.type.toUpperCase(),
       `"${t.desc || ""}"`
     ].join(",") + "\n";
   });
 
-  const blob = new Blob([csv], { type: "text/csv" });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
+
   const a = document.createElement("a");
   a.href = url;
   a.download = "business_transactions.csv";
   a.click();
+
   URL.revokeObjectURL(url);
 }
 window.exportBusinessCSV = exportBusinessCSV;
+
 
 
 function printBusinessSummary() {
@@ -5416,23 +5425,17 @@ ${renderMiniBar(
 el.innerHTML = `
 
 <!-- OPERATIONAL BALANCE -->
-<div class="card" style="margin-bottom:12px; border-left:4px solid #0f766e;">
-  <div style="display:flex; flex-direction:column; gap:10px">
+<div class="card" style="margin-bottom:12px; border-left:4px solid #00897b;">
+  <div style="display:flex; flex-direction:column; gap:8px">
 
-    <div>
+    <div onclick="openOperationalDrilldown()" style="cursor:pointer">
       <div class="small muted">Operational Balance</div>
-      <div style="font-size:22px; font-weight:bold;">
-        ${fmt(calculateOperationalBalance())}
+      <div style="font-size:22px; font-weight:bold;">${fmt(net)}</div>
+      <div class="small muted">
+        Income: <b id="accTotalIncome">${fmt(totalIncome)}</b> |
+        Expense: <b id="accTotalExpense">${fmt(totalExpense)}</b>
       </div>
     </div>
-
-    <div class="small muted">
-      Total Income: <b>${fmt(calculateFilteredOperationalTotals().income)}</b><br>
-      Total Expense: <b>${fmt(calculateFilteredOperationalTotals().expense)}</b>
-    </div>
-
-  </div>
-</div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
       <button class="btn small solid ${active==='today'?'primary':''}" onclick="setDateFilter('today')">Today</button>
