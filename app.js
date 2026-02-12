@@ -4054,6 +4054,47 @@ function renderManagerCODSummary(dateStr) {
 
 window.renderManagerCODSummary = renderManagerCODSummary;
 
+function opTxnMatchesFilter(dateStr) {
+  const d = new Date(dateStr);
+  const now = new Date();
+
+  const sameDay = (a,b) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  switch (state.ui?.opDateFilter) {
+
+    case "today":
+      return sameDay(d, now);
+
+    case "week": {
+      const start = new Date(now);
+      start.setDate(now.getDate() - now.getDay());
+      start.setHours(0,0,0,0);
+      return d >= start;
+    }
+
+    case "month":
+      return d.getMonth() === now.getMonth() &&
+             d.getFullYear() === now.getFullYear();
+
+    case "year":
+      return d.getFullYear() === now.getFullYear();
+
+    case "custom":
+      if (!state.ui?.opFromDate || !state.ui?.opToDate) return true;
+      return d >= new Date(state.ui.opFromDate) &&
+             d <= new Date(state.ui.opToDate + "T23:59:59");
+
+    case "all":
+    default:
+      return true;
+  }
+}
+
+window.opTxnMatchesFilter = opTxnMatchesFilter;
+
 
 function calculateFilteredOperationalTotals() {
 
@@ -6115,6 +6156,12 @@ state.ui.empToDate = state.ui.empToDate || null;;
 state.ui.bizDateFilter = state.ui.bizDateFilter || "today";
 state.ui.bizFromDate = state.ui.bizFromDate || null;
 state.ui.bizToDate = state.ui.bizToDate || null;
+
+state.ui = state.ui || {};
+
+state.ui.opDateFilter = state.ui.opDateFilter || "today";
+state.ui.opFromDate = state.ui.opFromDate || null;
+state.ui.opToDate = state.ui.opToDate || null;
 
 state.operational = state.operational || {};
 state.operational.includeEmpowerment = state.operational.includeEmpowerment || false;
