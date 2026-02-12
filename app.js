@@ -756,53 +756,61 @@ function openAccountEntryModal(accountId, type)  {
 window.openAccountEntryModal = openAccountEntryModal;
 
 function saveAccountEntry(accountId, type) {
-  const amount = Number(document.getElementById("entryAmount").value || 0);
-  const note = document.getElementById("entryNote").value || "";
-  const date = new Date().toISOString();
-  
-  createAccountEntry(accountId, type, amount, note, date);
+ const amount = Number(document.getElementById("entryAmount").value || 0);
+ const note = document.getElementById("entryNote").value || "";
+ const date = new Date().toISOString();
 
-  // 🔥 STEP 10 — EMPOWERMENT TRACKING
-  const acc = [...state.accounts.income, ...state.accounts.expense]
-    .find(a => a.id === accountId);
+ createAccountEntry(accountId, type, amount, note, date);
 
-  if (acc && acc.name && acc.name.toLowerCase().includes("empowerment")) {
+ const acc = [...state.accounts.income, ...state.accounts.expense]
+   .find(a => a.id === accountId);
 
-    // If it's money going OUT → empowerment given
-    if (type === "expense") {
-      state.empowerments.push({
-        id: crypto.randomUUID(),
-        amount: Math.abs(amount),
-        type: "given",
-        date
-      });
-    }
+ if (acc && acc.name && acc.name.toLowerCase().includes("empowerment")) {
 
-    // If it's money coming IN → empowerment repayment
-    if (type === "income") {
-      state.empowerments.push({
-        id: crypto.randomUUID(),
-        amount: Math.abs(amount),
-        type: "returned",
-        date
-      });
-    }
-  }
+   if (type === "expense") {
+     state.empowerments.push({
+       id: crypto.randomUUID(),
+       amount: Math.abs(amount),
+       type: "given",
+       date
+     });
+   }
 
-  save();
-  renderAccounts();
-  closeModal();
+   if (type === "income") {
+     state.empowerments.push({
+       id: crypto.randomUUID(),
+       amount: Math.abs(amount),
+       type: "returned",
+       date
+     });
+   }
+ }
+
+ save();
+ closeModal();
+
+ if (document.getElementById("opTxnList")) {
+   openOperationalDrilldown();
+ } else {
+   renderAccounts();
+ }
 }
 window.saveAccountEntry = saveAccountEntry;
 
 
 
 function promptCreateAccount(type) {
-  const name = prompt(
-    `Enter ${type.toUpperCase()} account name`
-  );
-  if (name !== null) {
-    createAccount(type, name);
+  const name = prompt(`Enter ${type.toUpperCase()} account name`);
+  if (!name) return;
+
+  createAccount(type, name);
+  save();
+
+  // 🔥 If inside operational modal, refresh it
+  if (document.getElementById("opTxnList")) {
+    openOperationalDrilldown();
+  } else {
+    renderAccounts();
   }
 }
 window.promptCreateAccount = promptCreateAccount;
@@ -4199,26 +4207,34 @@ function openOperationalDrilldown() {
 
   wrapper.innerHTML = `
     <div style="margin-bottom:10px">
-      <div><b>Total Income:</b> 
-        <span style="color:green">${fmt(totals.income)}</span>
-      </div>
 
-      <div><b>Total Expense:</b> 
-        <span style="color:#b42318">${fmt(totals.expense)}</span>
-      </div>
+  <div><b>Total Income:</b>
+    <span id="opIncome" style="color:green">
+      ${fmt(totals.income)}
+    </span>
+  </div>
 
-      <div><b>Net Operational Balance:</b>
-        <span style="color:${totals.net>=0?'green':'red'}">
-          ${fmt(totals.net)}
-        </span>
-      </div>
-      <label style="font-size:12px; margin-top:6px; display:block;">
-  <input type="checkbox"
-    ${state.operational?.includeEmpowerment ? "checked" : ""}
-    onchange="toggleOperationalEmpowerment(this.checked)">
-  Include Empowerment Position
-</label>
-    </div>
+  <div><b>Total Expense:</b>
+    <span id="opExpense" style="color:#b42318">
+      ${fmt(totals.expense)}
+    </span>
+  </div>
+
+  <div><b>Net Operational Balance:</b>
+    <span id="opNet"
+      style="color:${totals.net>=0?'green':'red'}">
+      ${fmt(totals.net)}
+    </span>
+  </div>
+
+  <label style="font-size:12px; margin-top:6px; display:block;">
+    <input type="checkbox"
+      ${state.operational?.includeEmpowerment ? "checked" : ""}
+      onchange="toggleOperationalEmpowerment(this.checked); refreshOperationalHeader();">
+    Include Empowerment Position
+  </label>
+
+</div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
       <button class="btn small solid" style="background:#0f766e;color:white"
@@ -4291,6 +4307,54 @@ ${renderAccountList("expense")}
 }
 
 window.openOperationalDrilldown = openOperationalDrilldown;
+
+function setOpDateFilter(range) {
+  state.ui.opDateFilter = range;
+  state.ui.opFromDate = null;
+  state.ui.opToDate = null;
+
+  renderOperationalTransactions();
+  refreshOperationalHeader();
+}
+window.setOpDateFilter = setOpDateFilter;
+
+
+function applyOpDateRange() {
+  state.ui.opDateFilter = "custom";
+  state.ui.opFromDate = document.getElementById("opFromDate").value;
+  state.ui.opToDate = document.getElementById("opToDate").value;
+
+  renderOperationalTransactions();
+  refreshOperationalHeader();
+}
+window.applyOpDateRange = applyOpDateRange;
+
+
+function clearOpDateRange() {
+  state.ui.opDateFilter = "today";
+  state.ui.opFromDate = null;
+  state.ui.opToDate = null;
+
+  renderOperationalTransactions();
+  refreshOperationalHeader();
+}
+window.clearOpDateRange = clearOpDateRange;
+
+function refreshOperationalHeader() {
+  const totals = calculateFilteredOperationalTotals();
+
+  const inc = document.getElementById("opIncome");
+  const exp = document.getElementById("opExpense");
+  const net = document.getElementById("opNet");
+
+  if (inc) inc.textContent = fmt(totals.income);
+  if (exp) exp.textContent = fmt(totals.expense);
+
+  if (net) {
+    net.textContent = fmt(totals.net);
+    net.style.color = totals.net >= 0 ? "green" : "red";
+  }
+}
 
 function openEmpowermentDrilldown() {
   // Always start drilldown on TODAY
@@ -5113,6 +5177,7 @@ function openCODDrillDown(staffId, date) {
 }
 
 window.openCODDrillDown = openCODDrillDown;
+
 
 
 function openTransactionDetails(txId) {
