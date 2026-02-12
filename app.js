@@ -5166,6 +5166,7 @@ window.toggleBizEmpowerment = toggleBizEmpowerment;
 
 
 function exportBusinessCSV() {
+
   const txns = (state.transactions || [])
     .filter(t => t.type === "credit" || t.type === "withdraw")
     .filter(t => bizTxnMatchesFilter(t.date))
@@ -5173,7 +5174,11 @@ function exportBusinessCSV() {
 
   let csv = "S/N,DateTime,Customer,Amount,Type,Description\n";
 
+  let totalCredit = 0;
+  let totalWithdraw = 0;
+
   txns.forEach((t, i) => {
+
     const customer = state.customers.find(c => c.id === t.customerId);
 
     const dateTime = new Date(t.date)
@@ -5181,15 +5186,28 @@ function exportBusinessCSV() {
       .replace("T", " ")
       .slice(0, 19);
 
+    const amount = Number(t.amount || 0);
+
+    if (t.type === "credit") totalCredit += amount;
+    if (t.type === "withdraw") totalWithdraw += amount;
+
     csv += [
       i + 1,
       dateTime,
       customer ? customer.name : "",
-      Number(t.amount || 0),
+      amount,
       t.type.toUpperCase(),
       `"${t.desc || ""}"`
     ].join(",") + "\n";
   });
+
+  const net = totalCredit - totalWithdraw;
+
+  // 🔹 Add totals row
+  csv += "\n";
+  csv += `,,,TOTAL CREDIT,${totalCredit},\n`;
+  csv += `,,,TOTAL WITHDRAWAL,${totalWithdraw},\n`;
+  csv += `,,,NET BALANCE,${net},\n`;
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -5201,6 +5219,7 @@ function exportBusinessCSV() {
 
   URL.revokeObjectURL(url);
 }
+
 window.exportBusinessCSV = exportBusinessCSV;
 
 
