@@ -792,7 +792,10 @@ function saveAccountEntry(accountId, type) {
  if (document.getElementById("opTxnList")) {
    openOperationalDrilldown();
  } else {
-   renderAccounts();
+   renderOperationalTransactions();
+renderOperationalAccountLists();
+refreshOperationalHeader();
+closeModal();
  }
 }
 window.saveAccountEntry = saveAccountEntry;
@@ -801,19 +804,15 @@ window.saveAccountEntry = saveAccountEntry;
 
 function promptCreateAccount(type) {
   const name = prompt(`Enter ${type.toUpperCase()} account name`);
-  if (!name) return;
+  if (name !== null) {
+    createAccount(type, name);
+    save();
 
-  createAccount(type, name);
-  save();
-
-  // 🔥 If inside operational modal, refresh it
-  if (document.getElementById("opTxnList")) {
-    openOperationalDrilldown();
-  } else {
-    renderAccounts();
+    renderOperationalAccountLists(); // refresh inside modal
   }
 }
 window.promptCreateAccount = promptCreateAccount;
+
 
 function getCODDraft(staffId, date) {
   if (!state.codDrafts) state.codDrafts = {};
@@ -4167,7 +4166,20 @@ function renderOperationalTransactions() {
   if (!container) return;
 
   const entries = (state.accountEntries || [])
-    .filter(e => opTxnMatchesFilter(e.date))
+    .filter(e => {
+
+  if (!opTxnMatchesFilter(e.date)) return false;
+
+  const isIncome = state.accounts.income
+    .some(a => a.id === e.accountId);
+
+  const typeFilter = state.ui.opTypeFilter || "all";
+
+  if (typeFilter === "income" && !isIncome) return false;
+  if (typeFilter === "expense" && isIncome) return false;
+
+  return true;
+})
     .sort((a,b) => new Date(b.date) - new Date(a.date))
     .slice(0, opTxnLimit);
 
@@ -4284,9 +4296,17 @@ function openOperationalDrilldown() {
         style="background:#0f766e"
         onclick="printOperationalSummary()">Print Summary</button>
     </div>
+    <div style="margin-bottom:8px;">
+  <button class="btn small solid"
+    onclick="setOpTypeFilter('all')">All</button>
 
-    <hr style="margin:14px 0; opacity:0.2">
+  <button class="btn small solid"
+    onclick="setOpTypeFilter('income')">Income</button>
 
+  <button class="btn small solid"
+    onclick="setOpTypeFilter('expense')">Expense</button>
+</div>
+    
     <hr style="margin:14px 0; opacity:0.2">
 
 <div style="display:flex; gap:20px; flex-wrap:wrap;">
@@ -4313,20 +4333,6 @@ function openOperationalDrilldown() {
 
 </div>
 
-<h4>Income Accounts</h4>
-${renderAccountList("income")}
-<button class="accounts-btn"
-  onclick="promptCreateAccount('income')">
-  + Add Income Account
-</button>
-
-<h4 style="margin-top:18px">Expense Accounts</h4>
-${renderAccountList("expense")}
-<button class="accounts-btn"
-  onclick="promptCreateAccount('expense')">
-  + Add Expense Account
-</button>
-
 <hr style="margin:14px 0; opacity:0.2">
 
     <div id="opTxnList" style="max-height:300px; overflow:auto"></div>
@@ -4343,6 +4349,12 @@ ${renderAccountList("expense")}
 }
 
 window.openOperationalDrilldown = openOperationalDrilldown;
+
+function setOpTypeFilter(type) {
+  state.ui.opTypeFilter = type;
+  renderOperationalTransactions();
+}
+window.setOpTypeFilter = setOpTypeFilter;
 
 function setOpDateFilter(range) {
   state.ui.opDateFilter = range;
@@ -4399,21 +4411,50 @@ function renderOperationalAccountLists() {
 
   if (!incomeBox || !expenseBox) return;
 
-  incomeBox.innerHTML = state.accounts.income
-    .map(a => `
-      <div style="padding:6px 0; cursor:pointer;"
-           onclick="openAccountEntryModal('${a.id}', 'income')">
-        ${a.accountNumber} — ${a.name}
-      </div>
-    `).join("");
+  const renderAccountRow = (a, type) => {
+    const total = sumEntries(
+      getEntriesByAccount(a.id).filter(e => opTxnMatchesFilter(e.date))
+    );
 
-  expenseBox.innerHTML = state.accounts.expense
-    .map(a => `
-      <div style="padding:6px 0; cursor:pointer;"
-           onclick="openAccountEntryModal('${a.id}', 'expense')">
-        ${a.accountNumber} — ${a.name}
+    return `
+      <div style="
+        padding:8px;
+        border-bottom:1px solid #eee;
+        display:flex;
+        justify-content:space-between;
+        cursor:pointer;"
+        onclick="openAccountEntriesSubDrill('${a.id}','${type}')">
+
+        <div>
+          <b>${a.accountNumber}</b> — ${a.name}
+        </div>
+
+        <div style="color:${type==='income'?'green':'#b42318'}">
+          ${fmt(total)}
+        </div>
       </div>
-    `).join("");
+    `;
+  };
+
+  incomeBox.innerHTML =
+    state.accounts.income
+      .slice(0,3)
+      .map(a => renderAccountRow(a,'income'))
+      .join("") +
+    (state.accounts.income.length > 3
+      ? `<div style="text-align:center; padding:6px; cursor:pointer; color:#0f766e"
+           onclick="expandOpAccounts('income')">See More</div>`
+      : "");
+
+  expenseBox.innerHTML =
+    state.accounts.expense
+      .slice(0,3)
+      .map(a => renderAccountRow(a,'expense'))
+      .join("") +
+    (state.accounts.expense.length > 3
+      ? `<div style="text-align:center; padding:6px; cursor:pointer; color:#0f766e"
+           onclick="expandOpAccounts('expense')">See More</div>`
+      : "");
 }
 window.renderOperationalAccountLists = renderOperationalAccountLists;
 
