@@ -4260,6 +4260,24 @@ function openOperationalDrilldown() {
         onclick="printOperationalSummary()">Print Summary</button>
     </div>
 
+    <hr style="margin:14px 0; opacity:0.2">
+
+<h4>Income Accounts</h4>
+${renderAccountList("income")}
+<button class="accounts-btn"
+  onclick="promptCreateAccount('income')">
+  + Add Income Account
+</button>
+
+<h4 style="margin-top:18px">Expense Accounts</h4>
+${renderAccountList("expense")}
+<button class="accounts-btn"
+  onclick="promptCreateAccount('expense')">
+  + Add Expense Account
+</button>
+
+<hr style="margin:14px 0; opacity:0.2">
+
     <div id="opTxnList" style="max-height:300px; overflow:auto"></div>
     <button id="opLoadMore"
       class="btn small solid"
@@ -5519,6 +5537,33 @@ function renderEmpowermentBalance() {
 
 window.renderEmpowermentBalance = renderEmpowermentBalance;
 
+function renderAccountList(type) {
+  return state.accounts[type]
+    .filter(a => !a.archived)
+    .map(a => `
+      <div id="acc-${a.id}" class="card small">
+        <b>${a.accountNumber}</b> — ${a.name}<br/>
+
+        <div class="small muted" style="margin:4px 0">
+          Total: <b>
+            ${fmt(
+              sumEntries(
+                getEntriesByAccount(a.id)
+              )
+            )}
+          </b>
+        </div>
+
+        <button class="btn small solid"
+          onclick="event.stopPropagation(); openAccountEntryModal('${a.id}', '${type}')">
+          + Add Entry
+        </button>
+      </div>
+    `).join("");
+}
+
+window.renderAccountList = renderAccountList;
+
 function renderAccounts() {
 const totalIncome = sumEntries(
   state.accountEntries.filter(e =>
@@ -5552,37 +5597,6 @@ const maxAccountTotal = Math.max(...accountTotals, 1);
   
   const el = document.getElementById("accountsPanel");
   if (!el) return;
-
-  const renderList = (type) =>
-  state.accounts[type]
-    .filter(a => !a.archived)
-    .map(a => `
-  <div id="acc-${a.id}" class="card small">
-    <b>${a.accountNumber}</b> — ${a.name}<br/>
-
-<div class="small muted" style="margin:4px 0">
-  Total: <b class="account-total">
-  ${fmt(
-    sumEntries(
-      getEntriesByAccount(a.id).filter(e => entryMatchesFilter(e.date))
-    )
-  )}
-</b>
-</div>
-
-${renderMiniBar(
-  sumEntries(getEntriesByAccount(a.id).filter(e => entryMatchesFilter(e.date))),
-  maxAccountTotal
-)}
-
-<button class="btn small solid"
- onclick="openAccountEntryModal('${a.id}', '${type}')">
-
-    <div class="account-entries">
-      ${renderAccountEntries(a.id)}
-    </div>
-  </div>
-`).join("");
 
  const active = state.ui.dateFilter || "today";
 
