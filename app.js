@@ -1713,6 +1713,20 @@ function scrollToApprovals() {
   });
 }
 
+
+function generateCustomerAccountNumber() {
+  const existingNumbers = state.customers
+    .map(c => Number(c.accountNumber || 0))
+    .filter(n => !isNaN(n));
+
+  const max = existingNumbers.length
+    ? Math.max(...existingNumbers)
+    : 999;
+
+  return String(max + 1);
+}
+
+
 function openApproval(customerId, approvalId) {
   activeCustomerId = customerId;
 
@@ -1731,6 +1745,27 @@ function handleApprovalAction(id, action) {
   if (!approval) return;
 
   approval.status = action === "approve" ? "approved" : "rejected";
+  // 🎯 HANDLE CUSTOMER CREATION APPROVAL
+if (action === "approve" && approval.type === "customer_creation") {
+
+  const data = approval.payload;
+
+  const newCustomer = {
+    id: uid("c"),
+    name: data.name,
+    phone: data.phone,
+    nin: data.nin,
+    address: data.address,
+    photo: data.photo,
+    accountNumber: generateCustomerAccountNumber(),
+    balance: 0,
+    frozen: false,
+    transactions: []
+  };
+
+  state.customers.push(newCustomer);
+}
+
 approval.processedAt = new Date().toISOString();
   approval.resolvedBy = currentStaff().id;
   approval.resolvedAt = new Date().toISOString();
@@ -6568,49 +6603,51 @@ window.renderMiniBar = renderMiniBar;
 `;
     const ok = await openModalGeneric("Create Customer", f, "Create");
     if (ok) {
-      const name = f.querySelector("#nName").value.trim();
-      const phone = f.querySelector("#nPhone").value.trim();
-      const bal = Number(f.querySelector("#nBal").value || 0);
-      if (!name) return showToast("Enter name");
-      const nin = f.querySelector("#nNIN").value.trim();
-const address = f.querySelector("#nAddress").value.trim();
-const photoFile = f.querySelector("#nPhoto").files[0];
 
-let photoBase64 = "";
-if (photoFile) {
-  photoBase64 = await toBase64(photoFile);
-}
+  const name = f.querySelector("#nName").value.trim();
+  const phone = f.querySelector("#nPhone").value.trim();
+  const nin = f.querySelector("#nNIN").value.trim();
+  const address = f.querySelector("#nAddress").value.trim();
+  const bal = Number(f.querySelector("#nBal").value || 0);
+  const photoFile = f.querySelector("#nPhoto").files[0];
 
-const pendingCustomer = {
-  id: uid("pc"),
-  name,
-  phone,
-  nin,
-  address,
-  photo: photoBase64,
-  openingBalance: bal,
-  requestedBy: currentStaff().name,
-  status: "pending",
-  date: new Date().toISOString()
-};
+  if (!name || !phone) return showToast("Enter required fields");
 
-state.customerApprovals = state.customerApprovals || [];
-state.customerApprovals.push(pendingCustomer);
+  let photoBase64 = "";
 
-save();
-showToast("Customer sent for approval");
+  if (photoFile) {
+    photoBase64 = await toBase64(photoFile);
+  }
 
-      await pushAudit(
-        currentStaff().name,
-         currentStaff().role,
-        "create_customer",
-        JSON.stringify(c)
-      );
-      save();
-      renderCustomers();
-      updateChartData();
-      showToast("Customer created");
+  state.approvals = state.approvals || [];
+
+  state.approvals.unshift({
+    id: uid("ap"),
+    type: "customer_creation",   // 🔥 IMPORTANT (must match approval handler)
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    createdBy: currentStaff().id,
+    payload: {
+      name,
+      phone,
+      nin,
+      address,
+      photo: photoBase64,
+      openingBalance: bal
     }
+  });
+
+  await pushAudit(
+    currentStaff().name,
+    currentStaff().role,
+    "request_customer_creation",
+    name
+  );
+
+  save();
+  renderApprovals();
+  showToast("Customer sent for approval");
+}
   });
   
 
