@@ -3003,6 +3003,8 @@ async function confirmDeleteCustomer(id) {
     );
     if (ok) deleteCustomer(id);
   } 
+
+
   
   function deleteCustomer(id) {
 
@@ -3122,6 +3124,122 @@ document.getElementById("submitTx").onclick = () => {
   console.log("🔥 SUBMIT BUTTON CLICKED");
 };
 
+function openCustomerStatement(customerId) {
+
+  const customer = state.customers.find(c => c.id === customerId);
+  if (!customer) return;
+
+  const txns = (customer.transactions || [])
+    .filter(t => t.type === "credit" || t.type === "withdraw")
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
+
+  let runningBalance = 0;
+
+  const rows = txns.map((t, i) => {
+
+    if (t.type === "credit") runningBalance += Number(t.amount);
+    if (t.type === "withdraw") runningBalance -= Number(t.amount);
+
+    return `
+      <tr>
+        <td>${i+1}</td>
+        <td>${new Date(t.date).toLocaleString()}</td>
+        <td>${t.type.toUpperCase()}</td>
+        <td>${fmt(t.amount)}</td>
+        <td>${fmt(runningBalance)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const wrapper = document.createElement("div");
+
+  wrapper.innerHTML = `
+    <div style="margin-bottom:10px">
+      <b>${customer.name}</b><br>
+      Account No: ${customer.accountNumber}<br>
+      Phone: ${customer.phone}
+    </div>
+
+    <table style="width:100%; border-collapse:collapse">
+      <thead>
+        <tr>
+          <th>S/N</th>
+          <th>Date</th>
+          <th>Type</th>
+          <th>Amount</th>
+          <th>Balance</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+
+    <div style="margin-top:10px">
+      <button class="btn solid"
+        onclick="printCustomerStatement('${customerId}')">
+        Print
+      </button>
+    </div>
+  `;
+
+  openModalGeneric("Account Statement", wrapper);
+}
+
+
+function printCustomerStatement(customerId) {
+
+  const customer = state.customers.find(c => c.id === customerId);
+  if (!customer) return;
+
+  const txns = (customer.transactions || [])
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
+
+  let runningBalance = 0;
+
+  const rows = txns.map((t, i) => {
+
+    if (t.type === "credit") runningBalance += Number(t.amount);
+    if (t.type === "withdraw") runningBalance -= Number(t.amount);
+
+    return `
+      <tr>
+        <td>${i+1}</td>
+        <td>${new Date(t.date).toLocaleString()}</td>
+        <td>${t.type}</td>
+        <td>${fmt(t.amount)}</td>
+        <td>${fmt(runningBalance)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const printWindow = window.open("", "", "width=900,height=700");
+
+  printWindow.document.write(`
+    <html>
+    <head>
+      <title>Account Statement</title>
+    </head>
+    <body>
+      <h3>${customer.name}</h3>
+      <p>Account No: ${customer.accountNumber}</p>
+      <table border="1" cellspacing="0" cellpadding="5">
+        <tr>
+          <th>S/N</th>
+          <th>Date</th>
+          <th>Type</th>
+          <th>Amount</th>
+          <th>Balance</th>
+        </tr>
+        ${rows}
+      </table>
+    </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+  printWindow.print();
+}
 
   // =========================
 // TRANSACTION PROCESSING
