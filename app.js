@@ -4725,6 +4725,7 @@ function exportBusinessCSV() {
 
   URL.revokeObjectURL(url);
 }
+window.exportBusinessCSV = exportBusinessCSV;
 
 
 
