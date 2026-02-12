@@ -4303,7 +4303,6 @@ function exportOperationalCSV() {
   link.click();
   document.body.removeChild(link);
 }
-
 window.exportOperationalCSV = exportOperationalCSV;
 
 function printOperationalSummary() {
