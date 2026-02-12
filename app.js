@@ -5416,17 +5416,23 @@ ${renderMiniBar(
 el.innerHTML = `
 
 <!-- OPERATIONAL BALANCE -->
-<div class="card" style="margin-bottom:12px; border-left:4px solid #00897b;">
-  <div style="display:flex; flex-direction:column; gap:8px">
+<div class="card" style="margin-bottom:12px; border-left:4px solid #0f766e;">
+  <div style="display:flex; flex-direction:column; gap:10px">
 
-    <div onclick="openOperationalDrilldown()" style="cursor:pointer">
+    <div>
       <div class="small muted">Operational Balance</div>
-      <div style="font-size:22px; font-weight:bold;">${fmt(net)}</div>
-      <div class="small muted">
-        Income: <b id="accTotalIncome">${fmt(totalIncome)}</b> |
-        Expense: <b id="accTotalExpense">${fmt(totalExpense)}</b>
+      <div style="font-size:22px; font-weight:bold;">
+        ${fmt(calculateOperationalBalance())}
       </div>
     </div>
+
+    <div class="small muted">
+      Total Income: <b>${fmt(calculateFilteredOperationalTotals().income)}</b><br>
+      Total Expense: <b>${fmt(calculateFilteredOperationalTotals().expense)}</b>
+    </div>
+
+  </div>
+</div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
       <button class="btn small solid ${active==='today'?'primary':''}" onclick="setDateFilter('today')">Today</button>
