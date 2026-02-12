@@ -4225,37 +4225,84 @@ function exportOperationalCSV() {
 
   const entries = getFilteredOperationalEntries();
 
-  let csv = "S/N,Date,Account,Type,Amount,Note\n";
+  if (!entries.length) {
+    alert("No transactions to export for selected filter.");
+    return;
+  }
+
+  const rows = [];
+
+  // Header row
+  rows.push([
+    "S/N",
+    "Date",
+    "Time",
+    "Account",
+    "Type",
+    "Amount"
+  ]);
+
+  let totalNet = 0;
 
   entries.forEach((e, index) => {
 
-    const acc = [...state.accounts.income, ...state.accounts.expense]
+    const dateObj = new Date(e.date);
+
+    const date = dateObj.toLocaleDateString();
+    const time = dateObj.toLocaleTimeString();
+
+    const account = [...state.accounts.income, ...state.accounts.expense]
       .find(a => a.id === e.accountId);
 
     const isIncome = state.accounts.income
       .some(a => a.id === e.accountId);
 
-    csv += `${index + 1},`;
-    csv += `"${new Date(e.date).toLocaleString()}",`;
-    csv += `"${acc ? acc.name : "Unknown"}",`;
-    csv += `"${isIncome ? "INCOME" : "EXPENSE"}",`;
-    csv += `${e.amount},`;
-    csv += `"${e.note || ""}"\n`;
+    const type = isIncome ? "INCOME" : "EXPENSE";
 
+    const amount = Number(e.amount || 0);
+
+    // Add to running net total
+    totalNet += isIncome ? amount : -amount;
+
+    rows.push([
+      index + 1,
+      date,
+      time,
+      account ? account.name : "Unknown",
+      type,
+      amount
+    ]);
   });
 
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
+  // Empty line before total
+  rows.push([]);
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "operational_transactions.csv";
-  a.click();
+  // TOTAL ROW
+  rows.push([
+    "",
+    "",
+    "",
+    "",
+    "TOTAL",
+    totalNet
+  ]);
 
-  URL.revokeObjectURL(url);
+  // Convert to CSV string
+  const csvContent = rows
+    .map(row => row.join(","))
+    .join("\n");
+
+  // Download
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "operational_transactions.csv";
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
-
-window.exportOperationalCSV = exportOperationalCSV;
 
 function printOperationalSummary() {
 
