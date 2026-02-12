@@ -3703,6 +3703,58 @@ renderAudit();
     chartWeek.update();
   }
 
+  function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+  });
+}
+
+function approveCustomer(pendingId) {
+
+  const pending = state.customerApprovals.find(p => p.id === pendingId);
+  if (!pending) return;
+
+  const nextAccountNumber = getNextAccountNumber();
+
+  const newCustomer = {
+    id: uid("c"),
+    accountNumber: nextAccountNumber,
+    name: pending.name,
+    phone: pending.phone,
+    nin: pending.nin,
+    address: pending.address,
+    photo: pending.photo,
+    balance: pending.openingBalance,
+    frozen: false,
+    transactions: []
+  };
+
+  state.customers.push(newCustomer);
+
+  pending.status = "approved";
+
+  save();
+  renderCustomers();
+  showToast("Customer approved");
+}
+
+function getNextAccountNumber() {
+  const base = 1000;
+
+  const numbers = state.customers
+    .map(c => Number(c.accountNumber))
+    .filter(n => !isNaN(n));
+
+  if (numbers.length === 0) return base;
+
+  return Math.max(...numbers) + 1;
+}
+
+
+
   function printStatement(id) {
     const c = state.customers.find((x) => x.id === id) || state.customers[0];
     if (!c) return showToast("No customer");
@@ -6492,22 +6544,62 @@ window.renderMiniBar = renderMiniBar;
 
   document.getElementById("btnNew").addEventListener("click", async () => {
     const f = document.createElement("div");
-    f.innerHTML = `<div style="display:flex;gap:8px"><input id="nName" class="input" placeholder="Full name"/><input id="nPhone" class="input" placeholder="Phone"/></div><div style="margin-top:8px"><input id="nBal" class="input" placeholder="Opening balance"/></div>`;
+    f.innerHTML = `
+<div style="display:flex; gap:8px; flex-wrap:wrap">
+  <input id="nName" class="input" placeholder="Full Name" style="flex:1"/>
+  <input id="nPhone" class="input" placeholder="Phone Number" style="flex:1"/>
+</div>
+
+<div style="margin-top:8px">
+  <input id="nNIN" class="input" placeholder="NIN"/>
+</div>
+
+<div style="margin-top:8px">
+  <input id="nAddress" class="input" placeholder="Address"/>
+</div>
+
+<div style="margin-top:8px">
+  <input id="nPhoto" type="file" accept="image/*" class="input"/>
+</div>
+
+<div style="margin-top:8px">
+  <input id="nBal" class="input" placeholder="Opening balance"/>
+</div>
+`;
     const ok = await openModalGeneric("Create Customer", f, "Create");
     if (ok) {
       const name = f.querySelector("#nName").value.trim();
       const phone = f.querySelector("#nPhone").value.trim();
       const bal = Number(f.querySelector("#nBal").value || 0);
       if (!name) return showToast("Enter name");
-      const c = {
-        id: uid("c"),
-        name,
-        phone,
-        balance: bal,
-        frozen: false,
-        transactions: [],
-      };
-      state.customers.push(c);
+      const nin = f.querySelector("#nNIN").value.trim();
+const address = f.querySelector("#nAddress").value.trim();
+const photoFile = f.querySelector("#nPhoto").files[0];
+
+let photoBase64 = "";
+if (photoFile) {
+  photoBase64 = await toBase64(photoFile);
+}
+
+const pendingCustomer = {
+  id: uid("pc"),
+  name,
+  phone,
+  nin,
+  address,
+  photo: photoBase64,
+  openingBalance: bal,
+  requestedBy: currentStaff().name,
+  status: "pending",
+  date: new Date().toISOString()
+};
+
+state.customerApprovals = state.customerApprovals || [];
+state.customerApprovals.push(pendingCustomer);
+
+save();
+showToast("Customer sent for approval");
+
       await pushAudit(
         currentStaff().name,
          currentStaff().role,
