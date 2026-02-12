@@ -4231,23 +4231,13 @@ function exportOperationalCSV() {
   }
 
   const rows = [];
-
-  // Header row
-  rows.push([
-    "S/N",
-    "Date",
-    "Time",
-    "Account",
-    "Type",
-    "Amount"
-  ]);
+  rows.push(["S/N","Date","Time","Account","Type","Amount"]);
 
   let totalNet = 0;
 
   entries.forEach((e, index) => {
 
     const dateObj = new Date(e.date);
-
     const date = dateObj.toLocaleDateString();
     const time = dateObj.toLocaleTimeString();
 
@@ -4258,10 +4248,8 @@ function exportOperationalCSV() {
       .some(a => a.id === e.accountId);
 
     const type = isIncome ? "INCOME" : "EXPENSE";
-
     const amount = Number(e.amount || 0);
 
-    // Add to running net total
     totalNet += isIncome ? amount : -amount;
 
     rows.push([
@@ -4274,25 +4262,11 @@ function exportOperationalCSV() {
     ]);
   });
 
-  // Empty line before total
   rows.push([]);
+  rows.push(["","","","","TOTAL", totalNet]);
 
-  // TOTAL ROW
-  rows.push([
-    "",
-    "",
-    "",
-    "",
-    "TOTAL",
-    totalNet
-  ]);
+  const csvContent = rows.map(r => r.join(",")).join("\n");
 
-  // Convert to CSV string
-  const csvContent = rows
-    .map(row => row.join(","))
-    .join("\n");
-
-  // Download
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
 
   const link = document.createElement("a");
@@ -4303,7 +4277,9 @@ function exportOperationalCSV() {
   link.click();
   document.body.removeChild(link);
 }
+
 window.exportOperationalCSV = exportOperationalCSV;
+
 
 function printOperationalSummary() {
 
