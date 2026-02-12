@@ -4275,6 +4275,18 @@ function openOperationalDrilldown() {
         onclick="clearOpDateRange()">Clear</button>
     </div>
 
+        <div style="display:flex; gap:6px; margin-bottom:10px">
+      <button class="btn small solid"
+        style="background:#0f766e"
+        onclick="exportOperationalCSV()">Export CSV</button>
+
+      <button class="btn small solid"
+        style="background:#0f766e"
+        onclick="printOperationalSummary()">Print Summary</button>
+    </div>
+
+    <hr style="margin:14px 0; opacity:0.2">
+
     <hr style="margin:14px 0; opacity:0.2">
 
 <div style="display:flex; gap:20px; flex-wrap:wrap;">
@@ -4300,18 +4312,6 @@ function openOperationalDrilldown() {
   </div>
 
 </div>
-
-    <div style="display:flex; gap:6px; margin-bottom:10px">
-      <button class="btn small solid"
-        style="background:#0f766e"
-        onclick="exportOperationalCSV()">Export CSV</button>
-
-      <button class="btn small solid"
-        style="background:#0f766e"
-        onclick="printOperationalSummary()">Print Summary</button>
-    </div>
-
-    <hr style="margin:14px 0; opacity:0.2">
 
 <h4>Income Accounts</h4>
 ${renderAccountList("income")}
