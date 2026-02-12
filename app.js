@@ -4054,49 +4054,116 @@ function renderManagerCODSummary(dateStr) {
 
 window.renderManagerCODSummary = renderManagerCODSummary;
 
+function calculateFilteredOperationalTotals() {
+
+  const entries = (state.accountEntries || []).filter(e =>
+    opTxnMatchesFilter(e.date)
+  );
+
+  let income = 0;
+  let expense = 0;
+
+  entries.forEach(e => {
+    const isIncome = state.accounts.income.some(a => a.id === e.accountId);
+    const isExpense = state.accounts.expense.some(a => a.id === e.accountId);
+
+    if (isIncome) income += Number(e.amount || 0);
+    if (isExpense) expense += Number(e.amount || 0);
+  });
+
+  const net = income - expense;
+
+  return { income, expense, net };
+}
+
+window.calculateFilteredOperationalTotals = calculateFilteredOperationalTotals;
+
+
+function calculateOperationalBalance() {
+  const t = calculateFilteredOperationalTotals();
+  return t.net;
+}
+
+window.calculateOperationalBalance = calculateOperationalBalance;
+
+
+
 function openOperationalDrilldown() {
-  // Ensure UI storage exists
-  if (!state.ui) state.ui = {};
 
-  // Default limit = 50
-  state.ui.operationalTxLimit = state.ui.operationalTxLimit || 50;
+  state.ui.opDateFilter = state.ui.opDateFilter || "today";
+  opTxnLimit = 50;
 
-  // Filter + sort (newest first for drilldown view)
-  const entries = (state.accountEntries || [])
-    .filter(e => entryMatchesFilter(e.date))
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const totals = calculateFilteredOperationalTotals();
 
-  // Apply limit
-  const visibleEntries = entries.slice(0, state.ui.operationalTxLimit);
-  const hasMore = entries.length > visibleEntries.length;
+  const wrapper = document.createElement("div");
 
-  // Build list HTML
-  const listHtml = visibleEntries.length
-    ? visibleEntries.map(e => {
-        const acc = [...state.accounts.income, ...state.accounts.expense]
-          .find(a => a.id === e.accountId);
+  wrapper.innerHTML = `
+    <div style="margin-bottom:10px">
+      <div><b>Total Income:</b> 
+        <span style="color:green">${fmt(totals.income)}</span>
+      </div>
 
-        return `
-          <div class="small" style="margin-bottom:10px; padding:6px; border-bottom:1px solid #eee;">
-            <b>${fmt(e.amount)}</b> — ${acc ? acc.name : "Unknown Account"}<br>
-            <span class="muted">${new Date(e.date).toLocaleString()}</span><br>
-            <span class="muted">${e.note || ""}</span>
-          </div>
-        `;
-      }).join("")
-    : `<div class="small muted">No entries in this range</div>`;
+      <div><b>Total Expense:</b> 
+        <span style="color:#b42318">${fmt(totals.expense)}</span>
+      </div>
 
-  // Add Load More button if needed
-  const finalHtml = listHtml + (hasMore ? `
-    <div style="text-align:center; margin-top:12px;">
-      <button class="btn small solid"
-        onclick="loadMoreOperationalTransactions()">
-        Load More
-      </button>
+      <div><b>Net Operational Balance:</b>
+        <span style="color:${totals.net>=0?'green':'red'}">
+          ${fmt(totals.net)}
+        </span>
+      </div>
     </div>
-  ` : "");
 
-  openModalGeneric("Operational Transactions", finalHtml, null);
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
+      <button class="btn small solid" style="background:#0f766e;color:white"
+        onclick="setOpDateFilter('today')">Today</button>
+
+      <button class="btn small solid" style="background:#0f766e;color:white"
+        onclick="setOpDateFilter('week')">This Week</button>
+
+      <button class="btn small solid" style="background:#0f766e;color:white"
+        onclick="setOpDateFilter('month')">This Month</button>
+
+      <button class="btn small solid" style="background:#0f766e;color:white"
+        onclick="setOpDateFilter('year')">This Year</button>
+
+      <button class="btn small solid" style="background:#0f766e;color:white"
+        onclick="setOpDateFilter('all')">All Time</button>
+    </div>
+
+    <div style="display:flex; gap:6px; margin-bottom:8px">
+      <input type="date" id="opFromDate" class="input small">
+      <span>to</span>
+      <input type="date" id="opToDate" class="input small">
+
+      <button class="btn small solid"
+        style="background:#0f766e;color:white"
+        onclick="applyOpDateRange()">Apply</button>
+
+      <button class="btn small solid"
+        onclick="clearOpDateRange()">Clear</button>
+    </div>
+
+    <div style="display:flex; gap:6px; margin-bottom:10px">
+      <button class="btn small solid"
+        style="background:#0f766e"
+        onclick="exportOperationalCSV()">Export CSV</button>
+
+      <button class="btn small solid"
+        style="background:#0f766e"
+        onclick="printOperationalSummary()">Print Summary</button>
+    </div>
+
+    <div id="opTxnList" style="max-height:300px; overflow:auto"></div>
+    <button id="opLoadMore"
+      class="btn small solid"
+      style="margin-top:8px;background:#0f766e;color:white">
+      See More
+    </button>
+  `;
+
+  openModalGeneric("Operational Transactions", wrapper, null);
+  renderOperationalTransactions();
 }
 
 window.openOperationalDrilldown = openOperationalDrilldown;
@@ -5425,17 +5492,23 @@ ${renderMiniBar(
 el.innerHTML = `
 
 <!-- OPERATIONAL BALANCE -->
-<div class="card" style="margin-bottom:12px; border-left:4px solid #00897b;">
-  <div style="display:flex; flex-direction:column; gap:8px">
+<div class="card" style="margin-bottom:12px; border-left:4px solid #0f766e; cursor:pointer"
+     onclick="openOperationalDrilldown()">
 
-    <div onclick="openOperationalDrilldown()" style="cursor:pointer">
-      <div class="small muted">Operational Balance</div>
-      <div style="font-size:22px; font-weight:bold;">${fmt(net)}</div>
-      <div class="small muted">
-        Income: <b id="accTotalIncome">${fmt(totalIncome)}</b> |
-        Expense: <b id="accTotalExpense">${fmt(totalExpense)}</b>
-      </div>
+  <div style="display:flex; flex-direction:column; gap:6px">
+    <div class="small muted">Operational Balance</div>
+
+    <div style="font-size:22px; font-weight:bold;">
+      ${fmt(calculateOperationalBalance())}
     </div>
+
+    <div class="small muted">
+      Income: ${fmt(calculateFilteredOperationalTotals().income)}
+      |
+      Expense: ${fmt(calculateFilteredOperationalTotals().expense)}
+    </div>
+  </div>
+</div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
       <button class="btn small solid ${active==='today'?'primary':''}" onclick="setDateFilter('today')">Today</button>
