@@ -4166,6 +4166,12 @@ function openOperationalDrilldown() {
           ${fmt(totals.net)}
         </span>
       </div>
+      <label style="font-size:12px; margin-top:6px; display:block;">
+  <input type="checkbox"
+    ${state.operational?.includeEmpowerment ? "checked" : ""}
+    onchange="toggleOperationalEmpowerment(this.checked)">
+  Include Empowerment Position
+</label>
     </div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
@@ -5553,29 +5559,6 @@ el.innerHTML = `
      onclick="event.stopPropagation(); toggleOperationalEmpowerment(this.checked)">
    Include Empowerment Position
  </label>
-
- <hr style="margin:12px 0; opacity:0.2">
-
- <div>
-   <input type="text"
-          class="input small"
-          placeholder="Search account by name or number..."
-          oninput="event.stopPropagation(); filterAccounts(this.value)">
- </div>
-
- <h4 style="margin-top:14px">Income Accounts</h4>
- ${renderList("income")}
- <button class="accounts-btn"
-   onclick="event.stopPropagation(); promptCreateAccount('income')">
-   + Add Income Account
- </button>
-
- <h4 style="margin-top:18px">Expense Accounts</h4>
- ${renderList("expense")}
- <button class="accounts-btn"
-   onclick="event.stopPropagation(); promptCreateAccount('expense')">
-   + Add Expense Account
- </button>
 
 </div>
   
