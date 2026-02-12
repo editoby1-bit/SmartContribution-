@@ -4304,6 +4304,8 @@ function exportOperationalCSV() {
   document.body.removeChild(link);
 }
 
+window.exportOperationalCSV = exportOperationalCSV;
+
 function printOperationalSummary() {
 
   const entries = getFilteredOperationalEntries();
