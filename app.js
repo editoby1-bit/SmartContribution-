@@ -4156,7 +4156,26 @@ function toggleOperationalEmpowerment(val) {
 }
 window.toggleOperationalEmpowerment = toggleOperationalEmpowerment;
 
+function getFilteredOperationalEntries() {
 
+  return (state.accountEntries || [])
+    .filter(e => {
+
+      if (!opTxnMatchesFilter(e.date)) return false;
+
+      const isIncome = state.accounts.income
+        .some(a => a.id === e.accountId);
+
+      const typeFilter = state.ui.opTypeFilter || "all";
+
+      if (typeFilter === "income" && !isIncome) return false;
+      if (typeFilter === "expense" && isIncome) return false;
+
+      return true;
+    })
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+}
 
 let opTxnLimit = 50;
 
@@ -4165,23 +4184,8 @@ function renderOperationalTransactions() {
   const container = document.getElementById("opTxnList");
   if (!container) return;
 
-  const entries = (state.accountEntries || [])
-    .filter(e => {
-
-  if (!opTxnMatchesFilter(e.date)) return false;
-
-  const isIncome = state.accounts.income
-    .some(a => a.id === e.accountId);
-
-  const typeFilter = state.ui.opTypeFilter || "all";
-
-  if (typeFilter === "income" && !isIncome) return false;
-  if (typeFilter === "expense" && isIncome) return false;
-
-  return true;
-})
-    .sort((a,b) => new Date(b.date) - new Date(a.date))
-    .slice(0, opTxnLimit);
+  const entries = getFilteredOperationalEntries()
+  .slice(0, opTxnLimit);
 
   container.innerHTML = entries.map(e => {
 
@@ -4216,6 +4220,96 @@ function renderOperationalTransactions() {
 }
 
 window.renderOperationalTransactions = renderOperationalTransactions;
+
+function exportOperationalCSV() {
+
+  const entries = getFilteredOperationalEntries();
+
+  let csv = "S/N,Date,Account,Type,Amount,Note\n";
+
+  entries.forEach((e, index) => {
+
+    const acc = [...state.accounts.income, ...state.accounts.expense]
+      .find(a => a.id === e.accountId);
+
+    const isIncome = state.accounts.income
+      .some(a => a.id === e.accountId);
+
+    csv += `${index + 1},`;
+    csv += `"${new Date(e.date).toLocaleString()}",`;
+    csv += `"${acc ? acc.name : "Unknown"}",`;
+    csv += `"${isIncome ? "INCOME" : "EXPENSE"}",`;
+    csv += `${e.amount},`;
+    csv += `"${e.note || ""}"\n`;
+
+  });
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "operational_transactions.csv";
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+window.exportOperationalCSV = exportOperationalCSV;
+
+function printOperationalSummary() {
+
+  const entries = getFilteredOperationalEntries();
+  const totals = calculateFilteredOperationalTotals();
+
+  const w = window.open("", "_blank");
+
+  w.document.write(`
+    <h2>Operational Transaction Summary</h2>
+
+    <p><b>Total Income:</b> ${fmt(totals.income)}</p>
+    <p><b>Total Expense:</b> ${fmt(totals.expense)}</p>
+    <p><b>Net Balance:</b> ${fmt(totals.net)}</p>
+
+    <hr>
+
+    <table border="1" cellspacing="0" cellpadding="6">
+      <tr>
+        <th>#</th>
+        <th>Date</th>
+        <th>Account</th>
+        <th>Type</th>
+        <th>Amount</th>
+      </tr>
+
+      ${entries.map((e,i) => {
+
+        const acc = [...state.accounts.income, ...state.accounts.expense]
+          .find(a => a.id === e.accountId);
+
+        const isIncome = state.accounts.income
+          .some(a => a.id === e.accountId);
+
+        return `
+          <tr>
+            <td>${i+1}</td>
+            <td>${new Date(e.date).toLocaleString()}</td>
+            <td>${acc ? acc.name : "Unknown"}</td>
+            <td>${isIncome ? "INCOME" : "EXPENSE"}</td>
+            <td>${fmt(e.amount)}</td>
+          </tr>
+        `;
+      }).join("")}
+
+    </table>
+  `);
+
+  w.document.close();
+  w.print();
+}
+
+window.printOperationalSummary = printOperationalSummary;
+
 
 function openOperationalDrilldown() {
 
