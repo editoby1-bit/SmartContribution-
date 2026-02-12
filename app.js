@@ -4142,6 +4142,52 @@ function toggleOperationalEmpowerment(val) {
 
 window.toggleOperationalEmpowerment = toggleOperationalEmpowerment;
 
+let opTxnLimit = 50;
+
+function renderOperationalTransactions() {
+
+  const container = document.getElementById("opTxnList");
+  if (!container) return;
+
+  const entries = (state.accountEntries || [])
+    .filter(e => opTxnMatchesFilter(e.date))
+    .sort((a,b) => new Date(b.date) - new Date(a.date))
+    .slice(0, opTxnLimit);
+
+  container.innerHTML = entries.map(e => {
+
+    const acc = [...state.accounts.income, ...state.accounts.expense]
+      .find(a => a.id === e.accountId);
+
+    const isIncome = state.accounts.income
+      .some(a => a.id === e.accountId);
+
+    return `
+      <div style="margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:6px">
+        ${new Date(e.date).toLocaleString()} —
+        <b>${fmt(e.amount)}</b>
+        <span style="color:${isIncome ? 'green' : '#b42318'}">
+          (${isIncome ? 'Income' : 'Expense'})
+        </span>
+        <br>
+        <span class="muted">
+          ${acc ? acc.name : "Unknown Account"}
+        </span>
+      </div>
+    `;
+  }).join("");
+
+  const btn = document.getElementById("opLoadMore");
+  if (btn) {
+    btn.onclick = () => {
+      opTxnLimit += 50;
+      renderOperationalTransactions();
+    };
+  }
+}
+
+window.renderOperationalTransactions = renderOperationalTransactions;
+
 function openOperationalDrilldown() {
 
   state.ui.opDateFilter = state.ui.opDateFilter || "today";
