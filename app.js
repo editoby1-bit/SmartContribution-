@@ -5912,11 +5912,28 @@ el.innerHTML = `
      style="margin-bottom:12px; border-left:4px solid #0f766e; cursor:pointer;"
      onclick="openOperationalDrilldown()">
 
- <div class="small muted">Operational Balance</div>
+ ${(() => {
+  const totals = calculateFilteredOperationalTotals();
 
- <div style="font-size:22px; font-weight:bold;">
-   ${fmt(calculateOperationalBalance())}
- </div>
+  return `
+    <div class="small muted">Operational Balance</div>
+
+    <div style="font-size:22px; font-weight:bold;">
+      ${fmt(totals.net)}
+    </div>
+
+    <div style="font-size:12px; margin-top:4px;">
+      <span style="color:green">
+        Income: ${fmt(totals.income)}
+      </span>
+      &nbsp; | &nbsp;
+      <span style="color:#b42318">
+        Expense: ${fmt(totals.expense)}
+      </span>
+    </div>
+  `;
+})()}
+
 
  <label style="font-size:12px;">
    <input type="checkbox"
@@ -5994,10 +6011,27 @@ el.innerHTML = `
      onclick="openBusinessDrilldown()">
   <div style="display:flex; flex-direction:column; gap:10px">
     <div>
-      <div class="small muted">Business Balance</div>
-      <div style="font-size:22px; font-weight:bold;">
-        ${fmt(calculateBusinessBalance())}
-      </div>
+      ${(() => {
+  const totals = calculateFilteredBusinessTotals();
+
+  return `
+    <div class="small muted">Business Balance</div>
+
+    <div style="font-size:22px; font-weight:bold;">
+      ${fmt(totals.net)}
+    </div>
+
+    <div style="font-size:12px; margin-top:4px;">
+      <span style="color:green">
+        Credit: ${fmt(totals.income)}
+      </span>
+      &nbsp; | &nbsp;
+      <span style="color:#b42318">
+        Withdrawal: ${fmt(totals.expense)}
+      </span>
+    </div>
+  `;
+})()}
     </div>
 
     <label style="font-size:12px;">
