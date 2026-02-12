@@ -4695,21 +4695,21 @@ function exportBusinessCSV() {
     .filter(t => bizTxnMatchesFilter(t.date))
     .sort((a,b) => new Date(a.date) - new Date(b.date));
 
-  let csv = "S/N,Date,Time,Customer,Amount,Type,Description\n";
+  let csv = "S/N,DateTime,Customer,Amount,Type,Description\n";
 
   txns.forEach((t, i) => {
     const customer = state.customers.find(c => c.id === t.customerId);
 
-    const d = new Date(t.date);
-    const date = d.toLocaleDateString();
-    const time = d.toLocaleTimeString();
+    const dateTime = new Date(t.date)
+      .toISOString()
+      .replace("T", " ")
+      .slice(0, 19);
 
     csv += [
       i + 1,
-      date,
-      time,
+      dateTime,
       customer ? customer.name : "",
-      Number(t.amount).toFixed(2),
+      Number(t.amount || 0),
       t.type.toUpperCase(),
       `"${t.desc || ""}"`
     ].join(",") + "\n";
@@ -4725,7 +4725,6 @@ function exportBusinessCSV() {
 
   URL.revokeObjectURL(url);
 }
-window.exportBusinessCSV = exportBusinessCSV;
 
 
 
