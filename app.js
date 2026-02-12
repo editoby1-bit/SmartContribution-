@@ -5481,15 +5481,8 @@ const totalExpense = sumEntries(
     entryMatchesFilter(e.date)
   )
 );
-const net = totalIncome - totalExpense;
+
 const accountTotals = [];
-const emp = calculateFilteredEmpowermentTotals();
-
-const empGiven = emp.totalGivenOut;
-const empRepaid = emp.totalReturnedCapital;
-const empInterest = emp.totalInterestEarned;
-const empBalance = emp.netPosition;
-
 
 ["income","expense"].forEach(type => {
   state.accounts[type].forEach(a => {
@@ -5530,10 +5523,8 @@ ${renderMiniBar(
   maxAccountTotal
 )}
 
-<button class="btn small solid" add-entry-btn"
-  onclick="openAccountEntryModal('${a.id}', '${type}')">
-  + Add Entry
-</button>
+<button class="btn small solid"
+ onclick="openAccountEntryModal('${a.id}', '${type}')">
 
     <div class="account-entries">
       ${renderAccountEntries(a.id)}
@@ -5546,78 +5537,48 @@ ${renderMiniBar(
 el.innerHTML = `
 
 <!-- OPERATIONAL BALANCE -->
-<div class="card" style="margin-bottom:12px; border-left:4px solid #0f766e;">
+<div class="card"
+     style="margin-bottom:12px; border-left:4px solid #0f766e; cursor:pointer;"
+     onclick="openOperationalDrilldown()">
 
-  <div class="small muted">Operational Balance</div>
+ <div class="small muted">Operational Balance</div>
 
-  <div style="font-size:22px; font-weight:bold;">
-    ${fmt(calculateOperationalBalance())}
-  </div>
+ <div style="font-size:22px; font-weight:bold;">
+   ${fmt(calculateOperationalBalance())}
+ </div>
 
-  <label style="font-size:12px;">
-    <input type="checkbox"
-      ${state.operational?.includeEmpowerment ? "checked" : ""}
-      onchange="toggleOperationalEmpowerment(this.checked)">
-    Include Empowerment Position
-  </label>
+ <label style="font-size:12px;">
+   <input type="checkbox"
+     ${state.operational?.includeEmpowerment ? "checked" : ""}
+     onclick="event.stopPropagation(); toggleOperationalEmpowerment(this.checked)">
+   Include Empowerment Position
+ </label>
 
-  <div style="margin-top:10px">
-    <button class="btn small solid" onclick="openOperationalDrilldown()">
-      View Details
-    </button>
-  </div>
+ <hr style="margin:12px 0; opacity:0.2">
+
+ <div>
+   <input type="text"
+          class="input small"
+          placeholder="Search account by name or number..."
+          oninput="event.stopPropagation(); filterAccounts(this.value)">
+ </div>
+
+ <h4 style="margin-top:14px">Income Accounts</h4>
+ ${renderList("income")}
+ <button class="accounts-btn"
+   onclick="event.stopPropagation(); promptCreateAccount('income')">
+   + Add Income Account
+ </button>
+
+ <h4 style="margin-top:18px">Expense Accounts</h4>
+ ${renderList("expense")}
+ <button class="accounts-btn"
+   onclick="event.stopPropagation(); promptCreateAccount('expense')">
+   + Add Expense Account
+ </button>
 
 </div>
-
-    <div style="display:flex; gap:6px; flex-wrap:wrap;">
-      <button class="btn small solid ${active==='today'?'primary':''}" onclick="setDateFilter('today')">Today</button>
-      <button class="btn small solid ${active==='week'?'primary':''}" onclick="setDateFilter('week')">This Week</button>
-      <button class="btn small solid ${active==='month'?'primary':''}" onclick="setDateFilter('month')">This Month</button>
-      <button class="btn small solid ${active==='year'?'primary':''}" onclick="setDateFilter('year')">This Year</button>
-      <button class="btn small solid ${active==='all'?'primary':''}" onclick="setDateFilter('all')">All Time</button>
-    </div>
-
-    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-      <input type="date" id="fromDate" class="input small"
-             value="${state.ui.fromDate || ''}"
-             onchange="setCustomDateRange()" />
-      <span style="font-size:12px; opacity:0.7;">to</span>
-      <input type="date" id="toDate" class="input small"
-             value="${state.ui.toDate || ''}"
-             onchange="setCustomDateRange()" />
-      <button class="btn small solid primary" onclick="clearDateRange()">Clear</button>
-    </div>
-
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <button class="btn small solid" onclick="exportTransactionsCSV()">Export CSV</button>
-      <button class="btn small solid" onclick="printSummaryReport()">Print Summary</button>
-    </div>
-
-    <hr style="margin:14px 0; opacity:0.2">
-
-    <div>
-      <input type="text"
-             class="input small"
-             placeholder="Search account by name or number..."
-             oninput="filterAccounts(this.value)">
-    </div>
-
-    <h4>Income Accounts</h4>
-    ${renderList("income")}
-    <button class="accounts-btn" onclick="promptCreateAccount('income')">
-      + Add Income Account
-    </button>
-
-    <h4 style="margin-top:18px">Expense Accounts</h4>
-    ${renderList("expense")}
-    <button class="accounts-btn" onclick="promptCreateAccount('expense')">
-      + Add Expense Account
-    </button>
-
-  </div>
-</div>
-
-
+  
 <!-- EMPOWERMENT BALANCE -->
 <div class="card" style="margin-bottom:12px; border-left:4px solid #1976d2; cursor:pointer;" onclick="openEmpowermentDrilldown()">
   ${(() => {
@@ -5694,7 +5655,7 @@ el.innerHTML = `
     <label style="font-size:12px;">
       <input type="checkbox"
         ${state.business.includeEmpowerment ? "checked" : ""}
-        onchange="toggleEmpowermentImpact(this.checked)">
+        onclick="event.stopPropagation(); toggleEmpowermentImpact(this.checked)">
       Include Empowerment
     </label>
   </div>
