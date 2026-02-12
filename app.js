@@ -4143,12 +4143,21 @@ function calculateOperationalBalance() {
 window.calculateOperationalBalance = calculateOperationalBalance;
 
 function toggleOperationalEmpowerment(val) {
+  state.operational = state.operational || {};
   state.operational.includeEmpowerment = val;
   save();
-  renderAccounts();
-}
 
+  // Update dashboard
+  renderAccounts();
+
+  // 🔹 If drilldown is open, update header live
+  if (document.getElementById("opNet")) {
+    refreshOperationalHeader();
+  }
+}
 window.toggleOperationalEmpowerment = toggleOperationalEmpowerment;
+
+
 
 let opTxnLimit = 50;
 
@@ -4252,7 +4261,7 @@ function openOperationalDrilldown() {
       <button class="btn small solid" style="background:#0f766e;color:white"
         onclick="setOpDateFilter('all')">All Time</button>
     </div>
-
+  
     <div style="display:flex; gap:6px; margin-bottom:8px">
       <input type="date" id="opFromDate" class="input small">
       <span>to</span>
@@ -4265,6 +4274,32 @@ function openOperationalDrilldown() {
       <button class="btn small solid"
         onclick="clearOpDateRange()">Clear</button>
     </div>
+
+    <hr style="margin:14px 0; opacity:0.2">
+
+<div style="display:flex; gap:20px; flex-wrap:wrap;">
+
+  <div style="flex:1; min-width:260px;">
+    <h4 style="color:green;">Income Accounts</h4>
+    <div id="opIncomeAccounts"></div>
+    <button class="btn small solid"
+      style="background:#0f766e;color:white"
+      onclick="promptCreateAccount('income')">
+      + Add Income Account
+    </button>
+  </div>
+
+  <div style="flex:1; min-width:260px;">
+    <h4 style="color:#b42318;">Expense Accounts</h4>
+    <div id="opExpenseAccounts"></div>
+    <button class="btn small solid"
+      style="background:#0f766e;color:white"
+      onclick="promptCreateAccount('expense')">
+      + Add Expense Account
+    </button>
+  </div>
+
+</div>
 
     <div style="display:flex; gap:6px; margin-bottom:10px">
       <button class="btn small solid"
@@ -4304,6 +4339,7 @@ ${renderAccountList("expense")}
 
   openModalGeneric("Operational Transactions", wrapper, null);
   renderOperationalTransactions();
+  renderOperationalAccountLists();
 }
 
 window.openOperationalDrilldown = openOperationalDrilldown;
@@ -4355,6 +4391,32 @@ function refreshOperationalHeader() {
     net.style.color = totals.net >= 0 ? "green" : "red";
   }
 }
+ 
+function renderOperationalAccountLists() {
+
+  const incomeBox = document.getElementById("opIncomeAccounts");
+  const expenseBox = document.getElementById("opExpenseAccounts");
+
+  if (!incomeBox || !expenseBox) return;
+
+  incomeBox.innerHTML = state.accounts.income
+    .map(a => `
+      <div style="padding:6px 0; cursor:pointer;"
+           onclick="openAccountEntryModal('${a.id}', 'income')">
+        ${a.accountNumber} — ${a.name}
+      </div>
+    `).join("");
+
+  expenseBox.innerHTML = state.accounts.expense
+    .map(a => `
+      <div style="padding:6px 0; cursor:pointer;"
+           onclick="openAccountEntryModal('${a.id}', 'expense')">
+        ${a.accountNumber} — ${a.name}
+      </div>
+    `).join("");
+}
+window.renderOperationalAccountLists = renderOperationalAccountLists;
+
 
 function openEmpowermentDrilldown() {
   // Always start drilldown on TODAY
