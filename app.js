@@ -1381,7 +1381,10 @@ function renderApprovals() {
             </div>
 
             <div class="small muted">
-              Requested at: ${new Date(a.requestedAt).toLocaleString()}
+              Requested at: (() => {
+  const created = a.createdAt || a.date;
+  return created ? new Date(created).toLocaleString() : "—";
+})()
             </div>
           </div>
 
@@ -1755,17 +1758,17 @@ if (action === "approve" && approval.type === "customer_creation") {
   const data = approval.payload;
 
   const newCustomer = {
-    id: uid("c"),
-    name: data.name,
-    phone: data.phone,
-    nin: data.nin,
-    address: data.address,
-    photo: data.photo,
-    accountNumber: generateCustomerAccountNumber(),
-    balance: Number(data.openingBalance || 0),
-    frozen: false,
-    transactions: []
-  };
+  id: uid("c"),
+  name: data.customerName, // 🔥 CRITICAL FIX
+  phone: data.phone,
+  nin: data.nin,
+  address: data.address,
+  photo: data.photo,
+  accountNumber: generateCustomerAccountNumber(),
+  balance: data.openingBalance || 0, // also better than 0
+  frozen: false,
+  transactions: []
+};
 
   state.customers.push(newCustomer);
 }
@@ -6637,13 +6640,13 @@ window.renderMiniBar = renderMiniBar;
 
   // keep payload (this is correct)
   payload: {
-    name,
-    phone,
-    nin,
-    address,
-    photo: photoBase64,
-    openingBalance: bal
-  }
+  customerName: name,   // 🔥 THIS FIXES "Customer missing"
+  phone,
+  nin,
+  address,
+  photo: photoBase64,
+  openingBalance: bal
+}
 });
 
   await pushAudit(
