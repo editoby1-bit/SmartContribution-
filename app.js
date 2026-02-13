@@ -6735,42 +6735,61 @@ window.renderMiniBar = renderMiniBar;
 
   document.getElementById("btnNew").addEventListener("click", async () => {
     const f = document.createElement("div");
-    f.innerHTML = `
-<div style="display:flex;gap:8px;margin-bottom:8px">
-  <input id="nName" class="input" placeholder="Full name" required/>
-  <input id="nPhone" class="input" placeholder="Phone number" required/>
-</div>
+   f.innerHTML = `
+<div style="display:flex;flex-direction:column;gap:8px">
 
-<div style="display:flex;gap:8px;margin-bottom:8px">
-  <input id="nNIN" class="input" placeholder="NIN" required/>
-  <input id="nAddress" class="input" placeholder="Address" required/>
-</div>
+  <input id="nName" class="input" placeholder="Full name *" required>
+  
+  <input id="nPhone" class="input" placeholder="Phone number *" required>
+  
+  <input id="nNIN" class="input" placeholder="NIN *" required>
+  
+  <input id="nAddress" class="input" placeholder="Address *" required>
 
-<div style="margin-bottom:8px">
-  <input id="nBal" class="input" type="number" placeholder="Opening balance (optional)"/>
-</div>
+  <input id="nPhoto" type="file" accept="image/*" class="input" required>
 
-<div style="margin-top:6px">
-  <label class="small muted">Customer Photo (Required)</label>
-  <input id="nPhoto" type="file" accept="image/*" required/>
+  <input id="nBal" class="input" placeholder="Opening balance (optional)">
+
 </div>
 `;
+
     const ok = await openModalGeneric("Create Customer", f, "Create");
     if (ok) {
 
   const name = f.querySelector("#nName").value.trim();
 const phone = f.querySelector("#nPhone").value.trim();
-const bal = Number(f.querySelector("#nBal").value || 0);
 const nin = f.querySelector("#nNIN").value.trim();
 const address = f.querySelector("#nAddress").value.trim();
+const bal = Number(f.querySelector("#nBal").value || 0);
 const photoFile = f.querySelector("#nPhoto").files[0];
 
-// 🔒 STRICT KYC VALIDATION (PASTE EXACTLY HERE)
-if (!name) return showToast("Full name is required");
-if (!phone) return showToast("Phone number is required");
-if (!nin) return showToast("NIN is required");
-if (!address) return showToast("Address is required");
-if (!photoFile) return showToast("Customer photo is required");
+// 🔒 STRICT KYC VALIDATION (BANK-GRADE)
+if (!name) {
+  showToast("Full name is required");
+  return;
+}
+
+if (!phone) {
+  showToast("Phone number is required");
+  return;
+}
+
+if (!nin) {
+  showToast("NIN is required");
+  return;
+}
+
+if (!address) {
+  showToast("Address is required");
+  return;
+}
+
+if (!photoFile) {
+  showToast("Customer photo is required");
+  return;
+}
+
+let photoBase64 = await toBase64(photoFile);
 
   state.approvals = state.approvals || [];
 
