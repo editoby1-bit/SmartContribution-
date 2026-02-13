@@ -1419,6 +1419,102 @@ function renderApprovals() {
 }
 
 
+function renderCustomerKycApprovals() {
+  const box = document.getElementById("customerKycApprovals");
+  if (!box) return;
+
+  const staff = currentStaff();
+  const isApprover = staff && canApprove();
+
+  const pending = (state.approvals || [])
+    .filter(a => a.type === "customer_creation" && a.status === "pending")
+    .sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+
+  if (pending.length === 0) {
+    box.innerHTML = `<div class="small muted">No new customer requests</div>`;
+    return;
+  }
+
+  let html = "";
+
+  pending.forEach(a => {
+    const p = a.payload || {};
+
+    html += `
+      <div class="card" style="
+        margin-bottom:10px;
+        padding:10px;
+        border-left:4px solid #0f766e;
+      ">
+
+        <div style="display:flex; gap:10px; align-items:flex-start">
+
+          <!-- PHOTO -->
+          ${
+            p.photo
+              ? `<img src="${p.photo}"
+                      style="width:48px;height:48px;border-radius:8px;
+                             object-fit:cover;border:1px solid #e5e7eb;">`
+              : `<div style="width:48px;height:48px;border-radius:8px;
+                             background:#f3f4f6;display:flex;
+                             align-items:center;justify-content:center;
+                             font-size:10px;color:#9ca3af;">
+                   No Photo
+                 </div>`
+          }
+
+          <!-- DETAILS -->
+          <div style="flex:1; font-size:12px; line-height:1.4">
+            <div style="font-weight:700; margin-bottom:4px;">
+              NEW CUSTOMER
+            </div>
+
+            <div><b>Name:</b> ${p.name || "—"}</div>
+            <div><b>Phone:</b> ${p.phone || "—"}</div>
+            <div><b>NIN:</b> ${p.nin || "—"}</div>
+            <div style="word-break:break-word;">
+              <b>Address:</b> ${p.address || "—"}
+            </div>
+
+            <div class="small muted" style="margin-top:4px">
+              By: ${a.createdByName || a.requestedBy || "Staff"}
+            </div>
+
+            <div class="small muted">
+              ${(() => {
+                const d = a.createdAt || a.date;
+                return d ? new Date(d).toLocaleString() : "—";
+              })()}
+            </div>
+          </div>
+        </div>
+
+        ${
+          isApprover
+            ? `
+            <div style="display:flex; gap:6px; margin-top:8px">
+              <button class="btn small"
+                onclick="processApproval('${a.id}', 'approve')">
+                Approve
+              </button>
+              <button class="btn small ghost danger"
+                onclick="processApproval('${a.id}', 'reject')">
+                Reject
+              </button>
+            </div>
+            `
+            : `<div class="small muted" style="margin-top:6px">
+                 Awaiting manager approval
+               </div>`
+        }
+
+      </div>
+    `;
+  });
+
+  box.innerHTML = html;
+}
+
 function renderCustomerCreationApprovals() {
   const el = document.getElementById("approvals");
   if (!el) return;
@@ -1882,6 +1978,7 @@ approval.processedAt = new Date().toISOString();
   renderDashboard();
   renderDashboard();
   bindCODButtons();
+  renderCustomerKycApprovals();
 
 }
 
@@ -5802,6 +5899,7 @@ function renderDashboard() {
   bindCODButtons();
   renderManagerCODSummary(window.activeCODDate);
   renderCODForDate(window.activeCODDate);
+  renderCustomerKycApprovals();
 }
 
 function renderDashboardApprovals() {
@@ -6907,6 +7005,7 @@ state.operational.includeEmpowerment = state.operational.includeEmpowerment || f
   buildChart();
   updateChartData();
   renderEmpowermentBalance();
+  renderCustomerKycApprovals();
   
   bindCODButtons();
   bindDashboardButton();      // controls show/hide dashboard
