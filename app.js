@@ -2389,12 +2389,13 @@ function renderProfileTab() {
  </div>
 `;
 
-  <div class="card" style="margin-bottom:12px">
-    <div class="kv">
-      <div class="kv-label">Account Balance</div>
-      <div class="kv-value">${fmt(savingsBalance)}</div>
-    </div>
-  `;
+html += `
+ <div class="card" style="margin-bottom:12px">
+   <div class="kv">
+     <div class="kv-label">Account Balance</div>
+     <div class="kv-value">${fmt(savingsBalance)}</div>
+   </div>
+ `;
 
   // =========================
   // EMPOWERMENT BALANCE (NEGATIVE)
