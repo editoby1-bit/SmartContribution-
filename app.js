@@ -1715,15 +1715,19 @@ function scrollToApprovals() {
 
 
 function generateCustomerAccountNumber() {
-  const existingNumbers = state.customers
-    .map(c => Number(c.accountNumber || 0))
-    .filter(n => !isNaN(n));
+  const customers = state.customers || [];
 
-  const max = existingNumbers.length
-    ? Math.max(...existingNumbers)
-    : 999;
+  // Extract ONLY valid numeric account numbers
+  const numericAccounts = customers
+    .map(c => parseInt(c.accountNumber, 10))
+    .filter(n => !isNaN(n) && n >= 1000); // ignore legacy weird formats
 
-  return String(max + 1);
+  // Start from 1000 if none exist
+  const nextNumber = numericAccounts.length > 0
+    ? Math.max(...numericAccounts) + 1
+    : 1000;
+
+  return String(nextNumber);
 }
 
 
@@ -1758,7 +1762,7 @@ if (action === "approve" && approval.type === "customer_creation") {
     address: data.address,
     photo: data.photo,
     accountNumber: generateCustomerAccountNumber(),
-    balance: 0,
+    balance: Number(data.openingBalance || 0),
     frozen: false,
     transactions: []
   };
@@ -6622,20 +6626,25 @@ window.renderMiniBar = renderMiniBar;
   state.approvals = state.approvals || [];
 
   state.approvals.unshift({
-    id: uid("ap"),
-    type: "customer_creation",   // 🔥 IMPORTANT (must match approval handler)
-    status: "pending",
-    createdAt: new Date().toISOString(),
-    createdBy: currentStaff().id,
-    payload: {
-      name,
-      phone,
-      nin,
-      address,
-      photo: photoBase64,
-      openingBalance: bal
-    }
-  });
+  id: uid("ap"),
+  type: "customer_creation",
+  status: "pending",
+
+  // 👇 THESE THREE FIX YOUR UI DISPLAY
+  customerName: name,
+  requestedBy: currentStaff().name,
+  requestedAt: new Date().toISOString(),
+
+  // keep payload (this is correct)
+  payload: {
+    name,
+    phone,
+    nin,
+    address,
+    photo: photoBase64,
+    openingBalance: bal
+  }
+});
 
   await pushAudit(
     currentStaff().name,
