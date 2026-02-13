@@ -1366,78 +1366,62 @@ function renderApprovals() {
   const p = a.payload || {};
 
     html += `
-      <div class="approval-item card" style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-         <div style="display:flex;gap:10px;align-items:flex-start">
-  
-  <!-- PHOTO -->
-  <div>
-    ${
-      p.photo
-        ? `<img src="${p.photo}" 
-               style="width:60px;height:60px;border-radius:8px;object-fit:cover;border:1px solid #ddd;">`
-        : `<div style="width:60px;height:60px;border-radius:8px;
-                       background:#eee;display:flex;align-items:center;
-                       justify-content:center;font-size:12px;color:#777">
-             No Photo
-           </div>`
-    }
-  </div>
+  <div class="approval-item card" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
 
-  <!-- DETAILS -->
-  <div>
-    <div style="font-weight:700">
-      NEW CUSTOMER REQUEST
-    </div>
+      <!-- LEFT: PHOTO + DETAILS -->
+      <div style="display:flex;gap:12px;align-items:flex-start;flex:1;min-width:0">
 
-    <div class="small">
-      Name: <b>${p.name || "—"}</b>
-    </div>
+        <!-- PHOTO -->
+        ${
+          p.photo
+            ? `<img src="${p.photo}"
+                    style="width:56px;height:56px;border-radius:10px;
+                           object-fit:cover;border:1px solid #e5e7eb;">`
+            : `<div style="width:56px;height:56px;border-radius:10px;
+                           background:#f3f4f6;display:flex;
+                           align-items:center;justify-content:center;
+                           font-size:11px;color:#9ca3af;">
+                 No Photo
+               </div>`
+        }
 
-    <div class="small">
-      Phone: <b>${p.phone || "—"}</b>
-    </div>
-
-    <div class="small">
-      NIN: <b>${p.nin || "—"}</b>
-    </div>
-
-    <div class="small">
-      Address: <b>${p.address || "—"}</b>
-    </div>
-
-    <div class="small">
-      Requested by: <b>${a.requestedByName || a.requestedBy || "Staff"}</b>
-    </div>
-
-    <div class="small muted">
-      Requested at: ${(() => {
-        const created = a.createdAt || a.date;
-        return created ? new Date(created).toLocaleString() : "—";
-      })()}
-    </div>
-  </div>
-
-</div>
-
-
-            <div class="small">
-              Requested by: <b>${a.requestedByName || a.requestedBy || a.createdBy || "—"}</b>
-            </div>
-
-            <div class="small muted">
-              Requested at: ${(() => {
-  const created = a.createdAt || a.date;
-  return created ? new Date(created).toLocaleString() : "—";
-})()}
-
-            </div>
+        <!-- TEXT DETAILS -->
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700">
+            NEW CUSTOMER REQUEST
           </div>
 
-          ${
-            isApprover
-              ? `
-                <div style="display:flex;gap:6px">
+          <div class="small">
+            Name: <b>${p.name || "—"}</b>
+          </div>
+
+          <div class="small">
+            Phone: <b>${p.phone || "—"}</b>
+          </div>
+
+          <div class="small">
+            NIN: <b>${p.nin || "—"}</b>
+          </div>
+
+          <div class="small">
+            Address: <b>${p.address || "—"}</b>
+          </div>
+
+          <div class="small">
+            Requested by: <b>${a.createdByName || a.requestedByName || a.requestedBy || "—"}</b>
+          </div>
+
+          <div class="small muted">
+            Requested at: ${(() => {
+              const created = a.createdAt || a.date;
+              return created ? new Date(created).toLocaleString() : "—";
+            })()}
+          </div>
+        </div>
+
+      </div>
+`;
                   <button
                     class="btn"
                     onclick="processApproval('${a.id}', 'approve')">
@@ -6748,40 +6732,40 @@ window.renderMiniBar = renderMiniBar;
     const f = document.createElement("div");
     f.innerHTML = `
 <div style="display:flex;gap:8px;margin-bottom:8px">
-  <input id="nName" class="input" placeholder="Full Name"/>
-  <input id="nPhone" class="input" placeholder="Phone Number"/>
+  <input id="nName" class="input" placeholder="Full name" required/>
+  <input id="nPhone" class="input" placeholder="Phone number" required/>
 </div>
 
 <div style="display:flex;gap:8px;margin-bottom:8px">
-  <input id="nNIN" class="input" placeholder="NIN"/>
-  <input id="nAddress" class="input" placeholder="Address"/>
+  <input id="nNIN" class="input" placeholder="NIN" required/>
+  <input id="nAddress" class="input" placeholder="Address" required/>
 </div>
 
 <div style="margin-bottom:8px">
-  <input id="nPhoto" class="input" type="file" accept="image/*"/>
+  <input id="nBal" class="input" type="number" placeholder="Opening balance (optional)"/>
 </div>
 
-<div>
-  <input id="nBal" class="input" placeholder="Opening Balance (optional)"/>
+<div style="margin-top:6px">
+  <label class="small muted">Customer Photo (Required)</label>
+  <input id="nPhoto" type="file" accept="image/*" required/>
 </div>
 `;
     const ok = await openModalGeneric("Create Customer", f, "Create");
     if (ok) {
 
   const name = f.querySelector("#nName").value.trim();
-  const phone = f.querySelector("#nPhone").value.trim();
-  const nin = f.querySelector("#nNIN").value.trim();
-  const address = f.querySelector("#nAddress").value.trim();
-  const bal = Number(f.querySelector("#nBal").value || 0);
-  const photoFile = f.querySelector("#nPhoto").files[0];
+const phone = f.querySelector("#nPhone").value.trim();
+const bal = Number(f.querySelector("#nBal").value || 0);
+const nin = f.querySelector("#nNIN").value.trim();
+const address = f.querySelector("#nAddress").value.trim();
+const photoFile = f.querySelector("#nPhoto").files[0];
 
-  if (!name || !phone) return showToast("Enter required fields");
-
-  let photoBase64 = "";
-
-  if (photoFile) {
-    photoBase64 = await toBase64(photoFile);
-  }
+// 🔒 STRICT KYC VALIDATION (PASTE EXACTLY HERE)
+if (!name) return showToast("Full name is required");
+if (!phone) return showToast("Phone number is required");
+if (!nin) return showToast("NIN is required");
+if (!address) return showToast("Address is required");
+if (!photoFile) return showToast("Customer photo is required");
 
   state.approvals = state.approvals || [];
 
