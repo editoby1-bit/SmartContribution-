@@ -1351,7 +1351,7 @@ function renderApprovals() {
   const isApprover = staff && canApprove(); // manager or CEO
 
   const pending = state.approvals
-    .filter(a => a.status === "pending")
+  .filter(a => a.status === "pending" && a.type !== "customer_creation")
     .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
 
   if (pending.length === 0) {
