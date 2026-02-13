@@ -1362,7 +1362,9 @@ function renderApprovals() {
   let html = "";
 
   pending.forEach(a => {
-    const cust = state.customers.find(c => c.id === a.customerId);
+    const cust =
+  state.customers.find(c => c.id === a.customerId) ||
+  (a.payload?.name ? { name: a.payload.name } : null);
 
     html += `
       <div class="approval-item card" style="margin-bottom:10px">
@@ -1373,18 +1375,19 @@ function renderApprovals() {
             </div>
 
             <div class="small">
-              Customer: <b>${cust ? cust.name : "Unknown"}</b>
-            </div>
+  Customer: <b>${cust?.name || a.payload?.name || "Unknown"}</b>
+</div>
 
             <div class="small">
-              Requested by: <b>${a.requestedByName || a.requestedBy}</b>
+              Requested by: <b>${a.requestedByName || a.requestedBy || a.createdBy || "—"}</b>
             </div>
 
             <div class="small muted">
-              Requested at: (() => {
+              Requested at: ${(() => {
   const created = a.createdAt || a.date;
   return created ? new Date(created).toLocaleString() : "—";
-})()
+})()}
+
             </div>
           </div>
 
