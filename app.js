@@ -1370,7 +1370,7 @@ function renderApprovals() {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
 
       <!-- LEFT: PHOTO + DETAILS -->
-      <div style="display:flex;gap:12px;align-items:flex-start;flex:1;min-width:0">
+      <div style="display:flex;gap:12px;align-items:flex-start;flex:1;min-width:0;width:100%">
 
         <!-- PHOTO -->
         ${
@@ -1387,8 +1387,8 @@ function renderApprovals() {
         }
 
         <!-- TEXT DETAILS -->
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700">
+        <div style="flex:1;min-width:180px;word-break:normal;">
+          <div style="font-weight:700;font-size:14px;white-space:nowrap;">
             NEW CUSTOMER REQUEST
           </div>
 
