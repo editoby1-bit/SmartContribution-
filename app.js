@@ -1422,6 +1422,92 @@ function renderApprovals() {
   el.innerHTML = html;
 }
 
+function renderCustomerCreationApprovals() {
+  const el = document.getElementById("approvals");
+  if (!el) return;
+
+  const staff = currentStaff();
+  const isApprover = staff && canApprove();
+
+  const pendingCustomers = (state.approvals || [])
+    .filter(a => a.status === "pending" && a.type === "customer_creation")
+    .sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+
+  if (pendingCustomers.length === 0) return;
+
+  let html = `<div style="font-weight:700;margin:10px 0">New Customer Requests</div>`;
+
+  pendingCustomers.forEach(a => {
+    const p = a.payload || {};
+
+    html += `
+      <div class="approval-item card" style="margin-bottom:10px;border-left:4px solid #0f766e">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          
+          <div>
+            <div style="font-weight:700">
+              NEW CUSTOMER REQUEST
+            </div>
+
+            <div class="small">
+              Name: <b>${p.name || "—"}</b>
+            </div>
+
+            <div class="small">
+              Phone: <b>${p.phone || "—"}</b>
+            </div>
+
+            <div class="small">
+              NIN: <b>${p.nin || "—"}</b>
+            </div>
+
+            <div class="small">
+              Address: <b>${p.address || "—"}</b>
+            </div>
+
+            <div class="small">
+              Requested by: <b>${a.requestedBy || a.createdBy || "—"}</b>
+            </div>
+
+            <div class="small muted">
+              Requested at: ${
+                a.createdAt
+                  ? new Date(a.createdAt).toLocaleString()
+                  : "—"
+              }
+            </div>
+          </div>
+
+          ${
+            isApprover
+              ? `
+              <div style="display:flex;gap:6px">
+                <button class="btn"
+                  onclick="handleApprovalAction('${a.id}', 'approve')">
+                  Approve
+                </button>
+
+                <button class="btn ghost danger"
+                  onclick="handleApprovalAction('${a.id}', 'reject')">
+                  Reject
+                </button>
+              </div>
+            `
+              : `<div class="small muted">⏳ Awaiting approval</div>`
+          }
+
+        </div>
+      </div>
+    `;
+  });
+
+  // 🔥 APPEND instead of replace (so financial approvals stay intact)
+  el.innerHTML = html + el.innerHTML;
+}
+
+window.renderCustomerCreationApprovals = renderCustomerCreationApprovals;
+
+
   function renderCustomers() {
          // =========================
   // EXISTING CUSTOMER LOGIC
@@ -5686,6 +5772,7 @@ function renderDashboard() {
   renderDashboardKPIs();
   renderAttentionRequired();
   renderDashboardApprovals();
+  renderCustomerCreationApprovals();
   renderDashboardActivity();
   initCODDatePicker();
   bindCODButtons();
