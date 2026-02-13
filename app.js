@@ -1419,31 +1419,36 @@ function renderApprovals() {
             })()}
           </div>
         </div>
-
       </div>
+
+      <!-- RIGHT: APPROVAL BUTTONS -->
+      ${
+        isApprover
+          ? `
+            <div style="display:flex;gap:6px">
+              <button
+                class="btn"
+                onclick="processApproval('${a.id}', 'approve')">
+                Approve
+              </button>
+
+              <button
+                class="btn ghost danger"
+                onclick="processApproval('${a.id}', 'reject')">
+                Reject
+              </button>
+            </div>
+          `
+          : `
+            <div class="small muted" style="margin-top:4px">
+              ⏳ Awaiting manager review
+            </div>
+          `
+      }
+
+    </div>
+  </div>
 `;
-                  <button
-                    class="btn"
-                    onclick="processApproval('${a.id}', 'approve')">
-                    Approve
-                  </button>
-
-                  <button
-                    class="btn ghost danger"
-                    onclick="processApproval('${a.id}', 'reject')">
-                    Reject
-                  </button>
-                </div>
-              `
-              : `
-                <div class="small muted" style="margin-top:4px">
-                  ⏳ Awaiting manager review
-                </div>
-              `
-          }
-        </div>
-      </div>
-    `;
   });
 
   el.innerHTML = html;
