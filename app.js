@@ -1343,6 +1343,8 @@ back.style.display = "flex";
 }
 window.openCODResolutionModal = openCODResolutionModal;
 
+
+
 function renderApprovals() {
      const el = document.getElementById("approvals");
   if (!el) return;
@@ -1362,97 +1364,60 @@ function renderApprovals() {
   let html = "";
 
   pending.forEach(a => {
-  const cust = state.customers.find(c => c.id === a.customerId);
-  const p = a.payload || {};
+    const cust = state.customers.find(c => c.id === a.customerId);
 
     html += `
-  <div class="approval-item card" style="margin-bottom:10px">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div class="approval-item card" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-weight:700">
+              ${a.type.toUpperCase()} — ${fmt(a.amount)}
+            </div>
 
-      <!-- LEFT: PHOTO + DETAILS -->
-      <div style="display:flex;gap:12px;align-items:flex-start;flex:1;min-width:0;width:100%">
+            <div class="small">
+              Customer: <b>${cust ? cust.name : "Unknown"}</b>
+            </div>
 
-        <!-- PHOTO -->
-        ${
-          p.photo
-            ? `<img src="${p.photo}"
-                    style="width:56px;height:56px;border-radius:10px;
-                           object-fit:cover;border:1px solid #e5e7eb;">`
-            : `<div style="width:56px;height:56px;border-radius:10px;
-                           background:#f3f4f6;display:flex;
-                           align-items:center;justify-content:center;
-                           font-size:11px;color:#9ca3af;">
-                 No Photo
-               </div>`
-        }
+            <div class="small">
+              Requested by: <b>${a.requestedByName || a.requestedBy}</b>
+            </div>
 
-        <!-- TEXT DETAILS -->
-        <div style="flex:1;min-width:0;max-width:100%;overflow:hidden;">
-          <div style="font-weight:700;font-size:14px;white-space:normal;">
-            NEW CUSTOMER REQUEST
+            <div class="small muted">
+              Requested at: ${new Date(a.requestedAt).toLocaleString()}
+            </div>
           </div>
 
-          <div class="small">
-            Name: <b>${p.name || "—"}</b>
-          </div>
+          ${
+            isApprover
+              ? `
+                <div style="display:flex;gap:6px">
+                  <button
+                    class="btn"
+                    onclick="processApproval('${a.id}', 'approve')">
+                    Approve
+                  </button>
 
-          <div class="small">
-            Phone: <b>${p.phone || "—"}</b>
-          </div>
-
-          <div class="small">
-            NIN: <b>${p.nin || "—"}</b>
-          </div>
-
-          <div class="small">
-            Address: <b>${p.address || "—"}</b>
-          </div>
-
-          <div class="small">
-            Requested by: <b>${a.createdByName || a.requestedByName || a.requestedBy || "—"}</b>
-          </div>
-
-          <div class="small muted">
-            Requested at: ${(() => {
-              const created = a.createdAt || a.date;
-              return created ? new Date(created).toLocaleString() : "—";
-            })()}
-          </div>
+                  <button
+                    class="btn ghost danger"
+                    onclick="processApproval('${a.id}', 'reject')">
+                    Reject
+                  </button>
+                </div>
+              `
+              : `
+                <div class="small muted" style="margin-top:4px">
+                  ⏳ Awaiting manager review
+                </div>
+              `
+          }
         </div>
       </div>
-
-      <!-- RIGHT: APPROVAL BUTTONS -->
-      ${
-        isApprover
-          ? `
-            <div style="display:flex;gap:6px;flex-shrink:0">
-              <button
-                class="btn"
-                onclick="processApproval('${a.id}', 'approve')">
-                Approve
-              </button>
-
-              <button
-                class="btn ghost danger"
-                onclick="processApproval('${a.id}', 'reject')">
-                Reject
-              </button>
-            </div>
-          `
-          : `
-            <div class="small muted" style="margin-top:4px">
-              ⏳ Awaiting manager review
-            </div>
-          `
-      }
-
-    </div>
-  </div>
-`;
+    `;
   });
 
   el.innerHTML = html;
 }
+
 
 function renderCustomerCreationApprovals() {
   const el = document.getElementById("approvals");
