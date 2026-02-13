@@ -1362,21 +1362,64 @@ function renderApprovals() {
   let html = "";
 
   pending.forEach(a => {
-    const cust =
-  state.customers.find(c => c.id === a.customerId) ||
-  (a.payload?.name ? { name: a.payload.name } : null);
+  const cust = state.customers.find(c => c.id === a.customerId);
+  const p = a.payload || {};
 
     html += `
       <div class="approval-item card" style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div>
-            <div style="font-weight:700">
-              ${a.type.toUpperCase()} — ${fmt(a.amount)}
-            </div>
+         <div style="display:flex;gap:10px;align-items:flex-start">
+  
+  <!-- PHOTO -->
+  <div>
+    ${
+      p.photo
+        ? `<img src="${p.photo}" 
+               style="width:60px;height:60px;border-radius:8px;object-fit:cover;border:1px solid #ddd;">`
+        : `<div style="width:60px;height:60px;border-radius:8px;
+                       background:#eee;display:flex;align-items:center;
+                       justify-content:center;font-size:12px;color:#777">
+             No Photo
+           </div>`
+    }
+  </div>
 
-            <div class="small">
-  Customer: <b>${cust?.name || a.payload?.name || "Unknown"}</b>
+  <!-- DETAILS -->
+  <div>
+    <div style="font-weight:700">
+      NEW CUSTOMER REQUEST
+    </div>
+
+    <div class="small">
+      Name: <b>${p.name || "—"}</b>
+    </div>
+
+    <div class="small">
+      Phone: <b>${p.phone || "—"}</b>
+    </div>
+
+    <div class="small">
+      NIN: <b>${p.nin || "—"}</b>
+    </div>
+
+    <div class="small">
+      Address: <b>${p.address || "—"}</b>
+    </div>
+
+    <div class="small">
+      Requested by: <b>${a.requestedByName || a.requestedBy || "Staff"}</b>
+    </div>
+
+    <div class="small muted">
+      Requested at: ${(() => {
+        const created = a.createdAt || a.date;
+        return created ? new Date(created).toLocaleString() : "—";
+      })()}
+    </div>
+  </div>
+
 </div>
+
 
             <div class="small">
               Requested by: <b>${a.requestedByName || a.requestedBy || a.createdBy || "—"}</b>
@@ -2291,6 +2334,7 @@ function openCustomerModal(id) {
   activeCustomerId = null;
 }
 
+
 function renderProfileTab() {
   const c = state.customers.find(x => x.id === activeCustomerId);
 
@@ -2314,11 +2358,36 @@ function renderProfileTab() {
   const latestApproval = pendingApprovals[0];
 
   let html = `
-  <div class="card" style="margin-bottom:12px">
-    <h4>${c.name}</h4>
-    <div class="small">Customer ID: ${c.id}</div>
-    <div class="small">Phone: ${c.phone || "—"}</div>
-  </div>
+ <div class="card" style="margin-bottom:12px">
+   <div style="display:flex;gap:14px;align-items:center">
+
+     <!-- CUSTOMER PHOTO -->
+     ${
+       c.photo
+         ? `<img src="${c.photo}" 
+                 style="width:80px;height:80px;border-radius:12px;
+                        object-fit:cover;border:2px solid #e5e7eb;">`
+         : `<div style="width:80px;height:80px;border-radius:12px;
+                        background:#f3f4f6;display:flex;
+                        align-items:center;justify-content:center;
+                        color:#9ca3af;font-size:12px">
+              No Photo
+            </div>`
+     }
+
+     <!-- CUSTOMER DETAILS -->
+     <div>
+       <h4 style="margin:0">${c.name}</h4>
+       <div class="small">Account No: ${c.accountNumber || "—"}</div>
+       <div class="small">Customer ID: ${c.id}</div>
+       <div class="small">Phone: ${c.phone || "—"}</div>
+       <div class="small">NIN: ${c.nin || "—"}</div>
+       <div class="small">Address: ${c.address || "—"}</div>
+     </div>
+
+   </div>
+ </div>
+`;
 
   <div class="card" style="margin-bottom:12px">
     <div class="kv">
@@ -6677,25 +6746,22 @@ window.renderMiniBar = renderMiniBar;
   document.getElementById("btnNew").addEventListener("click", async () => {
     const f = document.createElement("div");
     f.innerHTML = `
-<div style="display:flex; gap:8px; flex-wrap:wrap">
-  <input id="nName" class="input" placeholder="Full Name" style="flex:1"/>
-  <input id="nPhone" class="input" placeholder="Phone Number" style="flex:1"/>
+<div style="display:flex;gap:8px;margin-bottom:8px">
+  <input id="nName" class="input" placeholder="Full Name"/>
+  <input id="nPhone" class="input" placeholder="Phone Number"/>
 </div>
 
-<div style="margin-top:8px">
+<div style="display:flex;gap:8px;margin-bottom:8px">
   <input id="nNIN" class="input" placeholder="NIN"/>
-</div>
-
-<div style="margin-top:8px">
   <input id="nAddress" class="input" placeholder="Address"/>
 </div>
 
-<div style="margin-top:8px">
-  <input id="nPhoto" type="file" accept="image/*" class="input"/>
+<div style="margin-bottom:8px">
+  <input id="nPhoto" class="input" type="file" accept="image/*"/>
 </div>
 
-<div style="margin-top:8px">
-  <input id="nBal" class="input" placeholder="Opening balance"/>
+<div>
+  <input id="nBal" class="input" placeholder="Opening Balance (optional)"/>
 </div>
 `;
     const ok = await openModalGeneric("Create Customer", f, "Create");
@@ -6722,21 +6788,17 @@ window.renderMiniBar = renderMiniBar;
   id: uid("ap"),
   type: "customer_creation",
   status: "pending",
-
-  // 👇 THESE THREE FIX YOUR UI DISPLAY
-  customerName: name,
-  requestedBy: currentStaff().name,
-  requestedAt: new Date().toISOString(),
-
-  // keep payload (this is correct)
+  createdAt: new Date().toISOString(),
+  requestedBy: currentStaff().name,   // 🔥 ADD THIS
+  requestedByName: currentStaff().name, // 🔥 ADD THIS (for compatibility)
   payload: {
-  customerName: name,   // 🔥 THIS FIXES "Customer missing"
-  phone,
-  nin,
-  address,
-  photo: photoBase64,
-  openingBalance: bal
-}
+    name,
+    phone,
+    nin,
+    address,
+    photo: photoBase64,
+    openingBalance: bal
+  }
 });
 
   await pushAudit(
