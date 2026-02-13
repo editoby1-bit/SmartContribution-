@@ -1387,8 +1387,8 @@ function renderApprovals() {
         }
 
         <!-- TEXT DETAILS -->
-        <div style="flex:1;min-width:180px;word-break:normal;">
-          <div style="font-weight:700;font-size:14px;white-space:nowrap;">
+        <div style="flex:1;min-width:0;max-width:100%;overflow:hidden;">
+          <div style="font-weight:700;font-size:14px;white-space:normal;">
             NEW CUSTOMER REQUEST
           </div>
 
@@ -1425,7 +1425,7 @@ function renderApprovals() {
       ${
         isApprover
           ? `
-            <div style="display:flex;gap:6px">
+            <div style="display:flex;gap:6px;flex-shrink:0">
               <button
                 class="btn"
                 onclick="processApproval('${a.id}', 'approve')">
