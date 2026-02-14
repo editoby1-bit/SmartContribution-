@@ -6874,141 +6874,116 @@ function renderMiniBar(amount, max) {
 }
 window.renderMiniBar = renderMiniBar;
 
- document.getElementById("btnNew").addEventListener("click", async () => {
+ // ===== OPEN CUSTOMER ACCOUNT (CLEAN SINGLE HANDLER) =====
+const btnNew = document.getElementById("btnNew");
 
-  const f = document.createElement("div");
-  f.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:10px">
-     
-      <input id="nName" class="input" placeholder="Full name *">
-      <input id="nPhone" class="input" placeholder="Phone number *">
-      <input id="nNIN" class="input" placeholder="NIN *">
-      <input id="nAddress" class="input" placeholder="Address *">
+if (btnNew) {
+  btnNew.onclick = async () => {
 
-      <div>
-        <label class="small muted">Customer Photo *</label>
-        <input
-          id="nPhoto"
-          type="file"
-          accept="image/*"
-          capture="user"
-          class="input">
+    const formWrapper = document.createElement("div");
+    formWrapper.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:10px">
+
+        <input id="nName" class="input" placeholder="Full name *">
+        <input id="nPhone" class="input" placeholder="Phone number *">
+        <input id="nNIN" class="input" placeholder="NIN *">
+        <input id="nAddress" class="input" placeholder="Address *">
+
+        <div>
+          <label class="small muted">Customer Photo *</label>
+          <input
+            id="nPhoto"
+            type="file"
+            accept="image/*"
+            class="input">
+        </div>
+
+        <button id="btnOpenCamera" class="btn ghost" type="button">
+          📷 Use Camera
+        </button>
+
+        <input id="nBal" class="input" placeholder="Opening balance (optional)">
       </div>
+    `;
 
-      <button id="btnOpenCamera" class="btn ghost" type="button">
-        📷 Use Camera
-      </button>
+    // Bind camera AFTER DOM exists
+    setTimeout(() => {
+      const camBtn = formWrapper.querySelector("#btnOpenCamera");
+      if (camBtn) {
+        camBtn.onclick = () => openCameraCapture(formWrapper);
+      }
+    }, 0);
 
-      <input id="nBal" class="input" placeholder="Opening balance (optional)">
-    </div>
-  `;
+    const ok = await openModalGeneric(
+      "Open Customer Account",
+      formWrapper,
+      "Create",
+      true
+    );
 
-  // 🔥 OPEN MODAL
-  const modalPromise = openModalGeneric(
-    "Open Customer Account",
-    f,
-    "Create",
-    true
-  );
+    if (!ok) return;
 
-  // 🎥 CAMERA BUTTON HOOK (YOU WERE MISSING THIS)
-  setTimeout(() => {
-    const camBtn = document.getElementById("btnOpenCamera");
-    if (camBtn) {
-      camBtn.onclick = async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (typeof openCameraCapture === "function") {
-          await openCameraCapture();
-        } else {
-          showToast("Camera not available on this device/browser");
-        }
-      };
+    const name = formWrapper.querySelector("#nName").value.trim();
+    const phone = formWrapper.querySelector("#nPhone").value.trim();
+    const nin = formWrapper.querySelector("#nNIN").value.trim();
+    const address = formWrapper.querySelector("#nAddress").value.trim();
+    const bal = Number(formWrapper.querySelector("#nBal").value || 0);
+    const photoFile = formWrapper.querySelector("#nPhoto").files[0];
+
+    if (!name) return showToast("Full name is required");
+    if (!phone) return showToast("Phone number is required");
+    if (!nin) return showToast("NIN is required");
+    if (!address) return showToast("Address is required");
+
+    let photoBase64 = "";
+
+    if (photoFile) {
+      photoBase64 = await toBase64(photoFile);
+    } else if (window.capturedKycPhoto) {
+      photoBase64 = window.capturedKycPhoto;
+    } else {
+      return showToast("Customer photo is required");
     }
-  }, 0);
 
-  const ok = await modalPromise;
-  if (!ok) return;
+    state.approvals.unshift({
+      id: uid("ap"),
+      type: "customer_creation",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      createdBy: currentStaff().id,
+      createdByName: currentStaff().name,
+      payload: {
+        name,
+        phone,
+        nin,
+        address,
+        photo: photoBase64,
+        openingBalance: bal
+      }
+    });
 
-  // 🔒 GET VALUES
-  const name = f.querySelector("#nName").value.trim();
-  const phone = f.querySelector("#nPhone").value.trim();
-  const nin = f.querySelector("#nNIN").value.trim();
-  const address = f.querySelector("#nAddress").value.trim();
-  const bal = Number(f.querySelector("#nBal").value || 0);
-  const photoFile = f.querySelector("#nPhoto").files[0];
+    window.capturedKycPhoto = null;
 
-  // 🚨 STRICT VALIDATION (NOW WILL NOT CRASH FLOW)
-  if (!name) {
-    showToast("Full name is required");
-    return;
-  }
+    await pushAudit(
+      currentStaff().name,
+      currentStaff().role,
+      "request_customer_creation",
+      name
+    );
 
-  if (!phone) {
-    showToast("Phone number is required");
-    return;
-  }
+    save();
 
-  if (!nin) {
-    showToast("NIN is required");
-    return;
-  }
+    // 🔥 INSTANT GLOBAL REFRESH (fixes dashboard + buttons delay)
+    renderCustomerKycApprovals();
+    renderDashboardApprovals();
+    renderApprovals();
+    renderCustomers();
+    renderDashboard();
+    renderAudit();
 
-  if (!address) {
-    showToast("Address is required");
-    return;
-  }
-
-  let photoBase64 = "";
-
-  if (photoFile) {
-    photoBase64 = await toBase64(photoFile);
-  } else if (window.capturedKycPhoto) {
-    photoBase64 = window.capturedKycPhoto;
-  } else {
-    showToast("Customer photo is required");
-    return;
-  }
-
-  // 📥 SEND TO KYC PIPELINE
-  state.approvals.unshift({
-    id: uid("ap"),
-    type: "customer_creation",
-    status: "pending",
-    createdAt: new Date().toISOString(),
-    createdBy: currentStaff().id,
-    createdByName: currentStaff().name,
-    payload: {
-      name,
-      phone,
-      nin,
-      address,
-      photo: photoBase64,
-      openingBalance: bal
-    }
-  });
-
-  window.capturedKycPhoto = null;
-
-  await pushAudit(
-    currentStaff().name,
-    currentStaff().role,
-    "request_customer_creation",
-    name
-  );
-
-  save();
-
-  // 🔥 INSTANT GLOBAL REFRESH (fix dashboard + buttons delay)
-  renderCustomerKycApprovals();
-  renderDashboardApprovals();
-  renderApprovals();
-  renderCustomers();
-  renderDashboard();
-  renderAudit();
-
-  showToast("Customer sent for approval");
-});
+    showToast("Customer sent for approval");
+  };
+}
 
 
 document.getElementById("btnVerify").addEventListener("click", async () => {
