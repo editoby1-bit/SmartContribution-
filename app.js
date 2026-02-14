@@ -3588,6 +3588,37 @@ function drillDownApproval(approval) {
   }, 100);
 }
 
+async function openCameraCapture() {
+  const video = document.createElement("video");
+  video.autoplay = true;
+  video.style.width = "100%";
+
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  video.srcObject = stream;
+
+  const wrapper = document.createElement("div");
+  wrapper.appendChild(video);
+
+  const ok = await openModalGeneric("Capture Photo", wrapper, "Capture");
+
+  if (!ok) {
+    stream.getTracks().forEach(t => t.stop());
+    return;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+
+  const dataUrl = canvas.toDataURL("image/png");
+
+  const input = document.getElementById("nPhoto");
+  if (input) input.dataset.captured = dataUrl;
+
+  stream.getTracks().forEach(t => t.stop());
+}
+
 function scoreApprovalRisk(app, cust) {
   let score = 0;
 
@@ -3892,6 +3923,7 @@ renderCustomers();
 refreshCustomerProfile();
 updateChartData();
 renderAudit();
+renderCustomerKycApprovals();
 
   showToast(
     action === "approve"
@@ -6595,18 +6627,12 @@ if (okText) {
     };
 
     if (okBtn) {
- okBtn.onclick = e => {
-   e.stopPropagation();
+  okBtn.onclick = e => {
+    e.stopPropagation();
 
-   // 🔒 VALIDATION HOOK (PREVENTS AUTO CLOSE)
-   if (typeof validateFn === "function") {
-     const isValid = validateFn();
-     if (!isValid) return; // 🚫 DO NOT CLOSE MODAL
-   }
-
-   cleanup();
-   resolve(true);
- };
+    // 🔥 DO NOT auto close — let caller decide
+    resolve(true);
+  };
 }
 
     if (showCancel) {
@@ -6821,16 +6847,20 @@ window.renderMiniBar = renderMiniBar;
 
       <input id="nAddress" class="input" placeholder="Address *" required>
 
-      <div>
-        <label class="small muted">Customer Photo *</label>
-        <input
-          id="nPhoto"
-          type="file"
-          accept="image/*"
-          capture="user"
-          class="input"
-          required>
-      </div>
+     <div>
+  <label class="small muted">Customer Photo *</label>
+
+  <input
+    id="nPhoto"
+    type="file"
+    accept="image/*"
+    class="input"
+    required>
+
+  <button type="button" class="btn small solid" onclick="openCameraCapture()">
+    📸 Use Camera
+  </button>
+</div>
 
       <input id="nBal" class="input" placeholder="Opening balance (optional)">
     </div>
