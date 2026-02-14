@@ -1255,3 +1255,8 @@ body.dashboard-active #app.container {
   overflow-wrap: break-word;
   word-break: break-word;
 }
+#customerKycApprovals {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}

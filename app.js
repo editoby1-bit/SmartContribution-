@@ -5911,7 +5911,8 @@ function renderDashboardApprovals() {
 
   box.innerHTML = "";
 
-  const pending = state.approvals.filter(a => a.status === "pending");
+  const pending = state.approvals
+  .filter(a => a.status === "pending" && a.type !== "customer_creation");
 
   if (!pending.length) {
     box.innerHTML = `<div class="small">No approvals requiring action</div>`;
@@ -6555,7 +6556,7 @@ window.updateAccountTotals = updateAccountTotals;
     setTimeout(() => (t.style.display = "none"), ms);
   }
 
-  function openModalGeneric(title, content, okText = "OK", showCancel = true) {
+  function openModalGeneric(title, content, okText = "OK", showCancel = true, validateFn = null) {
   const back = document.getElementById("txModalBack");
   const modal = document.getElementById("txModal");
   const titleEl = document.getElementById("txTitle");
@@ -6594,11 +6595,18 @@ if (okText) {
     };
 
     if (okBtn) {
-  okBtn.onclick = e => {
-    e.stopPropagation();
-    cleanup();
-    resolve(true);
-  };
+ okBtn.onclick = e => {
+   e.stopPropagation();
+
+   // 🔒 VALIDATION HOOK (PREVENTS AUTO CLOSE)
+   if (typeof validateFn === "function") {
+     const isValid = validateFn();
+     if (!isValid) return; // 🚫 DO NOT CLOSE MODAL
+   }
+
+   cleanup();
+   resolve(true);
+ };
 }
 
     if (showCancel) {
@@ -6825,20 +6833,20 @@ window.renderMiniBar = renderMiniBar;
 </div>
 `;
 
-    const ok = await openModalGeneric(
+   const ok = await openModalGeneric(
   "Create Customer",
-  f,
+  formHtml,
   "Create",
   () => {
-    const name = f.querySelector("#nName").value.trim();
-    const phone = f.querySelector("#nPhone").value.trim();
-    const nin = f.querySelector("#nNIN").value.trim();
-    const address = f.querySelector("#nAddress").value.trim();
-    const photoFile = f.querySelector("#nPhoto").files[0];
+    const name = document.getElementById("nName")?.value?.trim();
+    const phone = document.getElementById("nPhone")?.value?.trim();
+    const nin = document.getElementById("nNIN")?.value?.trim();
+    const address = document.getElementById("nAddress")?.value?.trim();
+    const photo = document.getElementById("nPhoto")?.files?.[0];
 
     if (!name) {
       showToast("Full name is required");
-      return false; // 🚫 PREVENT CLOSE
+      return false; // 🚫 STOPS MODAL FROM CLOSING
     }
     if (!phone) {
       showToast("Phone number is required");
@@ -6852,12 +6860,12 @@ window.renderMiniBar = renderMiniBar;
       showToast("Address is required");
       return false;
     }
-    if (!photoFile) {
+    if (!photo) {
       showToast("Customer photo is required");
       return false;
     }
 
-    return true; // ✅ Only closes if valid
+    return true; // ✅ Only closes when valid
   }
 );
 
@@ -6928,10 +6936,11 @@ await pushAudit(
 
 save();
 
-// 🔥 FORCE LIVE UI SYNC (NO MORE TOGGLE NEEDED)
-renderCustomerKycApprovals();
-renderDashboard();
-renderApprovals(); // keeps legacy approvals in sync
+// 🔥 FORCE FULL REAL-TIME UI SYNC (NO TOGGLE EVER AGAIN)
+renderCustomerKycApprovals();     // KYC panel
+renderDashboardApprovals();       // dashboard approvals section
+renderApprovals();                // legacy approvals list
+renderDashboard();                // full dashboard refresh
 
 showToast("Customer sent for approval");
 
@@ -6954,7 +6963,43 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
       const f = document.createElement("div");
       f.innerHTML =
         '<div class="small">Mobile contribution</div><div style="margin-top:8px"><input id="mobAmt" class="input" placeholder="Amount"/></div>';
-      const ok = await openModalGeneric("Contribute", f, "Contribute");
+      const ok = await openModalGeneric(
+  "Create Customer",
+  f,
+  "Create",
+  true,
+  () => {
+    const name = f.querySelector("#nName").value.trim();
+    const phone = f.querySelector("#nPhone").value.trim();
+    const nin = f.querySelector("#nNIN").value.trim();
+    const address = f.querySelector("#nAddress").value.trim();
+    const photoFile = f.querySelector("#nPhoto").files[0];
+
+    if (!name) {
+      showToast("Full name is required");
+      return false;
+    }
+    if (!phone) {
+      showToast("Phone number is required");
+      return false;
+    }
+    if (!nin) {
+      showToast("NIN is required");
+      return false;
+    }
+    if (!address) {
+      showToast("Address is required");
+      return false;
+    }
+    if (!photoFile) {
+      showToast("Customer photo is required");
+      return false;
+    }
+
+    return true; // ✅ modal closes ONLY when valid
+  }
+);
+
       if (ok) {
         const v = Number(f.querySelector("#mobAmt").value || 0);
         if (v <= 0) return showToast("Enter amount");
