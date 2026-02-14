@@ -1371,7 +1371,7 @@ function renderApprovals() {
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
             <div style="font-weight:700">
-              ${a.type.toUpperCase()} — ${fmt(a.amount)}
+              ${a.type.toUpperCase()} ${a.amount ? "— " + fmt(a.amount) : ""}
             </div>
 
             <div class="small">
@@ -1934,25 +1934,28 @@ function handleApprovalAction(id, action) {
   if (!approval) return;
 
   approval.status = action === "approve" ? "approved" : "rejected";
-  // 🎯 HANDLE CUSTOMER CREATION APPROVAL
+ // 🎯 HANDLE CUSTOMER KYC APPROVAL (CREATE REAL CUSTOMER)
 if (action === "approve" && approval.type === "customer_creation") {
 
-  const data = approval.payload;
+  const data = approval.payload || {};
 
   const newCustomer = {
-  id: uid("c"),
-  name: data.customerName, // 🔥 CRITICAL FIX
-  phone: data.phone,
-  nin: data.nin,
-  address: data.address,
-  photo: data.photo,
-  accountNumber: generateCustomerAccountNumber(),
-  balance: data.openingBalance || 0, // also better than 0
-  frozen: false,
-  transactions: []
-};
+    id: uid("c"),
+    name: data.name,
+    phone: data.phone,
+    nin: data.nin,
+    address: data.address,
+    photo: data.photo,
+    accountNumber: generateCustomerAccountNumber(), // starts from 1000 ✔
+    balance: Number(data.openingBalance || 0),
+    frozen: false,
+    transactions: []
+  };
 
   state.customers.push(newCustomer);
+
+  // mark approval as processed properly
+  approval.customerId = newCustomer.id;
 }
 
 approval.processedAt = new Date().toISOString();
@@ -6817,16 +6820,17 @@ window.renderMiniBar = renderMiniBar;
 `;
 
     const ok = await openModalGeneric("Create Customer", f, "Create");
-    if (ok) {
+    if (!ok) return;
 
-  const name = f.querySelector("#nName").value.trim();
+// 🔒 GET VALUES FIRST
+const name = f.querySelector("#nName").value.trim();
 const phone = f.querySelector("#nPhone").value.trim();
 const nin = f.querySelector("#nNIN").value.trim();
 const address = f.querySelector("#nAddress").value.trim();
 const bal = Number(f.querySelector("#nBal").value || 0);
 const photoFile = f.querySelector("#nPhoto").files[0];
 
-// 🔒 STRICT KYC VALIDATION (BANK-GRADE)
+// 🚨 STRICT VALIDATION (MODAL WILL NOT CLOSE)
 if (!name) {
   showToast("Full name is required");
   return;
@@ -6852,17 +6856,18 @@ if (!photoFile) {
   return;
 }
 
-let photoBase64 = await toBase64(photoFile);
+// 🔄 Convert photo AFTER validation
+let photoBase64 = "";
+photoBase64 = await toBase64(photoFile);
 
-  state.approvals = state.approvals || [];
-
-  state.approvals.unshift({
+// 📥 SEND TO KYC APPROVAL PIPELINE (NOT DIRECT CUSTOMER)
+state.approvals.unshift({
   id: uid("ap"),
   type: "customer_creation",
   status: "pending",
   createdAt: new Date().toISOString(),
-  requestedBy: currentStaff().name,   // 🔥 ADD THIS
-  requestedByName: currentStaff().name, // 🔥 ADD THIS (for compatibility)
+  createdBy: currentStaff().id,
+  createdByName: currentStaff().name,
   payload: {
     name,
     phone,
@@ -6873,17 +6878,17 @@ let photoBase64 = await toBase64(photoFile);
   }
 });
 
-  await pushAudit(
-    currentStaff().name,
-    currentStaff().role,
-    "request_customer_creation",
-    name
-  );
+await pushAudit(
+  currentStaff().name,
+  currentStaff().role,
+  "request_customer_creation",
+  name
+);
 
-  save();
-  renderApprovals();
-  showToast("Customer sent for approval");
-}
+save();
+renderCustomerKycApprovals();
+showToast("Customer sent for approval");
+
   });
   
 
