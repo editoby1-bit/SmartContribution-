@@ -597,24 +597,55 @@ function sumByAccounts(accountIds) {
 }
 
 
-function confirmApproval(approval, action) {
-  const cust = state.customers.find(c => c.id === approval.customerId);
+async function confirmApproval(a, action) {
 
-  openModalGeneric(
-    action === "approved" ? "Approve Withdrawal" : "Reject Withdrawal",
-    `
-      <div class="small"><strong>Customer:</strong> ${cust?.name || approval.customerId}</div>
-      <div class="small"><strong>Amount:</strong> ₦${Number(approval.amount).toLocaleString()}</div>
-      <div class="small"><strong>Requested by:</strong> ${approval.requestedBy}</div>
-      <div class="small" style="margin-top:8px">
-        Are you sure you want to <strong>${action}</strong> this withdrawal?
-      </div>
-    `,
-    action === "approved" ? "Approve" : "Reject"
-  ).then(ok => {
-    if (ok) handleApprovalAction(approval.id, action);
-  });
+  // 🔥 SPECIAL PIPELINE: CUSTOMER KYC APPROVAL
+  if (a.type === "customer_creation") {
+    const p = a.payload || {};
+
+    if (action === "approved") {
+      // Create the real customer AFTER approval
+      const newCustomer = {
+        id: uid("cust"),
+        name: p.name,
+        phone: p.phone,
+        nin: p.nin,
+        address: p.address,
+        photo: p.photo || "",
+        accountNumber: nextAccountNumber("savings"),
+        createdAt: new Date().toISOString(),
+        balance: Number(p.openingBalance || 0)
+      };
+
+      state.customers.unshift(newCustomer);
+    }
+
+    // mark approval as resolved
+    a.status = action === "approved" ? "approved" : "rejected";
+    a.resolvedAt = new Date().toISOString();
+    a.resolvedBy = currentStaff().id;
+
+    save();
+
+    // 🔥 FULL UI SYNC
+    renderCustomers();
+    renderCustomerKycApprovals();
+    renderDashboardApprovals();
+    renderApprovals();
+    renderDashboard();
+
+    showToast(
+      action === "approved"
+        ? "Customer account opened successfully"
+        : "Customer request rejected"
+    );
+
+    return; // 🛑 VERY IMPORTANT: stop transaction logic
+  }
+
+  // 👇 KEEP YOUR EXISTING TRANSACTION APPROVAL LOGIC BELOW THIS LINE
 }
+
 
 function computeTodayStaffTotals(staffId) {
   const _today = new Date().toISOString().slice(0, 10);
@@ -6862,7 +6893,7 @@ window.renderMiniBar = renderMiniBar;
   `;
 
   // 🔥 THIS WAS MISSING (VERY IMPORTANT)
-  const ok = await openModalGeneric("Create Customer", f, "Submit", true);
+  await openModalGeneric("Open Customer Account", f, "Create", true);
 
   // If user clicks cancel → stop
   if (!ok) return;
@@ -6939,7 +6970,7 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
       f.innerHTML =
         '<div class="small">Mobile contribution</div><div style="margin-top:8px"><input id="mobAmt" class="input" placeholder="Amount"/></div>';
       const ok = await openModalGeneric(
-  "Create Customer",
+  "Open Customer Account",
   f,
   "Create",
   true,
@@ -7187,46 +7218,39 @@ window.resetCODDraftForStaffDate = resetCODDraftForStaffDate;
 
 async function openCameraCapture() {
   try {
-    const video = document.createElement("video");
-    video.autoplay = true;
-    video.muted = true;
-    video.playsInline = true;
-    video.style.width = "100%";
-    video.style.maxHeight = "320px";
-    video.style.borderRadius = "10px";
-    video.style.background = "#000";
-
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
+      video: { facingMode: "user" },
       audio: false
     });
 
+    const container = document.createElement("div");
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+    container.style.gap = "10px";
+
+    const video = document.createElement("video");
+    video.autoplay = true;
+    video.playsInline = true;
+    video.style.width = "100%";
+    video.style.borderRadius = "12px";
     video.srcObject = stream;
 
-    // 🔥 CRITICAL: wait for video to be ready
-    await new Promise(resolve => {
-      video.onloadedmetadata = () => {
-        video.play();
-        resolve();
-      };
-    });
+    container.appendChild(video);
 
-    const wrapper = document.createElement("div");
-    wrapper.appendChild(video);
-
-    const ok = await openModalGeneric(
+    const captured = await openModalGeneric(
       "Capture Photo",
-      wrapper,
+      container,
       "Capture",
       true
     );
 
-    if (!ok) {
+    if (!captured) {
+      // stop camera if cancelled
       stream.getTracks().forEach(t => t.stop());
-      return;
+      return null;
     }
 
-    // 🔥 Now video is guaranteed to have dimensions
+    // 📸 Take snapshot
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
@@ -7234,19 +7258,18 @@ async function openCameraCapture() {
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const dataUrl = canvas.toDataURL("image/png");
-
-    const photoInput = document.getElementById("nPhoto");
-    if (photoInput) {
-      photoInput.dataset.captured = dataUrl; // store captured image
-    }
-
+    // 🛑 STOP CAMERA (fix black screen bug)
     stream.getTracks().forEach(t => t.stop());
 
-    showToast("Photo captured successfully");
+    // Convert to base64
+    const base64 = canvas.toDataURL("image/jpeg", 0.8);
+
+    return base64;
+
   } catch (err) {
     console.error("Camera error:", err);
-    showToast("Camera not supported or permission denied");
+    showToast("Camera access denied or not available");
+    return null;
   }
 }
 
