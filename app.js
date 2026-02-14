@@ -5890,22 +5890,22 @@ function openTransactionDetails(txId) {
 }
 
 function renderDashboard() {
-  const dash = document.getElementById("dashboardView");
-  if (!dash || dash.style.display !== "block") return; // 🛑 Do nothing if dashboard isn't visible
+ const dash = document.getElementById("dashboardView");
+ if (!dash) return; // 🔥 allow rendering even when hidden
 
-  if (!canViewDashboard()) return;
+ if (!canViewDashboard()) return;
 
-  renderDashboardKPIs();
-  renderAttentionRequired();
-  renderDashboardApprovals();
-  renderCustomerCreationApprovals();
-  renderDashboardActivity();
-  initCODDatePicker();
-  bindCODButtons();
-  renderManagerCODSummary(window.activeCODDate);
-  renderCODForDate(window.activeCODDate);
-  renderCustomerKycApprovals();
+ renderDashboardKPIs();
+ renderAttentionRequired();
+ renderDashboardApprovals();
+ renderDashboardActivity();
+ initCODDatePicker();
+ bindCODButtons();
+ renderManagerCODSummary(window.activeCODDate);
+ renderCODForDate(window.activeCODDate);
+ renderCustomerKycApprovals(); // stays last
 }
+
 
 function renderDashboardApprovals() {
   const box = document.getElementById("dashboardApprovals");
@@ -5913,8 +5913,10 @@ function renderDashboardApprovals() {
 
   box.innerHTML = "";
 
-  const pending = state.approvals
-  .filter(a => a.status === "pending" && a.type !== "customer_creation");
+  // 🔥 INCLUDE ALL approvals (including customer_creation)
+  const pending = (state.approvals || [])
+    .filter(a => a.status === "pending")
+    .sort((a, b) => new Date(b.createdAt || b.requestedAt) - new Date(a.createdAt || a.requestedAt));
 
   if (!pending.length) {
     box.innerHTML = `<div class="small">No approvals requiring action</div>`;
@@ -5923,39 +5925,62 @@ function renderDashboardApprovals() {
 
   pending.forEach(a => {
     const cust = state.customers.find(c => c.id === a.customerId);
-    const date = a.requestedAt
-  ? new Date(a.requestedAt).toLocaleString()
-  : "";
+    const isKyc = a.type === "customer_creation";
+    const p = a.payload || {};
+
+    const dateRaw = a.createdAt || a.requestedAt || a.date;
+    const date = dateRaw ? new Date(dateRaw).toLocaleString() : "—";
 
     const row = document.createElement("div");
     row.className = "approval-row large";
 
+    // 🔥 FIX: Only calculate risk for monetary transactions
     const risk =
-      a.amount >= 500000 ? `<span class="badge danger">HIGH RISK</span>` : "";
+      !isKyc && a.amount >= 500000
+        ? `<span class="badge danger">HIGH RISK</span>`
+        : "";
+
+    // 🔥 FIX: Proper title handling (NO NaN, NO weird chars)
+    const title = isKyc
+      ? "NEW CUSTOMER REQUEST"
+      : `${a.type.toUpperCase()} — ${fmt(a.amount)}`;
+
+    // 🔥 FIX: Proper customer name resolution
+    const customerName = isKyc
+      ? (p.name || "Pending KYC")
+      : (cust?.name || "Unknown");
+
+    // 🔥 FIX: Requested by field (supports both pipelines)
+    const requestedBy =
+      a.createdByName || a.requestedByName || a.requestedBy || "—";
 
     row.innerHTML = `
-  <div class="approval-info">
-    <strong>${a.type.toUpperCase()} — ₦${Number(a.amount).toLocaleString()}</strong> ${risk}
+      <div class="approval-info">
+        <strong>${title}</strong> ${risk}
 
-    <div class="small"><b>Customer:</b> ${cust?.name || a.customerId}</div>
-    <div class="small"><b>Requested by:</b> ${a.requestedByName || a.requestedBy}</div>
-    <div class="small muted">${date}</div>
-  </div>
+        <div class="small"><b>Customer:</b> ${customerName}</div>
+        <div class="small"><b>Requested by:</b> ${requestedBy}</div>
+        <div class="small muted">${date}</div>
+      </div>
 
-  <div class="approval-actions">
-    <button class="btn approve">Approve</button>
-    <button class="btn danger reject">Reject</button>
-  </div>
-`;
+      <div class="approval-actions">
+        <button class="btn approve">Approve</button>
+        <button class="btn danger reject">Reject</button>
+      </div>
+    `;
 
+    // 🔥 ACTION HANDLERS (supports KYC + transactions)
     row.querySelector(".approve").onclick = () =>
       confirmApproval(a, "approved");
 
     row.querySelector(".reject").onclick = () =>
       confirmApproval(a, "rejected");
 
+    // 🔥 Only open customer modal for real customers (not KYC yet)
     row.querySelector(".approval-info").onclick = () => {
-      if (cust) openCustomerModal(cust.id);
+      if (!isKyc && cust) {
+        openCustomerModal(cust.id);
+      }
     };
 
     box.appendChild(row);
@@ -7164,27 +7189,44 @@ async function openCameraCapture() {
   try {
     const video = document.createElement("video");
     video.autoplay = true;
+    video.muted = true;
     video.playsInline = true;
     video.style.width = "100%";
-    video.style.borderRadius = "8px";
+    video.style.maxHeight = "320px";
+    video.style.borderRadius = "10px";
+    video.style.background = "#000";
 
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" },
+      video: true,
       audio: false
     });
 
     video.srcObject = stream;
 
+    // 🔥 CRITICAL: wait for video to be ready
+    await new Promise(resolve => {
+      video.onloadedmetadata = () => {
+        video.play();
+        resolve();
+      };
+    });
+
     const wrapper = document.createElement("div");
     wrapper.appendChild(video);
 
-    const ok = await openModalGeneric("Capture Photo", wrapper, "Capture");
+    const ok = await openModalGeneric(
+      "Capture Photo",
+      wrapper,
+      "Capture",
+      true
+    );
 
     if (!ok) {
       stream.getTracks().forEach(t => t.stop());
       return;
     }
 
+    // 🔥 Now video is guaranteed to have dimensions
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
@@ -7196,20 +7238,20 @@ async function openCameraCapture() {
 
     const photoInput = document.getElementById("nPhoto");
     if (photoInput) {
-      photoInput.dataset.captured = dataUrl;
+      photoInput.dataset.captured = dataUrl; // store captured image
     }
 
     stream.getTracks().forEach(t => t.stop());
 
     showToast("Photo captured successfully");
   } catch (err) {
-    console.error(err);
-    showToast("Camera not available on this device");
+    console.error("Camera error:", err);
+    showToast("Camera not supported or permission denied");
   }
 }
 
-// 🔥 CRITICAL: expose globally for onclick
 window.openCameraCapture = openCameraCapture;
+
 
 // =========================
 // EXPOSE FOR DEBUG
