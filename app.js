@@ -6808,143 +6808,93 @@ function renderMiniBar(amount, max) {
 window.renderMiniBar = renderMiniBar;
 
   document.getElementById("btnNew").addEventListener("click", async () => {
-    const f = document.createElement("div");
-   f.innerHTML = `
-<div style="display:flex;flex-direction:column;gap:8px">
 
-  <input id="nName" class="input" placeholder="Full name *" required>
-  
-  <input id="nPhone" class="input" placeholder="Phone number *" required>
-  
-  <input id="nNIN" class="input" placeholder="NIN *" required>
-  
-  <input id="nAddress" class="input" placeholder="Address *" required>
+  const f = document.createElement("div");
+  f.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
 
-  <input 
-  id="nPhoto"
-  type="file"
-  accept="image/*"
-  capture="environment"
-  class="input"
-  required>
+      <input id="nName" class="input" placeholder="Full name *" required>
 
-  <input id="nBal" class="input" placeholder="Opening balance (optional)">
+      <input id="nPhone" class="input" placeholder="Phone number *" required>
 
-</div>
-`;
+      <input id="nNIN" class="input" placeholder="NIN *" required>
 
-   const ok = await openModalGeneric(
-  "Create Customer",
-  formHtml,
-  "Create",
-  () => {
-    const name = document.getElementById("nName")?.value?.trim();
-    const phone = document.getElementById("nPhone")?.value?.trim();
-    const nin = document.getElementById("nNIN")?.value?.trim();
-    const address = document.getElementById("nAddress")?.value?.trim();
-    const photo = document.getElementById("nPhoto")?.files?.[0];
+      <input id="nAddress" class="input" placeholder="Address *" required>
 
-    if (!name) {
-      showToast("Full name is required");
-      return false; // 🚫 STOPS MODAL FROM CLOSING
+      <div>
+        <label class="small muted">Customer Photo *</label>
+        <input
+          id="nPhoto"
+          type="file"
+          accept="image/*"
+          capture="user"
+          class="input"
+          required>
+      </div>
+
+      <input id="nBal" class="input" placeholder="Opening balance (optional)">
+    </div>
+  `;
+
+  // 🔥 THIS WAS MISSING (VERY IMPORTANT)
+  const ok = await openModalGeneric("Create Customer", f, "Submit", true);
+
+  // If user clicks cancel → stop
+  if (!ok) return;
+
+  // 🔒 GET VALUES
+  const name = f.querySelector("#nName").value.trim();
+  const phone = f.querySelector("#nPhone").value.trim();
+  const nin = f.querySelector("#nNIN").value.trim();
+  const address = f.querySelector("#nAddress").value.trim();
+  const bal = Number(f.querySelector("#nBal").value || 0);
+  const photoFile = f.querySelector("#nPhoto").files[0];
+
+  // 🚨 STRICT VALIDATION (BUT MODAL SHOULD NOT CLOSE ON ERROR)
+  if (!name) return showToast("Full name is required");
+  if (!phone) return showToast("Phone number is required");
+  if (!nin) return showToast("NIN is required");
+  if (!address) return showToast("Address is required");
+  if (!photoFile) return showToast("Customer photo is required");
+
+  // Convert photo AFTER validation
+  const photoBase64 = await toBase64(photoFile);
+
+  // 📥 SEND TO KYC APPROVAL PIPELINE
+  state.approvals.unshift({
+    id: uid("ap"),
+    type: "customer_creation",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    createdBy: currentStaff().id,
+    createdByName: currentStaff().name,
+    payload: {
+      name,
+      phone,
+      nin,
+      address,
+      photo: photoBase64,
+      openingBalance: bal
     }
-    if (!phone) {
-      showToast("Phone number is required");
-      return false;
-    }
-    if (!nin) {
-      showToast("NIN is required");
-      return false;
-    }
-    if (!address) {
-      showToast("Address is required");
-      return false;
-    }
-    if (!photo) {
-      showToast("Customer photo is required");
-      return false;
-    }
-
-    return true; // ✅ Only closes when valid
-  }
-);
-
-if (!ok) return;
-
-// 🔒 GET VALUES FIRST
-const name = f.querySelector("#nName").value.trim();
-const phone = f.querySelector("#nPhone").value.trim();
-const nin = f.querySelector("#nNIN").value.trim();
-const address = f.querySelector("#nAddress").value.trim();
-const bal = Number(f.querySelector("#nBal").value || 0);
-const photoFile = f.querySelector("#nPhoto").files[0];
-
-// 🚨 STRICT VALIDATION (MODAL WILL NOT CLOSE)
-if (!name) {
-  showToast("Full name is required");
-  return;
-}
-
-if (!phone) {
-  showToast("Phone number is required");
-  return;
-}
-
-if (!nin) {
-  showToast("NIN is required");
-  return;
-}
-
-if (!address) {
-  showToast("Address is required");
-  return;
-}
-
-if (!photoFile) {
-  showToast("Customer photo is required");
-  return;
-}
-
-// 🔄 Convert photo AFTER validation
-let photoBase64 = "";
-photoBase64 = await toBase64(photoFile);
-
-// 📥 SEND TO KYC APPROVAL PIPELINE (NOT DIRECT CUSTOMER)
-state.approvals.unshift({
-  id: uid("ap"),
-  type: "customer_creation",
-  status: "pending",
-  createdAt: new Date().toISOString(),
-  createdBy: currentStaff().id,
-  createdByName: currentStaff().name,
-  payload: {
-    name,
-    phone,
-    nin,
-    address,
-    photo: photoBase64,
-    openingBalance: bal
-  }
-});
-
-await pushAudit(
-  currentStaff().name,
-  currentStaff().role,
-  "request_customer_creation",
-  name
-);
-
-save();
-
-// 🔥 FORCE FULL REAL-TIME UI SYNC (NO TOGGLE EVER AGAIN)
-renderCustomerKycApprovals();     // KYC panel
-renderDashboardApprovals();       // dashboard approvals section
-renderApprovals();                // legacy approvals list
-renderDashboard();                // full dashboard refresh
-
-showToast("Customer sent for approval");
-
   });
+
+  await pushAudit(
+    currentStaff().name,
+    currentStaff().role,
+    "request_customer_creation",
+    name
+  );
+
+  save();
+
+  // 🔥 FORCE LIVE UI (fixes toggle issue)
+  renderCustomerKycApprovals();
+  renderApprovals();
+  renderDashboard();
+
+  showToast("Customer sent for approval");
+
+});
   
 
 document.getElementById("btnVerify").addEventListener("click", async () => {
