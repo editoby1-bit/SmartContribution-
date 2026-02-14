@@ -2004,18 +2004,13 @@ approval.processedAt = new Date().toISOString();
 
   save();
 
-  // 🔁 FORCE FULL UI REFRESH
-  renderApprovals();
-  renderAudit();
-  buildChart();
-  updateChartData();
-  renderDashboard();
-  renderDashboard();
-  bindCODButtons();
-  renderCustomerKycApprovals();
+// 🔥 GLOBAL INSTANT UI SYNC (NO TOGGLE NEEDED EVER AGAIN)
+forceFullUIRefresh();
+};
 
-}
-
+window.processApproval = function(id, action) {
+  handleApprovalAction(id, action);
+};
 
 
 // ================================
@@ -2035,6 +2030,16 @@ function ensureEmpowermentModel(c) {
       history: []
     };
   }
+}
+
+function forceFullUIRefresh() {
+  renderCustomers();
+  renderApprovals();
+  renderCustomerKycApprovals();
+  renderDashboardApprovals();
+  renderDashboardActivity && renderDashboardActivity();
+  renderAudit && renderAudit();
+  renderDashboard();
 }
 
 function calculateEmpowermentSchedule(c) {
@@ -5920,6 +5925,16 @@ function openTransactionDetails(txId) {
 );
 }
 
+function forceFullUIRefresh() {
+  renderCustomers();
+  renderApprovals();
+  renderCustomerKycApprovals();
+  renderDashboardApprovals();
+  renderDashboardActivity && renderDashboardActivity();
+  renderAudit && renderAudit();
+  renderDashboard();
+}
+
 function renderDashboard() {
  const dash = document.getElementById("dashboardView");
  if (!dash) return; // 🔥 allow rendering even when hidden
@@ -6859,46 +6874,46 @@ function renderMiniBar(amount, max) {
 }
 window.renderMiniBar = renderMiniBar;
 
-  document.getElementById("btnNew").addEventListener("click", async () => {
+ document.getElementById("btnNew").addEventListener("click", async () => {
 
   const f = document.createElement("div");
   f.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px">
+      
+      <input id="nName" class="input" placeholder="Full name *">
+      <input id="nPhone" class="input" placeholder="Phone number *">
+      <input id="nNIN" class="input" placeholder="NIN *">
+      <input id="nAddress" class="input" placeholder="Address *">
 
-      <input id="nName" class="input" placeholder="Full name *" required>
+      <div>
+        <label class="small muted">Customer Photo *</label>
+        <input
+          id="nPhoto"
+          type="file"
+          accept="image/*"
+          capture="user"
+          class="input">
+      </div>
 
-      <input id="nPhone" class="input" placeholder="Phone number *" required>
-
-      <input id="nNIN" class="input" placeholder="NIN *" required>
-
-      <input id="nAddress" class="input" placeholder="Address *" required>
-
-     <div>
-  <label class="small muted">Customer Photo *</label>
-
-  <input
-    id="nPhoto"
-    type="file"
-    accept="image/*"
-    class="input"
-    required>
-
-  <button type="button" class="btn small solid" onclick="openCameraCapture()">
-    📸 Use Camera
-  </button>
-</div>
+      <button id="btnOpenCamera" class="btn ghost" type="button">
+        📷 Use Camera
+      </button>
 
       <input id="nBal" class="input" placeholder="Opening balance (optional)">
     </div>
   `;
 
-  // 🔥 THIS WAS MISSING (VERY IMPORTANT)
-  await openModalGeneric("Open Customer Account", f, "Create", true);
+  // 🔥 OPEN MODAL (THIS WAS MISSING → caused "ok is not defined")
+  const ok = await openModalGeneric(
+    "Open Customer Account",
+    f,
+    "Create",
+    true
+  );
 
-  // If user clicks cancel → stop
   if (!ok) return;
 
-  // 🔒 GET VALUES
+  // 🔒 GET VALUES AFTER USER CLICKS CREATE
   const name = f.querySelector("#nName").value.trim();
   const phone = f.querySelector("#nPhone").value.trim();
   const nin = f.querySelector("#nNIN").value.trim();
@@ -6906,15 +6921,21 @@ window.renderMiniBar = renderMiniBar;
   const bal = Number(f.querySelector("#nBal").value || 0);
   const photoFile = f.querySelector("#nPhoto").files[0];
 
-  // 🚨 STRICT VALIDATION (BUT MODAL SHOULD NOT CLOSE ON ERROR)
+  // 🚨 STRICT VALIDATION (NOW MODAL WILL NOT CLOSE APP CRASH)
   if (!name) return showToast("Full name is required");
   if (!phone) return showToast("Phone number is required");
   if (!nin) return showToast("NIN is required");
   if (!address) return showToast("Address is required");
-  if (!photoFile) return showToast("Customer photo is required");
 
-  // Convert photo AFTER validation
-  const photoBase64 = await toBase64(photoFile);
+  let photoBase64 = "";
+
+  if (photoFile) {
+    photoBase64 = await toBase64(photoFile);
+  } else if (window.capturedKycPhoto) {
+    photoBase64 = window.capturedKycPhoto;
+  } else {
+    return showToast("Customer photo is required");
+  }
 
   // 📥 SEND TO KYC APPROVAL PIPELINE
   state.approvals.unshift({
@@ -6934,6 +6955,8 @@ window.renderMiniBar = renderMiniBar;
     }
   });
 
+  window.capturedKycPhoto = null;
+
   await pushAudit(
     currentStaff().name,
     currentStaff().role,
@@ -6943,14 +6966,13 @@ window.renderMiniBar = renderMiniBar;
 
   save();
 
-  // 🔥 FORCE LIVE UI (fixes toggle issue)
-  renderCustomerKycApprovals();
-  renderApprovals();
-  renderDashboard();
+// 🔥 GLOBAL SYNC (fixes dashboard not updating instantly)
+forceFullUIRefresh();
 
-  showToast("Customer sent for approval");
+showToast("Customer sent for approval");
 
 });
+
   
 
 document.getElementById("btnVerify").addEventListener("click", async () => {
@@ -7219,7 +7241,7 @@ window.resetCODDraftForStaffDate = resetCODDraftForStaffDate;
 async function openCameraCapture() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" },
+      video: true,
       audio: false
     });
 
@@ -7237,20 +7259,21 @@ async function openCameraCapture() {
 
     container.appendChild(video);
 
-    const captured = await openModalGeneric(
+    const ok = await openModalGeneric(
       "Capture Photo",
       container,
       "Capture",
       true
     );
 
-    if (!captured) {
-      // stop camera if cancelled
+    if (!ok) {
       stream.getTracks().forEach(t => t.stop());
       return null;
     }
 
-    // 📸 Take snapshot
+    // Wait for video to be ready (CRITICAL for black screen fix)
+    await new Promise(res => setTimeout(res, 300));
+
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
@@ -7258,17 +7281,20 @@ async function openCameraCapture() {
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // 🛑 STOP CAMERA (fix black screen bug)
     stream.getTracks().forEach(t => t.stop());
 
-    // Convert to base64
-    const base64 = canvas.toDataURL("image/jpeg", 0.8);
+    const base64 = canvas.toDataURL("image/jpeg", 0.9);
+
+    // Store globally for the form
+    window.capturedKycPhoto = base64;
+
+    showToast("Photo captured successfully");
 
     return base64;
 
   } catch (err) {
-    console.error("Camera error:", err);
-    showToast("Camera access denied or not available");
+    console.error(err);
+    showToast("Camera not available on this device/browser");
     return null;
   }
 }
