@@ -6915,13 +6915,15 @@ if (btnNew) {
     }, 0);
 
     const ok = await openModalGeneric(
-      "Open Customer Account",
-      formWrapper,
-      "Create",
-      true
-    );
+  "Open Customer Account",
+  f,
+  "Create",
+  true
+);
 
-    if (!ok) return;
+console.log("Modal OK result:", ok); // ADD THIS LINE
+
+if (!ok) return;
 
     const name = formWrapper.querySelector("#nName").value.trim();
     const phone = formWrapper.querySelector("#nPhone").value.trim();
