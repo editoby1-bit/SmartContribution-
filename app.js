@@ -5926,12 +5926,13 @@ function openTransactionDetails(txId) {
 }
 
 function forceFullUIRefresh() {
- renderCustomerKycApprovals();
-renderDashboardApprovals();
-renderApprovals();
-renderCustomers();
-renderDashboard();
-renderAudit();
+  renderCustomers();
+  renderApprovals();
+  renderCustomerKycApprovals();
+  renderDashboardApprovals();
+  renderDashboardActivity && renderDashboardActivity();
+  renderAudit && renderAudit();
+  renderDashboard();
 }
 
 function renderDashboard() {
