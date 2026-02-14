@@ -5926,13 +5926,12 @@ function openTransactionDetails(txId) {
 }
 
 function forceFullUIRefresh() {
-  renderCustomers();
-  renderApprovals();
-  renderCustomerKycApprovals();
-  renderDashboardApprovals();
-  renderDashboardActivity && renderDashboardActivity();
-  renderAudit && renderAudit();
-  renderDashboard();
+ renderCustomerKycApprovals();
+renderDashboardApprovals();
+renderApprovals();
+renderCustomers();
+renderDashboard();
+renderAudit();
 }
 
 function renderDashboard() {
@@ -6879,7 +6878,7 @@ window.renderMiniBar = renderMiniBar;
   const f = document.createElement("div");
   f.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px">
-      
+     
       <input id="nName" class="input" placeholder="Full name *">
       <input id="nPhone" class="input" placeholder="Phone number *">
       <input id="nNIN" class="input" placeholder="NIN *">
@@ -6903,17 +6902,34 @@ window.renderMiniBar = renderMiniBar;
     </div>
   `;
 
-  // 🔥 OPEN MODAL (THIS WAS MISSING → caused "ok is not defined")
-  const ok = await openModalGeneric(
+  // 🔥 OPEN MODAL
+  const modalPromise = openModalGeneric(
     "Open Customer Account",
     f,
     "Create",
     true
   );
 
+  // 🎥 CAMERA BUTTON HOOK (YOU WERE MISSING THIS)
+  setTimeout(() => {
+    const camBtn = document.getElementById("btnOpenCamera");
+    if (camBtn) {
+      camBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof openCameraCapture === "function") {
+          await openCameraCapture();
+        } else {
+          showToast("Camera not available on this device/browser");
+        }
+      };
+    }
+  }, 0);
+
+  const ok = await modalPromise;
   if (!ok) return;
 
-  // 🔒 GET VALUES AFTER USER CLICKS CREATE
+  // 🔒 GET VALUES
   const name = f.querySelector("#nName").value.trim();
   const phone = f.querySelector("#nPhone").value.trim();
   const nin = f.querySelector("#nNIN").value.trim();
@@ -6921,11 +6937,26 @@ window.renderMiniBar = renderMiniBar;
   const bal = Number(f.querySelector("#nBal").value || 0);
   const photoFile = f.querySelector("#nPhoto").files[0];
 
-  // 🚨 STRICT VALIDATION (NOW MODAL WILL NOT CLOSE APP CRASH)
-  if (!name) return showToast("Full name is required");
-  if (!phone) return showToast("Phone number is required");
-  if (!nin) return showToast("NIN is required");
-  if (!address) return showToast("Address is required");
+  // 🚨 STRICT VALIDATION (NOW WILL NOT CRASH FLOW)
+  if (!name) {
+    showToast("Full name is required");
+    return;
+  }
+
+  if (!phone) {
+    showToast("Phone number is required");
+    return;
+  }
+
+  if (!nin) {
+    showToast("NIN is required");
+    return;
+  }
+
+  if (!address) {
+    showToast("Address is required");
+    return;
+  }
 
   let photoBase64 = "";
 
@@ -6934,10 +6965,11 @@ window.renderMiniBar = renderMiniBar;
   } else if (window.capturedKycPhoto) {
     photoBase64 = window.capturedKycPhoto;
   } else {
-    return showToast("Customer photo is required");
+    showToast("Customer photo is required");
+    return;
   }
 
-  // 📥 SEND TO KYC APPROVAL PIPELINE
+  // 📥 SEND TO KYC PIPELINE
   state.approvals.unshift({
     id: uid("ap"),
     type: "customer_creation",
@@ -6966,14 +6998,17 @@ window.renderMiniBar = renderMiniBar;
 
   save();
 
-// 🔥 GLOBAL SYNC (fixes dashboard not updating instantly)
-forceFullUIRefresh();
+  // 🔥 INSTANT GLOBAL REFRESH (fix dashboard + buttons delay)
+  renderCustomerKycApprovals();
+  renderDashboardApprovals();
+  renderApprovals();
+  renderCustomers();
+  renderDashboard();
+  renderAudit();
 
-showToast("Customer sent for approval");
-
+  showToast("Customer sent for approval");
 });
 
-  
 
 document.getElementById("btnVerify").addEventListener("click", async () => {
     const probs = await verifyAudit();
