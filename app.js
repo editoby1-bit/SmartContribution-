@@ -6875,70 +6875,66 @@ function renderMiniBar(amount, max) {
 window.renderMiniBar = renderMiniBar;
 
  // ===== OPEN CUSTOMER ACCOUNT (CLEAN SINGLE HANDLER) =====
-const btnNew = document.getElementById("btnNew");
+document.getElementById("btnNew").addEventListener("click", async () => {
 
-if (btnNew) {
-  btnNew.onclick = async () => {
+  // 🧱 CREATE FORM CONTAINER (single source of truth)
+  const formWrapper = document.createElement("div");
 
-    const formWrapper = document.createElement("div");
-    formWrapper.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:10px">
+  formWrapper.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+     
+      <input id="nName" class="input" placeholder="Full name *">
+      <input id="nPhone" class="input" placeholder="Phone number *">
+      <input id="nNIN" class="input" placeholder="NIN *">
+      <input id="nAddress" class="input" placeholder="Address *">
 
-        <input id="nName" class="input" placeholder="Full name *">
-        <input id="nPhone" class="input" placeholder="Phone number *">
-        <input id="nNIN" class="input" placeholder="NIN *">
-        <input id="nAddress" class="input" placeholder="Address *">
-
-        <div>
-          <label class="small muted">Customer Photo *</label>
-          <input
-            id="nPhoto"
-            type="file"
-            accept="image/*"
-            class="input">
-        </div>
-
-        <button id="btnOpenCamera" class="btn ghost" type="button">
-          📷 Use Camera
-        </button>
-
-        <input id="nBal" class="input" placeholder="Opening balance (optional)">
+      <div>
+        <label class="small muted">Customer Photo *</label>
+        <input
+          id="nPhoto"
+          type="file"
+          accept="image/*"
+          capture="user"
+          class="input">
       </div>
-    `;
 
-    // Bind camera AFTER DOM exists
-    setTimeout(() => {
-      const camBtn = formWrapper.querySelector("#btnOpenCamera");
-      if (camBtn) {
-        camBtn.onclick = () => openCameraCapture(formWrapper);
-      }
-    }, 0);
+      <button id="btnOpenCamera" class="btn ghost" type="button">
+        📷 Use Camera
+      </button>
 
-    const ok = await openModalGeneric(
-  "Open Customer Account",
-  f,
-  "Create",
-  true
-);
+      <input id="nBal" class="input" placeholder="Opening balance (optional)">
+    </div>
+  `;
 
-console.log("Modal OK result:", ok); // ADD THIS LINE
+  // 🔥 OPEN MODAL (CRITICAL — uses SAME variable)
+  const ok = await openModalGeneric(
+    "Open Customer Account",
+    formWrapper,
+    "Create",
+    true
+  );
 
-if (!ok) return;
+  console.log("Modal OK result:", ok);
 
-    const name = formWrapper.querySelector("#nName").value.trim();
-    const phone = formWrapper.querySelector("#nPhone").value.trim();
-    const nin = formWrapper.querySelector("#nNIN").value.trim();
-    const address = formWrapper.querySelector("#nAddress").value.trim();
-    const bal = Number(formWrapper.querySelector("#nBal").value || 0);
-    const photoFile = formWrapper.querySelector("#nPhoto").files[0];
+  if (!ok) return;
 
-    if (!name) return showToast("Full name is required");
-    if (!phone) return showToast("Phone number is required");
-    if (!nin) return showToast("NIN is required");
-    if (!address) return showToast("Address is required");
+  // 📥 GET VALUES (MUST use formWrapper, NOT f)
+  const name = formWrapper.querySelector("#nName").value.trim();
+  const phone = formWrapper.querySelector("#nPhone").value.trim();
+  const nin = formWrapper.querySelector("#nNIN").value.trim();
+  const address = formWrapper.querySelector("#nAddress").value.trim();
+  const bal = Number(formWrapper.querySelector("#nBal").value || 0);
+  const photoFile = formWrapper.querySelector("#nPhoto").files[0];
 
-    let photoBase64 = "";
+  // 🔒 VALIDATION (modal stays open now — already fixed earlier)
+  if (!name) return showToast("Full name is required");
+  if (!phone) return showToast("Phone number is required");
+  if (!nin) return showToast("NIN is required");
+  if (!address) return showToast("Address is required");
 
+  let photoBase64 = "";
+
+  try {
     if (photoFile) {
       photoBase64 = await toBase64(photoFile);
     } else if (window.capturedKycPhoto) {
@@ -6947,6 +6943,7 @@ if (!ok) return;
       return showToast("Customer photo is required");
     }
 
+    // 📥 PUSH TO KYC PIPELINE
     state.approvals.unshift({
       id: uid("ap"),
       type: "customer_creation",
@@ -6975,17 +6972,22 @@ if (!ok) return;
 
     save();
 
-    // 🔥 INSTANT GLOBAL REFRESH (fixes dashboard + buttons delay)
+    // 🔥 SAFE GLOBAL REFRESH (NO undefined functions)
     renderCustomerKycApprovals();
     renderDashboardApprovals();
     renderApprovals();
     renderCustomers();
-    renderDashboard();
     renderAudit();
+    renderDashboard();
 
     showToast("Customer sent for approval");
-  };
-}
+
+  } catch (err) {
+    console.error("CREATE CUSTOMER ERROR:", err);
+    showToast("Error creating customer request");
+  }
+
+});
 
 
 document.getElementById("btnVerify").addEventListener("click", async () => {
