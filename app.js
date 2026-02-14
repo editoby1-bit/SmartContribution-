@@ -3588,36 +3588,6 @@ function drillDownApproval(approval) {
   }, 100);
 }
 
-async function openCameraCapture() {
-  const video = document.createElement("video");
-  video.autoplay = true;
-  video.style.width = "100%";
-
-  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-  video.srcObject = stream;
-
-  const wrapper = document.createElement("div");
-  wrapper.appendChild(video);
-
-  const ok = await openModalGeneric("Capture Photo", wrapper, "Capture");
-
-  if (!ok) {
-    stream.getTracks().forEach(t => t.stop());
-    return;
-  }
-
-  const canvas = document.createElement("canvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext("2d").drawImage(video, 0, 0);
-
-  const dataUrl = canvas.toDataURL("image/png");
-
-  const input = document.getElementById("nPhoto");
-  if (input) input.dataset.captured = dataUrl;
-
-  stream.getTracks().forEach(t => t.stop());
-}
 
 function scoreApprovalRisk(app, cust) {
   let score = 0;
@@ -7190,6 +7160,56 @@ function resetCODDraftForStaffDate(staffId, dateStr) {
 }
 window.resetCODDraftForStaffDate = resetCODDraftForStaffDate;
 
+async function openCameraCapture() {
+  try {
+    const video = document.createElement("video");
+    video.autoplay = true;
+    video.playsInline = true;
+    video.style.width = "100%";
+    video.style.borderRadius = "8px";
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
+      audio: false
+    });
+
+    video.srcObject = stream;
+
+    const wrapper = document.createElement("div");
+    wrapper.appendChild(video);
+
+    const ok = await openModalGeneric("Capture Photo", wrapper, "Capture");
+
+    if (!ok) {
+      stream.getTracks().forEach(t => t.stop());
+      return;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL("image/png");
+
+    const photoInput = document.getElementById("nPhoto");
+    if (photoInput) {
+      photoInput.dataset.captured = dataUrl;
+    }
+
+    stream.getTracks().forEach(t => t.stop());
+
+    showToast("Photo captured successfully");
+  } catch (err) {
+    console.error(err);
+    showToast("Camera not available on this device");
+  }
+}
+
+// 🔥 CRITICAL: expose globally for onclick
+window.openCameraCapture = openCameraCapture;
 
 // =========================
 // EXPOSE FOR DEBUG
