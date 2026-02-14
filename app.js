@@ -6812,15 +6812,56 @@ window.renderMiniBar = renderMiniBar;
   
   <input id="nAddress" class="input" placeholder="Address *" required>
 
-  <input id="nPhoto" type="file" accept="image/*" class="input" required>
+  <input 
+  id="nPhoto"
+  type="file"
+  accept="image/*"
+  capture="environment"
+  class="input"
+  required>
 
   <input id="nBal" class="input" placeholder="Opening balance (optional)">
 
 </div>
 `;
 
-    const ok = await openModalGeneric("Create Customer", f, "Create");
-    if (!ok) return;
+    const ok = await openModalGeneric(
+  "Create Customer",
+  f,
+  "Create",
+  () => {
+    const name = f.querySelector("#nName").value.trim();
+    const phone = f.querySelector("#nPhone").value.trim();
+    const nin = f.querySelector("#nNIN").value.trim();
+    const address = f.querySelector("#nAddress").value.trim();
+    const photoFile = f.querySelector("#nPhoto").files[0];
+
+    if (!name) {
+      showToast("Full name is required");
+      return false; // 🚫 PREVENT CLOSE
+    }
+    if (!phone) {
+      showToast("Phone number is required");
+      return false;
+    }
+    if (!nin) {
+      showToast("NIN is required");
+      return false;
+    }
+    if (!address) {
+      showToast("Address is required");
+      return false;
+    }
+    if (!photoFile) {
+      showToast("Customer photo is required");
+      return false;
+    }
+
+    return true; // ✅ Only closes if valid
+  }
+);
+
+if (!ok) return;
 
 // 🔒 GET VALUES FIRST
 const name = f.querySelector("#nName").value.trim();
@@ -6886,7 +6927,12 @@ await pushAudit(
 );
 
 save();
+
+// 🔥 FORCE LIVE UI SYNC (NO MORE TOGGLE NEEDED)
 renderCustomerKycApprovals();
+renderDashboard();
+renderApprovals(); // keeps legacy approvals in sync
+
 showToast("Customer sent for approval");
 
   });
