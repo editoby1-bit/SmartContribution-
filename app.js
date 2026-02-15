@@ -3729,6 +3729,101 @@ if (!canApprove()) {
     return;
   }
 
+// 🔥 SPECIAL PIPELINE: CUSTOMER KYC APPROVAL (CRITICAL FIX)
+if (app.type === "customer_creation") {
+  const p = app.payload || {};
+
+  const review = document.createElement("div");
+  review.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:12px">
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        ${
+          p.photo
+            ? `<img src="${p.photo}"
+                 style="width:70px;height:70px;border-radius:12px;
+                        object-fit:cover;border:1px solid #e5e7eb;">`
+            : `<div style="width:70px;height:70px;border-radius:12px;
+                           background:#f3f4f6;display:flex;
+                           align-items:center;justify-content:center;
+                           font-size:11px;color:#9ca3af;">
+                 No Photo
+               </div>`
+        }
+
+        <div style="flex:1">
+          <div><b>Name:</b> ${p.name || "—"}</div>
+          <div><b>Phone:</b> ${p.phone || "—"}</div>
+          <div><b>NIN:</b> ${p.nin || "—"}</div>
+          <div><b>Address:</b> ${p.address || "—"}</div>
+          <div><b>Opening Balance:</b> ${fmt(Number(p.openingBalance || 0))}</div>
+        </div>
+      </div>
+
+      <div class="small muted">
+        Review customer details before opening account.
+      </div>
+    </div>
+  `;
+
+  const ok = await openModalGeneric(
+    "Review & Approve New Customer",
+    review,
+    action === "approve" ? "Approve & Open Account" : "Reject",
+    true
+  );
+
+  if (!ok) return;
+
+  if (action === "approve") {
+    // 🔢 ACCOUNT NUMBER STARTS FROM 1000 (CLIENT REQUIREMENT)
+    const existingNumbers = state.customers
+      .map(c => Number(c.accountNumber) || 999);
+
+    const max = existingNumbers.length
+      ? Math.max(...existingNumbers)
+      : 999;
+
+    const newCustomer = {
+      id: uid("cust"),
+      accountNumber: String(max + 1), // 1000, 1001, 1002...
+      name: p.name || "Unnamed",
+      phone: p.phone || "",
+      nin: p.nin || "",
+      address: p.address || "",
+      photo: p.photo || "",
+      balance: Number(p.openingBalance || 0),
+      createdAt: new Date().toISOString(),
+      createdBy: app.createdByName || "System"
+    };
+
+    state.customers.push(newCustomer);
+    app.resolvedCustomerId = newCustomer.id;
+  }
+
+  app.status = action === "approve" ? "approved" : "rejected";
+  app.processedBy = staff.name;
+  app.processedAt = new Date().toISOString();
+
+  save();
+
+  // 🔥 INSTANT UI SYNC (fixes dashboard + buttons delay)
+  renderCustomers();
+  renderCustomerKycApprovals();
+  renderDashboardApprovals();
+  renderApprovals();
+  renderDashboard();
+  renderAudit();
+
+  showToast(
+    action === "approve"
+      ? "Customer account opened successfully"
+      : "Customer request rejected"
+  );
+
+  return; // 🚨 CRITICAL: stops "Customer missing" logic
+}
+
   const cust = state.customers.find(c => c.id === app.customerId);
   if (!cust) return showToast("Customer missing");
  
