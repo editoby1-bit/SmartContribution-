@@ -6875,14 +6875,12 @@ function renderMiniBar(amount, max) {
 window.renderMiniBar = renderMiniBar;
 
  // ===== OPEN CUSTOMER ACCOUNT (CLEAN SINGLE HANDLER) =====
-document.getElementById("btnNew").addEventListener("click", async () => {
+ddocument.getElementById("btnNew").addEventListener("click", async () => {
 
-  // 🧱 CREATE FORM CONTAINER (single source of truth)
   const formWrapper = document.createElement("div");
-
   formWrapper.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px">
-     
+      
       <input id="nName" class="input" placeholder="Full name *">
       <input id="nPhone" class="input" placeholder="Phone number *">
       <input id="nNIN" class="input" placeholder="NIN *">
@@ -6906,7 +6904,7 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     </div>
   `;
 
-  // 🔥 OPEN MODAL (CRITICAL — uses SAME variable)
+  // Open modal (PROMISE MODE)
   const ok = await openModalGeneric(
     "Open Customer Account",
     formWrapper,
@@ -6914,11 +6912,9 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     true
   );
 
-  console.log("Modal OK result:", ok);
-
   if (!ok) return;
 
-  // 📥 GET VALUES (MUST use formWrapper, NOT f)
+  // GET VALUES (ONLY from formWrapper — NOT f)
   const name = formWrapper.querySelector("#nName").value.trim();
   const phone = formWrapper.querySelector("#nPhone").value.trim();
   const nin = formWrapper.querySelector("#nNIN").value.trim();
@@ -6926,7 +6922,7 @@ document.getElementById("btnNew").addEventListener("click", async () => {
   const bal = Number(formWrapper.querySelector("#nBal").value || 0);
   const photoFile = formWrapper.querySelector("#nPhoto").files[0];
 
-  // 🔒 VALIDATION (modal stays open now — already fixed earlier)
+  // Validation (modal stays open because openModalGeneric already returned true)
   if (!name) return showToast("Full name is required");
   if (!phone) return showToast("Phone number is required");
   if (!nin) return showToast("NIN is required");
@@ -6934,58 +6930,44 @@ document.getElementById("btnNew").addEventListener("click", async () => {
 
   let photoBase64 = "";
 
-  try {
-    if (photoFile) {
-      photoBase64 = await toBase64(photoFile);
-    } else if (window.capturedKycPhoto) {
-      photoBase64 = window.capturedKycPhoto;
-    } else {
-      return showToast("Customer photo is required");
-    }
-
-    // 📥 PUSH TO KYC PIPELINE
-    state.approvals.unshift({
-      id: uid("ap"),
-      type: "customer_creation",
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      createdBy: currentStaff().id,
-      createdByName: currentStaff().name,
-      payload: {
-        name,
-        phone,
-        nin,
-        address,
-        photo: photoBase64,
-        openingBalance: bal
-      }
-    });
-
-    window.capturedKycPhoto = null;
-
-    await pushAudit(
-      currentStaff().name,
-      currentStaff().role,
-      "request_customer_creation",
-      name
-    );
-
-    save();
-
-    // 🔥 SAFE GLOBAL REFRESH (NO undefined functions)
-    renderCustomerKycApprovals();
-    renderDashboardApprovals();
-    renderApprovals();
-    renderCustomers();
-    renderAudit();
-    renderDashboard();
-
-    showToast("Customer sent for approval");
-
-  } catch (err) {
-    console.error("CREATE CUSTOMER ERROR:", err);
-    showToast("Error creating customer request");
+  if (photoFile) {
+    photoBase64 = await toBase64(photoFile);
+  } else if (window.capturedKycPhoto) {
+    photoBase64 = window.capturedKycPhoto;
+  } else {
+    return showToast("Customer photo is required");
   }
+
+  // PUSH TO KYC APPROVAL PIPELINE
+  state.approvals.unshift({
+    id: uid("ap"),
+    type: "customer_creation",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    createdBy: currentStaff().id,
+    createdByName: currentStaff().name,
+    payload: {
+      name,
+      phone,
+      nin,
+      address,
+      photo: photoBase64,
+      openingBalance: bal
+    }
+  });
+
+  window.capturedKycPhoto = null;
+
+  await pushAudit(
+    currentStaff().name,
+    currentStaff().role,
+    "request_customer_creation",
+    name
+  );
+
+  save();
+  forceFullUIRefresh();
+  showToast("Customer sent for approval");
 
 });
 
