@@ -6875,7 +6875,7 @@ function renderMiniBar(amount, max) {
 window.renderMiniBar = renderMiniBar;
 
  // ===== OPEN CUSTOMER ACCOUNT (CLEAN SINGLE HANDLER) =====
-ddocument.getElementById("btnNew").addEventListener("click", async () => {
+document.getElementById("btnNew").addEventListener("click", async () => {
 
   const formWrapper = document.createElement("div");
   formWrapper.innerHTML = `
