@@ -2054,7 +2054,7 @@ if (action === "approve" && approval.type === "customer_creation") {
 
   return; // 🚨 CRITICAL: stops legacy approval flow
 }
-
+}
 window.processApproval = function(id, action) {
   handleApprovalAction(id, action);
 };
