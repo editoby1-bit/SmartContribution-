@@ -599,49 +599,12 @@ function sumByAccounts(accountIds) {
 
 async function confirmApproval(a, action) {
 
-  // 🔥 SPECIAL PIPELINE: CUSTOMER KYC APPROVAL
-  if (a.type === "customer_creation") {
-    const p = a.payload || {};
-
-    if (action === "approved") {
-      // Create the real customer AFTER approval
-      const newCustomer = {
-        id: uid("cust"),
-        name: p.name,
-        phone: p.phone,
-        nin: p.nin,
-        address: p.address,
-        photo: p.photo || "",
-        accountNumber: nextAccountNumber("savings"),
-        createdAt: new Date().toISOString(),
-        balance: Number(p.openingBalance || 0)
-      };
-
-      state.customers.unshift(newCustomer);
-    }
-
-    // mark approval as resolved
-    a.status = action === "approved" ? "approved" : "rejected";
-    a.resolvedAt = new Date().toISOString();
-    a.resolvedBy = currentStaff().id;
-
-    save();
-
-    // 🔥 FULL UI SYNC
-    renderCustomers();
-    renderCustomerKycApprovals();
-    renderDashboardApprovals();
-    renderApprovals();
-    renderDashboard();
-
-    showToast(
-      action === "approved"
-        ? "Customer account opened successfully"
-        : "Customer request rejected"
-    );
-
-    return; // 🛑 VERY IMPORTANT: stop transaction logic
-  }
+// 🔥 ROUTE CUSTOMER KYC TO MASTER APPROVAL PIPELINE (WITH REVIEW CARD)
+if (a.type === "customer_creation") {
+  // Use the main approval engine so dashboard & main screen behave identically
+  processApproval(a.id, action === "approved" ? "approve" : "reject");
+  return;
+}
 
   // 👇 KEEP YOUR EXISTING TRANSACTION APPROVAL LOGIC BELOW THIS LINE
 }
@@ -3767,13 +3730,16 @@ if (app.type === "customer_creation") {
   `;
 
   const ok = await openModalGeneric(
-    "Review & Approve New Customer",
-    review,
-    action === "approve" ? "Approve & Open Account" : "Reject",
-    true
-  );
+   "Review & Approve New Customer",
+   review,
+   action === "approve" ? "Approve & Open Account" : "Reject",
+   true
+);
 
-  if (!ok) return;
+if (!ok) return;
+
+// 🧼 CLOSE REVIEW MODAL AFTER DECISION (fix stuck card)
+document.getElementById("txModalBack").style.display = "none";
 
   if (action === "approve") {
     // 🔢 ACCOUNT NUMBER STARTS FROM 1000 (CLIENT REQUIREMENT)
@@ -4064,14 +4030,13 @@ await pushAudit(
 // persist
 save();
 
-// re-render UI
-renderApprovals();
-renderDashboardApprovals?.(); // safe if exists
+// 🔥 MASTER UI SYNC (fixes delayed buttons + panels)
+renderApprovals();                // main screen approvals
+renderCustomerKycApprovals();    // KYC panel
+renderDashboardApprovals();      // dashboard approvals
 renderCustomers();
-refreshCustomerProfile();
-updateChartData();
 renderAudit();
-renderCustomerKycApprovals();
+renderDashboard();               // CRITICAL: fixes toggle delay
 
   showToast(
     action === "approve"
@@ -7108,8 +7073,24 @@ document.getElementById("btnNew").addEventListener("click", async () => {
   );
 
   save();
-  forceFullUIRefresh();
-  showToast("Customer sent for approval");
+
+// 🧹 CLEAR FORM FIELDS (CRITICAL UX FIX)
+f.querySelector("#nName").value = "";
+f.querySelector("#nPhone").value = "";
+f.querySelector("#nNIN").value = "";
+f.querySelector("#nAddress").value = "";
+f.querySelector("#nBal").value = "";
+f.querySelector("#nPhoto").value = "";
+window.capturedKycPhoto = null;
+
+// 🔥 FULL INSTANT SYNC (fixes button delay everywhere)
+renderCustomerKycApprovals();
+renderDashboardApprovals();
+renderApprovals();
+renderCustomers();
+renderDashboard();
+
+showToast("Customer sent for approval");
 
 });
 
