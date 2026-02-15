@@ -1970,43 +1970,90 @@ if (action === "approve" && approval.type === "customer_creation") {
 
   const data = approval.payload || {};
 
-  const newCustomer = {
-    id: uid("c"),
-    name: data.name,
-    phone: data.phone,
-    nin: data.nin,
-    address: data.address,
-    photo: data.photo,
-    accountNumber: generateCustomerAccountNumber(), // starts from 1000 ✔
-    balance: Number(data.openingBalance || 0),
-    frozen: false,
-    transactions: []
-  };
+  // 🪪 REVIEW CARD BEFORE ACCOUNT CREATION (CLIENT REQUIREMENT)
+  const review = document.createElement("div");
+  review.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:12px">
+      
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        ${
+          data.photo
+            ? `<img src="${data.photo}" 
+                 style="width:70px;height:70px;border-radius:12px;
+                        object-fit:cover;border:1px solid #e5e7eb;">`
+            : `<div style="width:70px;height:70px;border-radius:12px;
+                           background:#f3f4f6;display:flex;
+                           align-items:center;justify-content:center;
+                           font-size:11px;color:#9ca3af;">
+                 No Photo
+               </div>`
+        }
 
-  state.customers.push(newCustomer);
+        <div style="flex:1">
+          <div><b>Name:</b> ${data.name || "—"}</div>
+          <div><b>Phone:</b> ${data.phone || "—"}</div>
+          <div><b>NIN:</b> ${data.nin || "—"}</div>
+          <div><b>Address:</b> ${data.address || "—"}</div>
+          <div><b>Opening Balance:</b> ${fmt(Number(data.openingBalance || 0))}</div>
+        </div>
+      </div>
 
-  // mark approval as processed properly
-  approval.customerId = newCustomer.id;
-}
+      <div class="small muted">
+        Please review customer details before opening account.
+      </div>
+    </div>
+  `;
 
-approval.processedAt = new Date().toISOString();
-  approval.resolvedBy = currentStaff().id;
-  approval.resolvedAt = new Date().toISOString();
+  openModalGeneric(
+    "Review & Approve New Customer",
+    review,
+    "Approve & Open Account",
+    true
+  ).then(confirmed => {
+    if (!confirmed) return;
 
-    // Audit log
-  state.audit.unshift({
-    id: crypto.randomUUID(),
-    actor: currentStaff().name,
-    role: currentStaff().role,
-    action: `approval_${action}`,
-    date: approval.resolvedAt
+    // 🔢 ACCOUNT NUMBER STARTS FROM 1000 (NO PREFIX)
+    const existingNumbers = state.customers
+      .map(c => Number(c.accountNumber) || 999);
+
+    const max = existingNumbers.length
+      ? Math.max(...existingNumbers)
+      : 999;
+
+    const newCustomer = {
+      id: uid("cust"),
+      accountNumber: String(max + 1), // 1000, 1001, 1002...
+      name: data.name || "Unnamed",
+      phone: data.phone || "",
+      nin: data.nin || "",
+      address: data.address || "",
+      photo: data.photo || "",
+      balance: Number(data.openingBalance || 0),
+      createdAt: new Date().toISOString(),
+      createdBy: approval.createdByName || "System"
+    };
+
+    // ✅ THIS fixes "Missing customer" everywhere
+    state.customers.push(newCustomer);
+
+    // link approval to real customer
+    approval.resolvedCustomerId = newCustomer.id;
+
+    save();
+
+    // 🔥 FULL UI SYNC (fixes dashboard delay + buttons delay)
+    renderCustomers();
+    renderApprovals();
+    renderCustomerKycApprovals();
+    renderDashboardApprovals();
+    renderDashboard();
+    renderAudit();
+
+    showToast("Customer account opened successfully");
   });
 
-  save();
-
-// 🔥 GLOBAL INSTANT UI SYNC (NO TOGGLE NEEDED EVER AGAIN)
-forceFullUIRefresh();
-};
+  return; // 🚨 CRITICAL: stops legacy approval flow
+}
 
 window.processApproval = function(id, action) {
   handleApprovalAction(id, action);
