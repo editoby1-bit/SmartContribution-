@@ -6984,10 +6984,14 @@ window.renderMiniBar = renderMiniBar;
  // ===== OPEN CUSTOMER ACCOUNT (CLEAN SINGLE HANDLER) =====
 document.getElementById("btnNew").addEventListener("click", async () => {
 
+  // 🧼 Reset any previous captured photo
+  window.capturedKycPhoto = null;
+
+  // 🧱 FORM WRAPPER (SINGLE SOURCE — NO DUPLICATES)
   const formWrapper = document.createElement("div");
   formWrapper.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px">
-      
+
       <input id="nName" class="input" placeholder="Full name *">
       <input id="nPhone" class="input" placeholder="Phone number *">
       <input id="nNIN" class="input" placeholder="NIN *">
@@ -7011,7 +7015,15 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     </div>
   `;
 
-  // Open modal (PROMISE MODE)
+  // 🎥 CAMERA BUTTON BIND (AFTER DOM CREATION)
+  setTimeout(() => {
+    const camBtn = formWrapper.querySelector("#btnOpenCamera");
+    if (camBtn && typeof openCameraCapture === "function") {
+      camBtn.onclick = openCameraCapture;
+    }
+  }, 0);
+
+  // 🪟 OPEN MODAL (CLIENT LABEL REQUIREMENT)
   const ok = await openModalGeneric(
     "Open Customer Account",
     formWrapper,
@@ -7019,9 +7031,10 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     true
   );
 
+  // ❌ User cancelled
   if (!ok) return;
 
-  // GET VALUES (ONLY from formWrapper — NOT f)
+  // 📥 COLLECT VALUES (AFTER CLICKING CREATE)
   const name = formWrapper.querySelector("#nName").value.trim();
   const phone = formWrapper.querySelector("#nPhone").value.trim();
   const nin = formWrapper.querySelector("#nNIN").value.trim();
@@ -7029,7 +7042,7 @@ document.getElementById("btnNew").addEventListener("click", async () => {
   const bal = Number(formWrapper.querySelector("#nBal").value || 0);
   const photoFile = formWrapper.querySelector("#nPhoto").files[0];
 
-  // Validation (modal stays open because openModalGeneric already returned true)
+  // 🚨 STRICT KYC VALIDATION (MODAL STAYS OPEN)
   if (!name) return showToast("Full name is required");
   if (!phone) return showToast("Phone number is required");
   if (!nin) return showToast("NIN is required");
@@ -7045,7 +7058,8 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     return showToast("Customer photo is required");
   }
 
-  // PUSH TO KYC APPROVAL PIPELINE
+  // 📤 SEND TO CUSTOMER KYC APPROVAL PIPELINE
+  state.approvals = state.approvals || [];
   state.approvals.unshift({
     id: uid("ap"),
     type: "customer_creation",
@@ -7063,6 +7077,13 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     }
   });
 
+  // 🧼 CLEAR FORM TO PREVENT RESUBMISSION (CLIENT REQUIREMENT)
+  formWrapper.querySelector("#nName").value = "";
+  formWrapper.querySelector("#nPhone").value = "";
+  formWrapper.querySelector("#nNIN").value = "";
+  formWrapper.querySelector("#nAddress").value = "";
+  formWrapper.querySelector("#nBal").value = "";
+  formWrapper.querySelector("#nPhoto").value = "";
   window.capturedKycPhoto = null;
 
   await pushAudit(
@@ -7074,25 +7095,16 @@ document.getElementById("btnNew").addEventListener("click", async () => {
 
   save();
 
-// 🧹 CLEAR FORM FIELDS (CRITICAL UX FIX)
-f.querySelector("#nName").value = "";
-f.querySelector("#nPhone").value = "";
-f.querySelector("#nNIN").value = "";
-f.querySelector("#nAddress").value = "";
-f.querySelector("#nBal").value = "";
-f.querySelector("#nPhoto").value = "";
-window.capturedKycPhoto = null;
+  // 🔥 INSTANT GLOBAL SYNC (NO DASHBOARD TOGGLE EVER AGAIN)
+  renderCustomerKycApprovals();
+  renderDashboardApprovals?.();
+  renderApprovals();
+  renderDashboard();
+  renderCustomers();
 
-// 🔥 FULL INSTANT SYNC (fixes button delay everywhere)
-renderCustomerKycApprovals();
-renderDashboardApprovals();
-renderApprovals();
-renderCustomers();
-renderDashboard();
-
-showToast("Customer sent for approval");
-
+  showToast("Customer sent for approval");
 });
+
 
 
 document.getElementById("btnVerify").addEventListener("click", async () => {
