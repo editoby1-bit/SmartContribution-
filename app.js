@@ -2998,8 +2998,10 @@ function printStatement(id) {
     }
   }
   function closeTxModal() {
-    txModalBack.style.display = "none";
-  }
+  const back = document.getElementById("txModalBack");
+  if (back) back.style.display = "none";
+}
+window.closeTxModal = closeTxModal;
 
   async function openEditCustomer(id) {
     const c = state.customers.find((x) => x.id === id);
