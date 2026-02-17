@@ -32,7 +32,9 @@ window.currentStaff = currentStaff;
   const $ = (s) => document.querySelector(s),
     $$ = (s) => document.querySelectorAll(s);
   const uid = (p = "id") => p + Math.random().toString(36).slice(2, 9);
-  const fmt = (n) => "₦" + Number(n || 0).toLocaleString();
+  const fmt = (n) => Number(n || 0).toLocaleString(); // ✅ no ₦ anywhere
+// (Optional helper if you ever need the symbol in ONE place like print headers)
+const fmtN = (n) => "₦" + fmt(n);
   async function sha(s) {
     try {
       const h = await crypto.subtle.digest(
@@ -1600,32 +1602,35 @@ window.renderCustomerCreationApprovals = renderCustomerCreationApprovals;
 
 
   function renderCustomers() {
-         // =========================
+  // =========================
   // EXISTING CUSTOMER LOGIC
   // =========================
   const list = $("#custList");
   list.innerHTML = "";
-  const q = $("#search").value.toLowerCase();
+
+  const q = ($("#search").value || "").toLowerCase().trim();
   let arr = state.customers.slice();
 
-  if ($("#sort").value === "balDesc")
-    arr.sort((a, b) => b.balance - a.balance);
-  else arr.sort((a, b) => a.name.localeCompare(b.name));
+  if ($("#sort").value === "balDesc") arr.sort((a, b) => (b.balance || 0) - (a.balance || 0));
+  else arr.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
-  arr = arr.filter(
-    (c) =>
-      !q || c.name.toLowerCase().includes(q) || (c.phone || "").includes(q)
-  );
+  // ✅ Search: name + phone + account number
+  arr = arr.filter((c) => {
+    if (!q) return true;
+    const name = (c.name || "").toLowerCase();
+    const phone = String(c.phone || "");
+    const acct = String(c.accountNumber || "");
+    return name.includes(q) || phone.includes(q) || acct.includes(q);
+  });
 
   arr.forEach((c) => {
     const r = document.createElement("div");
     r.className = "citem";
 
-if (c.balance < 0) {
-  r.style.background = "#fdecea";
-  r.style.border = "1px solid #f5c2c7";
-}
-
+    if ((c.balance || 0) < 0) {
+      r.style.background = "#fdecea";
+      r.style.border = "1px solid #f5c2c7";
+    }
 
     const nameBtn = document.createElement("button");
     nameBtn.className = "input";
@@ -1634,54 +1639,54 @@ if (c.balance < 0) {
     nameBtn.style.padding = "0";
     nameBtn.style.fontWeight = "700";
     nameBtn.style.cursor = "pointer";
-   nameBtn.innerHTML = `
-  ${c.name}
-  ${
-  (() => {
-    const activeLoan = (state.empowerments || []).find(e =>
-      e.customerId === c.id && e.status !== "completed"
-    );
 
-    if (!activeLoan) return "";
+    nameBtn.innerHTML = `
+      ${c.name || "—"}
+      ${
+        (() => {
+          const activeLoan = (state.empowerments || []).find(
+            (e) => e.customerId === c.id && e.status !== "completed"
+          );
+          if (!activeLoan) return "";
 
-    const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
-const interestLeft = activeLoan.expectedInterest - activeLoan.interestRepaid;
-const totalLeft = principalLeft + interestLeft;
+          const principalLeft = (activeLoan.principalGiven || 0) - (activeLoan.principalRepaid || 0);
+          const interestLeft = (activeLoan.expectedInterest || 0) - (activeLoan.interestRepaid || 0);
+          const totalLeft = principalLeft + interestLeft;
+          if (totalLeft <= 0) return "";
 
-if (totalLeft <= 0) return "";
-
-return `<span class="badge" style="
-          margin-left:6px;
-          background:#fff3cd;
-          color:#7a5c00
-        ">
-          EMPOWERMENT ${fmt(totalLeft)}
-        </span>`;
-  })()
-}
-  ${
-    c.balance < 0
-      ? `<span class="badge danger" style="margin-left:6px">
-           NEGATIVE ${fmt(Math.abs(c.balance))}
-         </span>`
-      : ""
-  }
-  
-`;
-
+          return `<span class="badge" style="
+                    margin-left:6px;
+                    background:#fff3cd;
+                    color:#7a5c00
+                  ">
+                    EMPOWERMENT ${fmt(totalLeft)}
+                  </span>`;
+        })()
+      }
+      ${
+        (c.balance || 0) < 0
+          ? `<span class="badge danger" style="margin-left:6px">
+               NEGATIVE ${fmt(Math.abs(c.balance || 0))}
+             </span>`
+          : ""
+      }
+    `;
 
     nameBtn.onclick = () => openCustomerModal(c.id);
 
     const left = document.createElement("div");
+
     const meta = document.createElement("div");
     meta.className = "small";
-    meta.textContent = `${c.phone} • ${fmt(c.balance)}`;
+    // ✅ numbers only (no ₦), also show account number clearly
+    meta.textContent = `${c.phone || "—"} • Acct: ${c.accountNumber || "—"} • Bal: ${fmt(c.balance || 0)}`;
 
     left.appendChild(nameBtn);
     left.appendChild(meta);
     r.appendChild(left);
 
     const actions = document.createElement("div");
+
     const view = document.createElement("button");
     view.className = "btn";
     view.textContent = "View";
@@ -1692,32 +1697,36 @@ return `<span class="badge" style="
     tx.textContent = "Tx";
     tx.onclick = () => {
       $("#custSel").value = c.id;
-      showToast("Selected " + c.name);
+      showToast("Selected " + (c.name || "Customer"));
     };
 
     actions.appendChild(view);
     actions.appendChild(tx);
     r.appendChild(actions);
+
     list.appendChild(r);
   });
 
+  // Rebuild customer dropdown
   $("#custSel").innerHTML = "";
   state.customers.forEach((c) => {
     const o = document.createElement("option");
     o.value = c.id;
-    o.textContent = `${c.name} • ${fmt(c.balance)}`;
+    o.textContent = `${c.name || "—"} • ${fmt(c.balance || 0)}`;
     $("#custSel").appendChild(o);
   });
 
   $("#custCount").textContent = state.customers.length;
+
   $("#totalBal").textContent = fmt(
-    state.customers.reduce((s, c) => s + c.balance, 0)
+    state.customers.reduce((s, c) => s + Number(c.balance || 0), 0)
   );
 
   $("#mobileBal").textContent = state.customers[0]
-    ? fmt(state.customers[0].balance)
+    ? fmt(state.customers[0].balance || 0)
     : fmt(0);
 }
+
 
 function showDashboard() {
   state.ui.dashboardMode = true;
@@ -1819,12 +1828,10 @@ function renderDashboardKPIs() {
   const box = document.getElementById("dashboardKPIs");
   if (!box) return;
 
-  const pendingCount = (state.approvals || []).filter(
-    a => a.status === "pending"
-  ).length;
+  const pendingCount = (state.approvals || []).filter(a => a.status === "pending").length;
 
   const totalCustomers = state.customers.length;
-  const totalBalance = state.customers.reduce((s, c) => s + c.balance, 0);
+  const totalBalance = state.customers.reduce((s, c) => s + Number(c.balance || 0), 0);
 
   const _today = new Date().toISOString().slice(0, 10);
   let inflow = 0;
@@ -1833,8 +1840,8 @@ function renderDashboardKPIs() {
   state.customers.forEach(c => {
     (c.transactions || []).forEach(t => {
       if (t.date?.startsWith(_today)) {
-        if (t.type === "credit") inflow += t.amount;
-        if (t.type === "withdraw") outflow += t.amount;
+        if (t.type === "credit") inflow += Number(t.amount || 0);
+        if (t.type === "withdraw") outflow += Number(t.amount || 0);
       }
     });
   });
@@ -1847,11 +1854,11 @@ function renderDashboardKPIs() {
 
     <div class="dash-card">
       <div class="small">Funds Under Management</div>
+      <div class="small muted">Currency: NGN</div>
       <h3>${fmt(totalBalance)}</h3>
     </div>
 
     <div class="dash-card clickable" data-kpi="approvals">
-    
       <div class="small">Approvals Pending</div>
       <h3>${pendingCount}</h3>
     </div>
@@ -1868,9 +1875,7 @@ function renderDashboardKPIs() {
   `;
 
   const ap = box.querySelector('[data-kpi="approvals"]');
-if (ap) {
-  ap.onclick = scrollToApprovals;
-}
+  if (ap) ap.onclick = scrollToApprovals;
 }
 
 
