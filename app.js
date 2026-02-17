@@ -2863,16 +2863,7 @@ function refreshAfterTransaction() {
   renderCustomers();
 }
 
-// 5. Print Statement (placeholder — we build report later)
-function printStatement(id) {
-  const c = state.customers.find(x => x.id === id);
-  if (!c) return;
-
-  // TEMP OR SIMPLE VERSION
-  alert("Statement printing feature will be upgraded in the Report module.");
-}
-
-  // tx tab
+ 
   function renderTransactionsTab() {
     const c = state.customers.find((x) => x.id === activeCustomerId);
     if (!c) return;
@@ -3446,29 +3437,275 @@ document.getElementById("submitTx").onclick = () => {
   console.log("🔥 SUBMIT BUTTON CLICKED");
 };
 
-function openCustomerStatement(customerId) {
+// ✅ Legacy compatibility — do NOT delete old calls
+function printStatement(id) {
+  printCustomerStatement(id);
+}
 
+// Helper: normalize types for display
+function prettyTxType(t) {
+  const m = {
+    credit: "CREDIT",
+    withdraw: "WITHDRAW",
+    empowerment_disbursement: "EMPOWERMENT (DISBURSE)",
+    empowerment_repayment_principal: "EMPOWERMENT (PRINCIPAL REPAY)",
+    empowerment_repayment_interest: "EMPOWERMENT (INTEREST REPAY)"
+  };
+  return m[t] || String(t || "").toUpperCase();
+}
+
+// Helper: collect statement txns (customer + empowerment-related)
+function _statementTxns(customer) {
+  const custTx = (customer.transactions || []).map(t => ({
+    ...t,
+    _src: "customer",
+    amount: Number(t.amount || 0),
+    date: t.date,
+    type: t.type,
+    desc: t.desc || t.note || ""
+  }));
+
+  const empTx = (state.transactions || [])
+    .filter(t =>
+      t &&
+      t.customerId === customer.id &&
+      (
+        t.type === "empowerment_disbursement" ||
+        t.type === "empowerment_repayment_principal" ||
+        t.type === "empowerment_repayment_interest"
+      )
+    )
+    .map(t => ({
+      ...t,
+      _src: "state",
+      amount: Number(t.amount || 0),
+      date: t.date,
+      type: t.type,
+      desc: t.desc || ""
+    }));
+
+  // merge + sort oldest -> newest
+  return [...custTx, ...empTx].sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+// ✅ PRINTABLE STATEMENT (bank-style layout, your requested columns)
+function printCustomerStatement(customerId) {
   const customer = state.customers.find(c => c.id === customerId);
-  if (!customer) return;
+  if (!customer) return showToast("Customer not found");
 
-  const txns = (customer.transactions || [])
-    .filter(t => t.type === "credit" || t.type === "withdraw")
-    .sort((a,b) => new Date(a.date) - new Date(b.date));
+  const txns = _statementTxns(customer);
 
-  let runningBalance = 0;
+  // -------------------------
+  // SAVINGS TOTALS (credit/withdraw only)
+  // -------------------------
+  let inflow = 0;
+  let outflow = 0;
+
+  let running = 0;
+  for (const t of txns) {
+    if (t.type === "credit") {
+      inflow += Number(t.amount || 0);
+      running += Number(t.amount || 0);
+    }
+    if (t.type === "withdraw") {
+      outflow += Number(t.amount || 0);
+      running -= Number(t.amount || 0);
+    }
+  }
+
+  const closingBal = Number(customer.balance || 0);
+  const net = inflow - outflow;
+  const openingBal = closingBal - net;
+
+  // -------------------------
+  // EMPOWERMENT TOTALS (from state.transactions)
+  // -------------------------
+  let empDisbursed = 0;
+  let empRepaidPrincipal = 0;
+  let empRepaidInterest = 0;
+
+  for (const t of txns) {
+    const amt = Number(t.amount || 0);
+    if (t.type === "empowerment_disbursement") empDisbursed += amt;
+    if (t.type === "empowerment_repayment_principal") empRepaidPrincipal += amt;
+    if (t.type === "empowerment_repayment_interest") empRepaidInterest += amt;
+  }
+
+  const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
+  const empOutstanding = empDisbursed - empRepaidPrincipal; // principal outstanding (clean + simple)
+  // If you want "total outstanding including interest", say so and I’ll compute it from state.empowerments.
+
+  // -------------------------
+  // Rows with running balance (savings only)
+  // -------------------------
+  let rb = openingBal;
 
   const rows = txns.map((t, i) => {
+    if (t.type === "credit") rb += Number(t.amount || 0);
+    if (t.type === "withdraw") rb -= Number(t.amount || 0);
 
-    if (t.type === "credit") runningBalance += Number(t.amount);
-    if (t.type === "withdraw") runningBalance -= Number(t.amount);
+    const when = t.date ? new Date(t.date) : null;
+    const dateStr = when && !isNaN(when) ? when.toLocaleString() : "—";
+
+    const desc = (t.desc || "").toString();
 
     return `
       <tr>
-        <td>${i+1}</td>
-        <td>${new Date(t.date).toLocaleString()}</td>
-        <td>${t.type.toUpperCase()}</td>
-        <td>${fmt(t.amount)}</td>
-        <td>${fmt(runningBalance)}</td>
+        <td>${i + 1}</td>
+        <td>${dateStr}</td>
+        <td>${customer.name}</td>
+        <td style="text-align:right">${fmt(t.amount)}</td>
+        <td>${prettyTxType(t.type)}</td>
+        <td>${desc.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
+        <td style="text-align:right">${fmt(rb)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const w = window.open("", "", "width=1100,height=800");
+  if (!w) return showToast("Popup blocked. Allow popups to print.");
+
+  w.document.write(`
+    <html>
+    <head>
+      <title>Account Statement - ${customer.name}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 18px; color:#111; }
+        h2 { margin: 0 0 6px 0; }
+        .meta { margin: 0 0 12px 0; font-size: 13px; color:#333; }
+        .totals {
+          display:flex; gap:14px; flex-wrap:wrap;
+          margin: 10px 0 10px 0;
+          font-size: 13px;
+        }
+        .totals .box {
+          border:1px solid #ddd; border-radius:10px; padding:10px 12px;
+          min-width: 170px;
+        }
+        .section-title {
+          margin: 14px 0 8px 0;
+          font-weight: 700;
+          font-size: 13px;
+          color:#222;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
+        th { background: #f5f5f5; text-align:left; }
+        .footer { margin-top: 14px; font-size: 12px; color:#666; }
+        @media print { button { display:none; } }
+      </style>
+    </head>
+    <body>
+      <h2>Customer Account Statement</h2>
+
+      <div class="meta">
+        <b>${customer.name}</b><br/>
+        Account No: <b>${customer.accountNumber || "—"}</b><br/>
+        Phone: ${customer.phone || "—"} &nbsp; • &nbsp;
+        Date Printed: ${new Date().toLocaleString()}
+      </div>
+
+      <div class="section-title">Savings Summary</div>
+      <div class="totals">
+        <div class="box"><div><b>Opening Balance</b></div><div>${fmt(openingBal)}</div></div>
+        <div class="box"><div><b>Total Inflow</b></div><div>${fmt(inflow)}</div></div>
+        <div class="box"><div><b>Total Outflow</b></div><div>${fmt(outflow)}</div></div>
+        <div class="box"><div><b>Net Movement</b></div><div>${fmt(net)}</div></div>
+        <div class="box"><div><b>Closing Balance</b></div><div>${fmt(closingBal)}</div></div>
+      </div>
+
+      <div class="section-title">Empowerment Summary</div>
+      <div class="totals">
+        <div class="box"><div><b>Total Disbursed</b></div><div>${fmt(empDisbursed)}</div></div>
+        <div class="box"><div><b>Repaid Principal</b></div><div>${fmt(empRepaidPrincipal)}</div></div>
+        <div class="box"><div><b>Repaid Interest</b></div><div>${fmt(empRepaidInterest)}</div></div>
+        <div class="box"><div><b>Total Repaid</b></div><div>${fmt(empRepaidTotal)}</div></div>
+        <div class="box"><div><b>Principal Outstanding</b></div><div>${fmt(empOutstanding)}</div></div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:55px">S/N</th>
+            <th style="width:170px">Date</th>
+            <th style="width:160px">Customer Name</th>
+            <th style="width:120px;text-align:right">Amount</th>
+            <th style="width:180px">Type</th>
+            <th>Description</th>
+            <th style="width:140px;text-align:right">Running Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows || `<tr><td colspan="7" style="text-align:center;color:#666">No transactions yet</td></tr>`}
+        </tbody>
+      </table>
+
+      <div class="footer">
+        This statement is system-generated.
+      </div>
+
+      <script>window.print();</script>
+    </body>
+    </html>
+  `);
+
+  w.document.close();
+}
+
+
+// ✅ IN-APP MODAL PREVIEW + PRINT BUTTON
+function openCustomerStatement(customerId) {
+  const customer = state.customers.find(c => c.id === customerId);
+  if (!customer) return showToast("Customer not found");
+
+  const txns = _statementTxns(customer);
+
+  // Savings totals
+  let inflow = 0;
+  let outflow = 0;
+  for (const t of txns) {
+    if (t.type === "credit") inflow += Number(t.amount || 0);
+    if (t.type === "withdraw") outflow += Number(t.amount || 0);
+  }
+
+  const closingBal = Number(customer.balance || 0);
+  const net = inflow - outflow;
+  const openingBal = closingBal - net;
+
+  // Empowerment totals
+  let empDisbursed = 0;
+  let empRepaidPrincipal = 0;
+  let empRepaidInterest = 0;
+
+  for (const t of txns) {
+    const amt = Number(t.amount || 0);
+    if (t.type === "empowerment_disbursement") empDisbursed += amt;
+    if (t.type === "empowerment_repayment_principal") empRepaidPrincipal += amt;
+    if (t.type === "empowerment_repayment_interest") empRepaidInterest += amt;
+  }
+
+  const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
+  const empOutstanding = empDisbursed - empRepaidPrincipal;
+
+  // Running balance display (savings only)
+  let rb = openingBal;
+
+  const rows = txns.map((t, i) => {
+    if (t.type === "credit") rb += Number(t.amount || 0);
+    if (t.type === "withdraw") rb -= Number(t.amount || 0);
+
+    const when = t.date ? new Date(t.date) : null;
+    const dateStr = when && !isNaN(when) ? when.toLocaleString() : "—";
+
+    return `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${dateStr}</td>
+        <td>${customer.name}</td>
+        <td style="text-align:right">${fmt(t.amount)}</td>
+        <td>${prettyTxType(t.type)}</td>
+        <td>${(t.desc || "").toString().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
+        <td style="text-align:right">${fmt(rb)}</td>
       </tr>
     `;
   }).join("");
@@ -3477,90 +3714,54 @@ function openCustomerStatement(customerId) {
 
   wrapper.innerHTML = `
     <div style="margin-bottom:10px">
-      <b>${customer.name}</b><br>
-      Account No: ${customer.accountNumber}<br>
-      Phone: ${customer.phone}
+      <b>${customer.name}</b><br/>
+      Account No: ${customer.accountNumber || "—"}<br/>
+      Phone: ${customer.phone || "—"}
     </div>
 
-    <table style="width:100%; border-collapse:collapse">
-      <thead>
-        <tr>
-          <th>S/N</th>
-          <th>Date</th>
-          <th>Type</th>
-          <th>Amount</th>
-          <th>Balance</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows}
-      </tbody>
-    </table>
+    <div style="margin:10px 0; font-weight:700;">Savings Summary</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px 0">
+      <div class="badge">Opening: ${fmt(openingBal)}</div>
+      <div class="badge">Inflow: ${fmt(inflow)}</div>
+      <div class="badge">Outflow: ${fmt(outflow)}</div>
+      <div class="badge">Net: ${fmt(net)}</div>
+      <div class="badge">Closing: ${fmt(closingBal)}</div>
+    </div>
 
-    <div style="margin-top:10px">
-      <button class="btn solid"
-        onclick="printCustomerStatement('${customerId}')">
-        Print
-      </button>
+    <div style="margin:10px 0; font-weight:700;">Empowerment Summary</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px 0">
+      <div class="badge">Disbursed: ${fmt(empDisbursed)}</div>
+      <div class="badge">Repaid Principal: ${fmt(empRepaidPrincipal)}</div>
+      <div class="badge">Repaid Interest: ${fmt(empRepaidInterest)}</div>
+      <div class="badge">Total Repaid: ${fmt(empRepaidTotal)}</div>
+      <div class="badge">Principal Outstanding: ${fmt(empOutstanding)}</div>
+    </div>
+
+    <div style="max-height:55vh; overflow:auto; border:1px solid #e5e7eb; border-radius:10px">
+      <table style="width:100%; border-collapse:collapse">
+        <thead>
+          <tr>
+            <th>S/N</th>
+            <th>Date</th>
+            <th>Customer Name</th>
+            <th style="text-align:right">Amount</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th style="text-align:right">Running Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows || `<tr><td colspan="7" style="text-align:center;color:#666">No transactions yet</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end">
+      <button class="btn solid" onclick="printCustomerStatement('${customerId}')">Print</button>
     </div>
   `;
 
-  openModalGeneric("Account Statement", wrapper);
-}
-
-
-function printCustomerStatement(customerId) {
-
-  const customer = state.customers.find(c => c.id === customerId);
-  if (!customer) return;
-
-  const txns = (customer.transactions || [])
-    .sort((a,b) => new Date(a.date) - new Date(b.date));
-
-  let runningBalance = 0;
-
-  const rows = txns.map((t, i) => {
-
-    if (t.type === "credit") runningBalance += Number(t.amount);
-    if (t.type === "withdraw") runningBalance -= Number(t.amount);
-
-    return `
-      <tr>
-        <td>${i+1}</td>
-        <td>${new Date(t.date).toLocaleString()}</td>
-        <td>${t.type}</td>
-        <td>${fmt(t.amount)}</td>
-        <td>${fmt(runningBalance)}</td>
-      </tr>
-    `;
-  }).join("");
-
-  const printWindow = window.open("", "", "width=900,height=700");
-
-  printWindow.document.write(`
-    <html>
-    <head>
-      <title>Account Statement</title>
-    </head>
-    <body>
-      <h3>${customer.name}</h3>
-      <p>Account No: ${customer.accountNumber}</p>
-      <table border="1" cellspacing="0" cellpadding="5">
-        <tr>
-          <th>S/N</th>
-          <th>Date</th>
-          <th>Type</th>
-          <th>Amount</th>
-          <th>Balance</th>
-        </tr>
-        ${rows}
-      </table>
-    </body>
-    </html>
-  `);
-
-  printWindow.document.close();
-  printWindow.print();
+  openModalGeneric("Account Statement", wrapper, "Close", false);
 }
 
   // =========================
@@ -4180,28 +4381,6 @@ function getNextAccountNumber() {
 
   return Math.max(...numbers) + 1;
 }
-
-
-
-  function printStatement(id) {
-    const c = state.customers.find((x) => x.id === id) || state.customers[0];
-    if (!c) return showToast("No customer");
-    let html = `<html><head><title>Statement - ${
-      c.name
-    }</title></head><body><h2>${c.name}</h2><p>Balance: ${fmt(
-      c.balance
-    )}</p><table border=\"1\" cellpadding=\"6\"><tr><th>Date</th><th>Type</th><th>Amount</th><th>Desc</th></tr>`;
-    for (const t of (c.transactions || []).slice().reverse()) {
-      html += `<tr><td>${new Date(t.date).toLocaleString()}</td><td>${
-        t.type
-      }</td><td>${fmt(t.amount)}</td><td>${t.desc || ""}</td></tr>`;
-    }
-    html += "</table></body></html>";
-    const w = window.open("");
-    w.document.write(html);
-    w.document.close();
-    w.print();
-  }
 
 
   function printAudit() {
