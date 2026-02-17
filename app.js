@@ -587,16 +587,16 @@ function sumByAccounts(accountIds) {
 
   function syncDashboardVisibility() {
   const btn = document.getElementById("btnDashboard");
-
   if (!btn) return;
 
-  if (canViewDashboard()) {
-    btn.style.display = "inline-block";
-  } else {
-    btn.style.display = "none";
-   
-  }
+  // if you have canViewDashboard(), use it. Else fallback:
+  const allowed = (typeof canViewDashboard === "function")
+    ? canViewDashboard()
+    : (currentStaff() && ["manager", "ceo"].includes(currentStaff().role));
+
+  btn.style.display = allowed ? "inline-block" : "none";
 }
+window.syncDashboardVisibility = syncDashboardVisibility;
 
 
 async function confirmApproval(a, action) {
@@ -2661,7 +2661,7 @@ function renderToolsTab() {
   const canAct = staff && (staff.role === "manager" || staff.role === "ceo");
 
   // ALWAYS recompute pending approvals
-  const approvals = state.approvals
+  const approvals = (state.approvals || [])
     .filter(a => a.customerId === c.id && a.status === "pending")
     .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
 
@@ -2698,34 +2698,23 @@ function renderToolsTab() {
           <b>${approval.type.toUpperCase()}</b> — ${fmt(approval.amount)}
         </div>
 
-        <div class="small muted">Requested by: ${approval.requestedBy}</div>
-        <div class="small muted">
-          ${new Date(approval.requestedAt).toLocaleString()}
-        </div>
+        <div class="small muted">Requested by: ${approval.requestedByName || approval.requestedBy || "—"}</div>
+        <div class="small muted">${new Date(approval.requestedAt).toLocaleString()}</div>
 
-        <div style="margin-top:12px;display:flex;gap:8px">
-          <button class="btn" id="approveBtn">Approve</button>
-          <button class="btn danger" id="rejectBtn">Reject</button>
-        </div>
-
-        <div class="small" style="margin-top:8px">
-          Risk Level:
-          ${approval.riskLevel ? `
-  <div class="small" style="margin-top:8px">
-    Risk Level:
-    <span class="badge ${
-      approval.riskLevel === "high"
-        ? "danger"
-        : approval.riskLevel === "medium"
-        ? "warning"
-        : "success"
-    }">
-      ${approval.riskLevel.toUpperCase()}
-    </span>
-  </div>
-` : ""}
-
-        </div>
+        ${approval.riskLevel ? `
+          <div class="small" style="margin-top:8px">
+            Risk Level:
+            <span class="badge ${
+              approval.riskLevel === "high"
+                ? "danger"
+                : approval.riskLevel === "medium"
+                ? "warning"
+                : "success"
+            }">
+              ${String(approval.riskLevel).toUpperCase()}
+            </span>
+          </div>
+        ` : ""}
 
         ${Array.isArray(approval.anomalies) && approval.anomalies.length ? `
           <div class="card warning" style="margin-top:8px">
@@ -2735,43 +2724,77 @@ function renderToolsTab() {
             </ul>
           </div>
         ` : ""}
+
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button class="btn" id="approveBtn">Approve</button>
+          <button class="btn danger" id="rejectBtn">Reject</button>
+        </div>
       </div>
     `;
   }
 
-// =========================
-// FINAL RENDER (ALWAYS)
-// =========================
+  // =========================
+  // TOOL BUTTONS (ADD STATEMENT)
+  // =========================
+  const toolButtons = `
+    <button class="btn" onclick="openActionModal('credit')">Credit</button>
+    <button class="btn" onclick="openActionModal('withdraw')">Withdraw</button>
+    <button class="btn" onclick="openEmpowermentModal()">Empowerment</button>
 
-let toolButtons = `
- <button class="btn" onclick="openActionModal('credit')">Credit</button>
- <button class="btn" onclick="openActionModal('withdraw')">Withdraw</button>
- <button class="btn" onclick="openEmpowermentModal()">Empowerment</button>
- <button class="btn ghost" onclick="toggleFreeze('${c.id}')">
-   ${c.frozen ? "Unfreeze" : "Freeze"}
- </button>
- <button class="btn danger" onclick="confirmDeleteCustomer('${c.id}')">
-   Delete
- </button>
-`;
+    <button class="btn solid" onclick="openCustomerStatement('${c.id}')">
+      Statement
+    </button>
 
-mBody.innerHTML = `
- ${approvalHTML}
+    <button class="btn ghost" onclick="toggleFreeze('${c.id}')">
+      ${c.frozen ? "Unfreeze" : "Freeze"}
+    </button>
 
- <div style="display:flex;gap:8px;flex-wrap:wrap">
-   ${toolButtons}
- </div>
-`;
+    <button class="btn danger" onclick="confirmDeleteCustomer('${c.id}')">
+      Delete
+    </button>
+  `;
+
+  mBody.innerHTML = `
+    ${approvalHTML}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${toolButtons}
+    </div>
+  `;
 
   // =========================
-  // EVENT BINDING
+  // EVENT BINDING (CRITICAL FIX)
   // =========================
   if (approval && canAct) {
-    document.getElementById("approveBtn").onclick =
-      () => processApproval(approval.id, "approve");
+    const approveBtn = document.getElementById("approveBtn");
+    const rejectBtn = document.getElementById("rejectBtn");
 
-    document.getElementById("rejectBtn").onclick =
-      () => processApproval(approval.id, "reject");
+    if (approveBtn) {
+      approveBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        approveBtn.disabled = true;
+        await processApproval(approval.id, "approve");
+
+        // ✅ refresh tools tab immediately so pending card disappears
+        window.activeApprovalId = null;
+        renderToolsTab();
+      };
+    }
+
+    if (rejectBtn) {
+      rejectBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        rejectBtn.disabled = true;
+        await processApproval(approval.id, "reject");
+
+        // ✅ refresh tools tab immediately so pending card disappears
+        window.activeApprovalId = null;
+        renderToolsTab();
+      };
+    }
 
     const sel = document.getElementById("approvalSelect");
     if (sel) {
@@ -2782,6 +2805,7 @@ mBody.innerHTML = `
     }
   }
 }
+window.renderToolsTab = renderToolsTab;
 
 
 
@@ -7044,23 +7068,28 @@ function bindDashboardButton() {
   btn.onclick = () => {
     const dash = document.getElementById("dashboardView");
     const app = document.getElementById("app");
+    if (!dash || !app) return;
 
-    const openingDashboard = dash.style.display !== "block";
+    const opening = dash.style.display !== "block";
 
-    state.ui.dashboardMode = openingDashboard; // 🔥 THIS is critical
+    // persist UI mode
+    state.ui = state.ui || {};
+    state.ui.dashboardMode = opening;
 
-    if (openingDashboard) {
+    if (opening) {
       dash.style.display = "block";
       app.style.display = "none";
-      renderDashboard();
+      renderDashboard?.();
     } else {
       dash.style.display = "none";
       app.style.display = "grid";
     }
 
-    save();
+    save?.();
   };
 }
+window.bindDashboardButton = bindDashboardButton;
+
 
 function jumpToAccountEntry(accountId, entryId) {
   const accountCard = document.getElementById(`acc-${accountId}`);
