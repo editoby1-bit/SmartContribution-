@@ -1260,3 +1260,12 @@ body.dashboard-active #app.container {
   overflow-y: auto;
   padding-right: 4px;
 }
+.req {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.input.invalid {
+  border: 1.5px solid #ef4444 !important;
+  background: #fff5f5;
+}

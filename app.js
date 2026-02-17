@@ -1441,7 +1441,6 @@ function renderCustomerKycApprovals() {
 
         <div style="display:flex; gap:10px; align-items:flex-start">
 
-          <!-- PHOTO -->
           ${
             p.photo
               ? `<img src="${p.photo}"
@@ -1455,11 +1454,8 @@ function renderCustomerKycApprovals() {
                  </div>`
           }
 
-          <!-- DETAILS -->
           <div style="flex:1; font-size:12px; line-height:1.4">
-            <div style="font-weight:700; margin-bottom:4px;">
-              NEW CUSTOMER
-            </div>
+            <div style="font-weight:700; margin-bottom:4px;">NEW CUSTOMER</div>
 
             <div><b>Name:</b> ${p.name || "—"}</div>
             <div><b>Phone:</b> ${p.phone || "—"}</div>
@@ -1485,15 +1481,20 @@ function renderCustomerKycApprovals() {
           isApprover
             ? `
               <div style="display:flex; gap:8px; margin-top:10px;">
-                <button class="btn solid approve"
-                        style="opacity:1 !important;"
-                        onclick="processApproval('${a.id}','approve')">
+                <button
+                  class="btn solid approve"
+                  style="opacity:1 !important;"
+                  onclick="processApproval('${a.id}','approve')"
+                >
                   Approve
                 </button>
 
-                <button class="btn solid danger reject"
-                        style="opacity:1 !important;"
-                        onclick="processApproval('${a.id}','reject')">
+                <!-- ✅ MATCH TRANSACTION REJECT STYLE -->
+                <button
+                  class="btn danger reject"
+                  style="opacity:1 !important;"
+                  onclick="processApproval('${a.id}','reject')"
+                >
                   Reject
                 </button>
               </div>
@@ -6985,217 +6986,228 @@ window.renderMiniBar = renderMiniBar;
 
  // ===== OPEN CUSTOMER ACCOUNT (CLEAN SINGLE HANDLER) =====
 document.getElementById("btnNew").addEventListener("click", async () => {
-  // reset any previous captured photo
-  window.capturedKycPhoto = null;
+  // ✅ Prevent double-send if user clicks too fast
+  if (window.__sendingNewCustomer) return;
+  window.__sendingNewCustomer = true;
 
-  // helper: render form html (keeps values if you go back from review)
-  const renderForm = (vals = {}) => `
-    <div style="display:flex;flex-direction:column;gap:10px">
+  try {
+    // 🧼 reset any previous captured photo
+    window.capturedKycPhoto = null;
 
-      <input id="nName" class="input" placeholder="Full name *" value="${vals.name || ""}">
-      <input id="nPhone" class="input" placeholder="Phone number *" value="${vals.phone || ""}">
-      <input id="nNIN" class="input" placeholder="NIN *" value="${vals.nin || ""}">
-      <input id="nAddress" class="input" placeholder="Address *" value="${vals.address || ""}">
+    // 🧱 Build form (single, clean wrapper)
+    const formWrapper = document.createElement("div");
+    formWrapper.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:10px">
 
-      <div style="display:flex;gap:10px;align-items:center">
-        <div style="flex:1">
-          <label class="small muted">Customer Photo *</label>
-          <input id="nPhoto" type="file" accept="image/*" class="input">
+        <div>
+          <label class="small">Full name <span class="req">*</span></label>
+          <input id="nName" class="input" placeholder="Enter full name">
         </div>
-      </div>
 
-      <!-- Preview -->
-      <div id="kycPreviewWrap" style="display:${vals.photo ? "block" : "none"};">
-        <div class="small muted" style="margin:6px 0">Preview</div>
-        <img id="kycPreview"
-             src="${vals.photo || ""}"
-             style="width:120px;height:120px;border-radius:12px;object-fit:cover;border:1px solid #e5e7eb;">
-      </div>
-
-      <!-- More obvious camera button (your Step 1 style) -->
-      <button id="btnOpenCamera"
-              class="btn solid"
-              type="button"
-              style="display:flex;align-items:center;justify-content:center;
-                     gap:8px;background:#0ea5e9;border:none;">
-        📸 Capture Live Photo (Recommended)
-      </button>
-
-      <input id="nBal" class="input" placeholder="Opening balance (optional)" value="${vals.bal ?? ""}">
-
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <button id="btnKycContinue" class="btn solid primary" type="button">Continue</button>
-      </div>
-    </div>
-  `;
-
-  // helper: build review html
-  const renderReview = (vals) => `
-    <div style="display:flex;flex-direction:column;gap:12px">
-
-      <div style="display:flex;gap:12px;align-items:flex-start">
-        <img src="${vals.photo}"
-             style="width:90px;height:90px;border-radius:12px;
-                    object-fit:cover;border:1px solid #e5e7eb;">
-
-        <div style="flex:1">
-          <div><b>Name:</b> ${vals.name}</div>
-          <div><b>Phone:</b> ${vals.phone}</div>
-          <div><b>NIN:</b> ${vals.nin}</div>
-          <div><b>Address:</b> ${vals.address}</div>
-          <div><b>Opening Balance:</b> ${fmt(Number(vals.bal || 0))}</div>
+        <div>
+          <label class="small">Phone number <span class="req">*</span></label>
+          <input id="nPhone" class="input" placeholder="Enter phone number">
         </div>
+
+        <div>
+          <label class="small">NIN <span class="req">*</span></label>
+          <input id="nNIN" class="input" placeholder="Enter NIN">
+        </div>
+
+        <div>
+          <label class="small">Address <span class="req">*</span></label>
+          <input id="nAddress" class="input" placeholder="Enter address">
+        </div>
+
+        <div>
+          <label class="small muted">Customer Photo <span class="req">*</span></label>
+          <input id="nPhoto" type="file" accept="image/*" capture="user" class="input">
+        </div>
+
+        <button
+          id="btnOpenCamera"
+          class="btn solid"
+          type="button"
+          style="justify-content:center"
+        >
+          📷 Use Camera (Recommended)
+        </button>
+
+        <div>
+          <label class="small muted">Opening Balance (optional)</label>
+          <input id="nBal" class="input" placeholder="0.00">
+        </div>
+
       </div>
+    `;
 
-      <div class="small muted">
-        Please confirm the details before sending for approval.
-      </div>
+    // ✨ Bank-grade live error clearing
+    ["#nName", "#nPhone", "#nNIN", "#nAddress"].forEach((id) => {
+      const el = formWrapper.querySelector(id);
+      if (!el) return;
+      el.addEventListener("input", () => el.classList.remove("invalid"));
+    });
 
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <button id="btnKycEdit" class="btn ghost" type="button">Edit</button>
-        <button id="btnKycSend" class="btn solid primary" type="button">Send for Approval</button>
-      </div>
-    </div>
-  `;
-
-  // MAIN WRAPPER (we will swap between form and review inside this wrapper)
-  const wrap = document.createElement("div");
-  const values = { name: "", phone: "", nin: "", address: "", bal: "", photo: "" };
-
-  // initial form render
-  wrap.innerHTML = renderForm(values);
-
-  // open modal WITHOUT relying on modal OK button (so it won’t close on validation)
-  // okText = null => no auto "OK/Create" button in modal actions
-  openModalGeneric("Open Customer Account", wrap, null, true);
-
-  // binders (re-bind after every wrap.innerHTML swap)
-  const bindFormHandlers = () => {
-    const camBtn = wrap.querySelector("#btnOpenCamera");
-    const fileInput = wrap.querySelector("#nPhoto");
-    const contBtn = wrap.querySelector("#btnKycContinue");
-
-    // file choose => preview it
-    if (fileInput) {
-      fileInput.onchange = async () => {
-        const f = fileInput.files && fileInput.files[0];
-        if (!f) return;
-
-        try {
-          const b64 = await toBase64(f);
-          values.photo = b64;
-          window.capturedKycPhoto = null; // prefer chosen file
-          const pv = wrap.querySelector("#kycPreview");
-          const pw = wrap.querySelector("#kycPreviewWrap");
-          if (pv) pv.src = b64;
-          if (pw) pw.style.display = "block";
-        } catch (e) {
-          console.error(e);
-          showToast("Could not read photo");
-        }
-      };
-    }
-
-    // camera capture => preview it
+    // 🎥 Camera button bind (no setTimeout)
+    const camBtn = formWrapper.querySelector("#btnOpenCamera");
     if (camBtn) {
       camBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-
-        const b64 = await openCameraCapture();
-        if (!b64) return;
-
-        values.photo = b64;
-
-        const pv = wrap.querySelector("#kycPreview");
-        const pw = wrap.querySelector("#kycPreviewWrap");
-        if (pv) pv.src = b64;
-        if (pw) pw.style.display = "block";
+        if (typeof openCameraCapture === "function") {
+          await openCameraCapture(); // sets window.capturedKycPhoto
+        } else {
+          showToast("Camera function not available");
+        }
       };
     }
 
-    // continue => validate + show review
-    if (contBtn) {
-      contBtn.onclick = async () => {
-        values.name = wrap.querySelector("#nName")?.value.trim() || "";
-        values.phone = wrap.querySelector("#nPhone")?.value.trim() || "";
-        values.nin = wrap.querySelector("#nNIN")?.value.trim() || "";
-        values.address = wrap.querySelector("#nAddress")?.value.trim() || "";
-        values.bal = wrap.querySelector("#nBal")?.value || "";
+    // 🪟 Open modal (Create)
+    const ok = await openModalGeneric(
+      "Open Customer Account",
+      formWrapper,
+      "Create",
+      true
+    );
 
-        // If user didn’t pick file but did camera, photo is stored in values.photo already
-        // If user picked neither, values.photo is empty.
-        if (!values.name) return showToast("Full name is required");
-        if (!values.phone) return showToast("Phone number is required");
-        if (!values.nin) return showToast("NIN is required");
-        if (!values.address) return showToast("Address is required");
-        if (!values.photo) return showToast("Customer photo is required");
+    // User cancelled
+    if (!ok) return;
 
-        // swap to review
-        wrap.innerHTML = renderReview(values);
-        bindReviewHandlers();
-      };
+    // 🔎 Collect inputs
+    const nameInput = formWrapper.querySelector("#nName");
+    const phoneInput = formWrapper.querySelector("#nPhone");
+    const ninInput = formWrapper.querySelector("#nNIN");
+    const addressInput = formWrapper.querySelector("#nAddress");
+    const balInput = formWrapper.querySelector("#nBal");
+    const photoInput = formWrapper.querySelector("#nPhoto");
+
+    // 🧼 Clear previous invalid state
+    [nameInput, phoneInput, ninInput, addressInput].forEach((inp) =>
+      inp?.classList.remove("invalid")
+    );
+
+    // Values
+    const name = (nameInput?.value || "").trim();
+    const phone = (phoneInput?.value || "").trim();
+    const nin = (ninInput?.value || "").trim();
+    const address = (addressInput?.value || "").trim();
+    const bal = Number((balInput?.value || "0").trim() || 0);
+    const photoFile = photoInput?.files?.[0];
+
+    // ✅ Bank-grade validation
+    if (!name) {
+      nameInput.classList.add("invalid");
+      nameInput.focus();
+      showToast("Full name is required");
+      return;
     }
-  };
-
-  const bindReviewHandlers = () => {
-    const editBtn = wrap.querySelector("#btnKycEdit");
-    const sendBtn = wrap.querySelector("#btnKycSend");
-
-    if (editBtn) {
-      editBtn.onclick = () => {
-        wrap.innerHTML = renderForm(values);
-        bindFormHandlers();
-      };
+    if (!phone) {
+      phoneInput.classList.add("invalid");
+      phoneInput.focus();
+      showToast("Phone number is required");
+      return;
+    }
+    if (!nin) {
+      ninInput.classList.add("invalid");
+      ninInput.focus();
+      showToast("NIN is required");
+      return;
+    }
+    if (!address) {
+      addressInput.classList.add("invalid");
+      addressInput.focus();
+      showToast("Address is required");
+      return;
     }
 
-    if (sendBtn) {
-      sendBtn.onclick = async () => {
-        // push approval
-        state.approvals = state.approvals || [];
-        state.approvals.unshift({
-          id: uid("ap"),
-          type: "customer_creation",
-          status: "pending",
-          createdAt: new Date().toISOString(),
-          createdBy: currentStaff().id,
-          createdByName: currentStaff().name,
-          payload: {
-            name: values.name,
-            phone: values.phone,
-            nin: values.nin,
-            address: values.address,
-            photo: values.photo,
-            openingBalance: Number(values.bal || 0)
+    // Photo (file OR camera capture)
+    let photoBase64 = "";
+    if (photoFile) {
+      photoBase64 = await toBase64(photoFile);
+    } else if (window.capturedKycPhoto) {
+      photoBase64 = window.capturedKycPhoto;
+    } else {
+      showToast("Customer photo is required");
+      return;
+    }
+
+    // ✅ Review / confirm before sending for approval
+    const review = document.createElement("div");
+    review.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          ${
+            photoBase64
+              ? `<img src="${photoBase64}" style="width:70px;height:70px;border-radius:12px;object-fit:cover;border:1px solid #e5e7eb;">`
+              : `<div style="width:70px;height:70px;border-radius:12px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:11px;color:#9ca3af;">No Photo</div>`
           }
-        });
+          <div style="flex:1">
+            <div><b>Name:</b> ${name}</div>
+            <div><b>Phone:</b> ${phone}</div>
+            <div><b>NIN:</b> ${nin}</div>
+            <div><b>Address:</b> ${address}</div>
+            <div><b>Opening Balance:</b> ${fmt(Number(bal || 0))}</div>
+          </div>
+        </div>
+        <div class="small muted">
+          Please confirm to send this request for manager approval.
+        </div>
+      </div>
+    `;
 
-        await pushAudit(
-          currentStaff().name,
-          currentStaff().role,
-          "request_customer_creation",
-          values.name
-        );
+    const confirmSend = await openModalGeneric(
+      "Review New Customer",
+      review,
+      "Send for approval",
+      true
+    );
 
-        save();
+    if (!confirmSend) return;
 
-        // refresh UIs
-        forceFullUIRefresh?.();
+    // 📤 Push approval
+    state.approvals = state.approvals || [];
+    state.approvals.unshift({
+      id: uid("ap"),
+      type: "customer_creation",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      createdBy: currentStaff().id,
+      createdByName: currentStaff().name,
+      payload: {
+        name,
+        phone,
+        nin,
+        address,
+        photo: photoBase64,
+        openingBalance: bal,
+      },
+    });
 
-        // clear values to prevent re-submit + close modal
-        values.name = values.phone = values.nin = values.address = "";
-        values.bal = "";
-        values.photo = "";
-        window.capturedKycPhoto = null;
+    // 🧼 Clear capture + form to prevent re-submission
+    window.capturedKycPhoto = null;
+    if (nameInput) nameInput.value = "";
+    if (phoneInput) phoneInput.value = "";
+    if (ninInput) ninInput.value = "";
+    if (addressInput) addressInput.value = "";
+    if (balInput) balInput.value = "";
+    if (photoInput) photoInput.value = "";
 
-        closeModal?.();
-        showToast("Customer sent for approval");
-      };
-    }
-  };
+    // ✅ Audit + persist
+    await pushAudit(
+      currentStaff().name,
+      currentStaff().role,
+      "request_customer_creation",
+      name
+    );
 
-  // first bind
-  bindFormHandlers();
+    save();
+    forceFullUIRefresh?.();
+
+    showToast("Customer sent for approval");
+  } finally {
+    // Always release lock
+    window.__sendingNewCustomer = false;
+  }
 });
 
 
