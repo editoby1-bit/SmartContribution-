@@ -1484,18 +1484,21 @@ function renderCustomerKycApprovals() {
         ${
           isApprover
             ? `
-            <div style="display:flex; gap:6px; margin-top:8px">
-              <button class="btn small"
-                onclick="processApproval('${a.id}', 'approve')">
-                Approve
-              </button>
-              <button class="btn small ghost danger"
-                onclick="processApproval('${a.id}', 'reject')">
-                Reject
-              </button>
-            </div>
+              <div style="display:flex; gap:8px; margin-top:10px;">
+                <button class="btn solid approve"
+                        style="opacity:1 !important;"
+                        onclick="processApproval('${a.id}','approve')">
+                  Approve
+                </button>
+
+                <button class="btn solid danger reject"
+                        style="opacity:1 !important;"
+                        onclick="processApproval('${a.id}','reject')">
+                  Reject
+                </button>
+              </div>
             `
-            : `<div class="small muted" style="margin-top:6px">
+            : `<div class="small muted" style="margin-top:10px">
                  Awaiting manager approval
                </div>`
         }
@@ -1506,6 +1509,8 @@ function renderCustomerKycApprovals() {
 
   box.innerHTML = html;
 }
+window.renderCustomerKycApprovals = renderCustomerKycApprovals;
+
 
 function renderCustomerCreationApprovals() {
   const el = document.getElementById("approvals");
@@ -6977,193 +6982,220 @@ function renderMiniBar(amount, max) {
 }
 window.renderMiniBar = renderMiniBar;
 
+
  // ===== OPEN CUSTOMER ACCOUNT (CLEAN SINGLE HANDLER) =====
 document.getElementById("btnNew").addEventListener("click", async () => {
-
-  // 🧼 Reset any previous captured photo
+  // reset any previous captured photo
   window.capturedKycPhoto = null;
 
-  // 🧱 SINGLE FORM WRAPPER (NO DUPLICATES, NO "f is not defined")
-  const formWrapper = document.createElement("div");
-  formWrapper.innerHTML = `
+  // helper: render form html (keeps values if you go back from review)
+  const renderForm = (vals = {}) => `
     <div style="display:flex;flex-direction:column;gap:10px">
 
-      <input id="nName" class="input" placeholder="Full name *">
-      <input id="nPhone" class="input" placeholder="Phone number *">
-      <input id="nNIN" class="input" placeholder="NIN *">
-      <input id="nAddress" class="input" placeholder="Address *">
+      <input id="nName" class="input" placeholder="Full name *" value="${vals.name || ""}">
+      <input id="nPhone" class="input" placeholder="Phone number *" value="${vals.phone || ""}">
+      <input id="nNIN" class="input" placeholder="NIN *" value="${vals.nin || ""}">
+      <input id="nAddress" class="input" placeholder="Address *" value="${vals.address || ""}">
 
-      <div>
-        <label class="small muted">Customer Photo *</label>
-        <input
-          id="nPhoto"
-          type="file"
-          accept="image/*"
-          capture="user"
-          class="input">
+      <div style="display:flex;gap:10px;align-items:center">
+        <div style="flex:1">
+          <label class="small muted">Customer Photo *</label>
+          <input id="nPhoto" type="file" accept="image/*" class="input">
+        </div>
       </div>
 
-      <button id="btnOpenCamera" class="btn ghost" type="button">
-        📷 Use Camera
+      <!-- Preview -->
+      <div id="kycPreviewWrap" style="display:${vals.photo ? "block" : "none"};">
+        <div class="small muted" style="margin:6px 0">Preview</div>
+        <img id="kycPreview"
+             src="${vals.photo || ""}"
+             style="width:120px;height:120px;border-radius:12px;object-fit:cover;border:1px solid #e5e7eb;">
+      </div>
+
+      <!-- More obvious camera button (your Step 1 style) -->
+      <button id="btnOpenCamera"
+              class="btn solid"
+              type="button"
+              style="display:flex;align-items:center;justify-content:center;
+                     gap:8px;background:#0ea5e9;border:none;">
+        📸 Capture Live Photo (Recommended)
       </button>
 
-      <!-- Live preview (camera or file) -->
-      <img id="photoPreview"
-           style="display:none;width:90px;height:90px;border-radius:12px;
-                  object-fit:cover;border:1px solid #e5e7eb;margin-top:4px;" />
+      <input id="nBal" class="input" placeholder="Opening balance (optional)" value="${vals.bal ?? ""}">
 
-      <input id="nBal" class="input" placeholder="Opening balance (optional)">
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button id="btnKycContinue" class="btn solid primary" type="button">Continue</button>
+      </div>
     </div>
   `;
 
-  // 🎥 CAMERA BUTTON BIND (IMMEDIATE — NO setTimeout BUG)
-  const camBtn = formWrapper.querySelector("#btnOpenCamera");
-  const previewImg = formWrapper.querySelector("#photoPreview");
-  const fileInput = formWrapper.querySelector("#nPhoto");
+  // helper: build review html
+  const renderReview = (vals) => `
+    <div style="display:flex;flex-direction:column;gap:12px">
 
-  if (camBtn) {
-    camBtn.onclick = async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <img src="${vals.photo}"
+             style="width:90px;height:90px;border-radius:12px;
+                    object-fit:cover;border:1px solid #e5e7eb;">
 
-      if (typeof openCameraCapture !== "function") {
-        showToast("Camera feature not available");
-        return;
-      }
+        <div style="flex:1">
+          <div><b>Name:</b> ${vals.name}</div>
+          <div><b>Phone:</b> ${vals.phone}</div>
+          <div><b>NIN:</b> ${vals.nin}</div>
+          <div><b>Address:</b> ${vals.address}</div>
+          <div><b>Opening Balance:</b> ${fmt(Number(vals.bal || 0))}</div>
+        </div>
+      </div>
 
-      const photo = await openCameraCapture(); // sets window.capturedKycPhoto
+      <div class="small muted">
+        Please confirm the details before sending for approval.
+      </div>
 
-      if (photo) {
-        previewImg.src = photo;
-        previewImg.style.display = "block";
-        fileInput.value = ""; // avoid conflict with file upload
-      }
-    };
-  }
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button id="btnKycEdit" class="btn ghost" type="button">Edit</button>
+        <button id="btnKycSend" class="btn solid primary" type="button">Send for Approval</button>
+      </div>
+    </div>
+  `;
 
-  // 📁 FILE UPLOAD PREVIEW (nice UX)
-  fileInput.onchange = async () => {
-    const file = fileInput.files[0];
-    if (!file) return;
-    const base64 = await toBase64(file);
-    previewImg.src = base64;
-    previewImg.style.display = "block";
-    window.capturedKycPhoto = null; // prioritize file over camera
+  // MAIN WRAPPER (we will swap between form and review inside this wrapper)
+  const wrap = document.createElement("div");
+  const values = { name: "", phone: "", nin: "", address: "", bal: "", photo: "" };
+
+  // initial form render
+  wrap.innerHTML = renderForm(values);
+
+  // open modal WITHOUT relying on modal OK button (so it won’t close on validation)
+  // okText = null => no auto "OK/Create" button in modal actions
+  openModalGeneric("Open Customer Account", wrap, null, true);
+
+  // binders (re-bind after every wrap.innerHTML swap)
+  const bindFormHandlers = () => {
+    const camBtn = wrap.querySelector("#btnOpenCamera");
+    const fileInput = wrap.querySelector("#nPhoto");
+    const contBtn = wrap.querySelector("#btnKycContinue");
+
+    // file choose => preview it
+    if (fileInput) {
+      fileInput.onchange = async () => {
+        const f = fileInput.files && fileInput.files[0];
+        if (!f) return;
+
+        try {
+          const b64 = await toBase64(f);
+          values.photo = b64;
+          window.capturedKycPhoto = null; // prefer chosen file
+          const pv = wrap.querySelector("#kycPreview");
+          const pw = wrap.querySelector("#kycPreviewWrap");
+          if (pv) pv.src = b64;
+          if (pw) pw.style.display = "block";
+        } catch (e) {
+          console.error(e);
+          showToast("Could not read photo");
+        }
+      };
+    }
+
+    // camera capture => preview it
+    if (camBtn) {
+      camBtn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const b64 = await openCameraCapture();
+        if (!b64) return;
+
+        values.photo = b64;
+
+        const pv = wrap.querySelector("#kycPreview");
+        const pw = wrap.querySelector("#kycPreviewWrap");
+        if (pv) pv.src = b64;
+        if (pw) pw.style.display = "block";
+      };
+    }
+
+    // continue => validate + show review
+    if (contBtn) {
+      contBtn.onclick = async () => {
+        values.name = wrap.querySelector("#nName")?.value.trim() || "";
+        values.phone = wrap.querySelector("#nPhone")?.value.trim() || "";
+        values.nin = wrap.querySelector("#nNIN")?.value.trim() || "";
+        values.address = wrap.querySelector("#nAddress")?.value.trim() || "";
+        values.bal = wrap.querySelector("#nBal")?.value || "";
+
+        // If user didn’t pick file but did camera, photo is stored in values.photo already
+        // If user picked neither, values.photo is empty.
+        if (!values.name) return showToast("Full name is required");
+        if (!values.phone) return showToast("Phone number is required");
+        if (!values.nin) return showToast("NIN is required");
+        if (!values.address) return showToast("Address is required");
+        if (!values.photo) return showToast("Customer photo is required");
+
+        // swap to review
+        wrap.innerHTML = renderReview(values);
+        bindReviewHandlers();
+      };
+    }
   };
 
-  // 🔁 LOOP = MODAL STAYS OPEN UNTIL VALID (CRITICAL FIX)
-  while (true) {
+  const bindReviewHandlers = () => {
+    const editBtn = wrap.querySelector("#btnKycEdit");
+    const sendBtn = wrap.querySelector("#btnKycSend");
 
-    const ok = await openModalGeneric(
-      "Open Customer Account", // client requirement ✔
-      formWrapper,
-      "Create",
-      true
-    );
-
-    // ❌ User cancelled modal
-    if (!ok) {
-      window.capturedKycPhoto = null;
-      return;
+    if (editBtn) {
+      editBtn.onclick = () => {
+        wrap.innerHTML = renderForm(values);
+        bindFormHandlers();
+      };
     }
 
-    // 📥 COLLECT VALUES AFTER CLICKING CREATE
-    const name = formWrapper.querySelector("#nName").value.trim();
-    const phone = formWrapper.querySelector("#nPhone").value.trim();
-    const nin = formWrapper.querySelector("#nNIN").value.trim();
-    const address = formWrapper.querySelector("#nAddress").value.trim();
-    const bal = Number(formWrapper.querySelector("#nBal").value || 0);
-    const photoFile = formWrapper.querySelector("#nPhoto").files[0];
+    if (sendBtn) {
+      sendBtn.onclick = async () => {
+        // push approval
+        state.approvals = state.approvals || [];
+        state.approvals.unshift({
+          id: uid("ap"),
+          type: "customer_creation",
+          status: "pending",
+          createdAt: new Date().toISOString(),
+          createdBy: currentStaff().id,
+          createdByName: currentStaff().name,
+          payload: {
+            name: values.name,
+            phone: values.phone,
+            nin: values.nin,
+            address: values.address,
+            photo: values.photo,
+            openingBalance: Number(values.bal || 0)
+          }
+        });
 
-    // 🚨 STRICT VALIDATION (MODAL WILL REOPEN INSTEAD OF CLOSING)
-    if (!name) {
-      showToast("Full name is required");
-      continue;
+        await pushAudit(
+          currentStaff().name,
+          currentStaff().role,
+          "request_customer_creation",
+          values.name
+        );
+
+        save();
+
+        // refresh UIs
+        forceFullUIRefresh?.();
+
+        // clear values to prevent re-submit + close modal
+        values.name = values.phone = values.nin = values.address = "";
+        values.bal = "";
+        values.photo = "";
+        window.capturedKycPhoto = null;
+
+        closeModal?.();
+        showToast("Customer sent for approval");
+      };
     }
+  };
 
-    if (!phone) {
-      showToast("Phone number is required");
-      continue;
-    }
-
-    if (!nin) {
-      showToast("NIN is required");
-      continue;
-    }
-
-    if (!address) {
-      showToast("Address is required");
-      continue;
-    }
-
-    // 📸 PHOTO HANDLING (Camera OR File)
-    let photoBase64 = "";
-
-    if (photoFile) {
-      photoBase64 = await toBase64(photoFile);
-    } else if (window.capturedKycPhoto) {
-      photoBase64 = window.capturedKycPhoto;
-    } else {
-      showToast("Customer photo is required");
-      continue;
-    }
-
-    // 📤 SEND TO KYC APPROVAL PIPELINE (NOT DIRECT CUSTOMER CREATION)
-    state.approvals = state.approvals || [];
-    state.approvals.unshift({
-      id: uid("ap"),
-      type: "customer_creation",
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      createdBy: currentStaff().id,
-      createdByName: currentStaff().name,
-      payload: {
-        name,
-        phone,
-        nin,
-        address,
-        photo: photoBase64,
-        openingBalance: bal
-      }
-    });
-
-    // 🧼 CLEAR FORM AFTER SUCCESS (PREVENT RESUBMISSION BUG)
-    formWrapper.querySelector("#nName").value = "";
-    formWrapper.querySelector("#nPhone").value = "";
-    formWrapper.querySelector("#nNIN").value = "";
-    formWrapper.querySelector("#nAddress").value = "";
-    formWrapper.querySelector("#nBal").value = "";
-    formWrapper.querySelector("#nPhoto").value = "";
-    previewImg.style.display = "none";
-    previewImg.src = "";
-    window.capturedKycPhoto = null;
-
-    // 🧾 AUDIT
-    await pushAudit(
-      currentStaff().name,
-      currentStaff().role,
-      "request_customer_creation",
-      name
-    );
-
-    save();
-
-    // 🔥 GLOBAL INSTANT UI SYNC (NO DASHBOARD TOGGLE EVER AGAIN)
-    if (typeof forceFullUIRefresh === "function") {
-      forceFullUIRefresh();
-    } else {
-      renderCustomerKycApprovals?.();
-      renderDashboardApprovals?.();
-      renderApprovals?.();
-      renderDashboard?.();
-      renderCustomers?.();
-      renderAudit?.();
-    }
-
-    showToast("Customer sent for approval");
-
-    return; // ✅ EXIT LOOP AFTER SUCCESS (IMPORTANT)
-  }
+  // first bind
+  bindFormHandlers();
 });
 
 
@@ -7426,109 +7458,134 @@ function resetCODDraftForStaffDate(staffId, dateStr) {
 }
 window.resetCODDraftForStaffDate = resetCODDraftForStaffDate;
 
+
 async function openCameraCapture() {
+  // This camera UI is a separate overlay and DOES NOT reuse your app modal,
+  // so it won’t destroy/replace your "Open Customer Account" form.
+
   let stream = null;
 
-  const back = document.getElementById("txModalBack");
-  const modal = document.getElementById("txModal");
-  const titleEl = document.getElementById("txTitle");
-  const bodyEl = document.getElementById("txBody");
-  const actions = modal.querySelector(".modal-actions");
-  const cancelBtn = document.getElementById("txCancel");
+  // overlay
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.background = "rgba(0,0,0,0.75)";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.zIndex = "99999";
+
+  const card = document.createElement("div");
+  card.style.width = "min(520px, 92vw)";
+  card.style.background = "white";
+  card.style.borderRadius = "14px";
+  card.style.padding = "12px";
+  card.style.display = "flex";
+  card.style.flexDirection = "column";
+  card.style.gap = "10px";
+
+  const title = document.createElement("div");
+  title.style.fontWeight = "700";
+  title.textContent = "Capture Photo";
+
+  const video = document.createElement("video");
+  video.autoplay = true;
+  video.playsInline = true;
+  video.muted = true;
+  video.style.width = "100%";
+  video.style.borderRadius = "12px";
+  video.style.background = "#111";
+
+  const actions = document.createElement("div");
+  actions.style.display = "flex";
+  actions.style.gap = "8px";
+  actions.style.justifyContent = "flex-end";
+
+  const btnCancel = document.createElement("button");
+  btnCancel.className = "btn ghost";
+  btnCancel.type = "button";
+  btnCancel.textContent = "Cancel";
+
+  const btnCapture = document.createElement("button");
+  btnCapture.className = "btn solid primary";
+  btnCapture.type = "button";
+  btnCapture.textContent = "Capture";
+
+  actions.appendChild(btnCancel);
+  actions.appendChild(btnCapture);
+
+  card.appendChild(title);
+  card.appendChild(video);
+  card.appendChild(actions);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  const cleanup = () => {
+    try {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+    } catch {}
+    overlay.remove();
+  };
 
   try {
-    // ⚠️ On PC, camera usually requires HTTPS or localhost
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user" },
       audio: false
     });
 
-    // Build UI
-    titleEl.textContent = "Capture Photo";
-    bodyEl.innerHTML = "";
-
-    // Remove any previous OK buttons
-    actions.querySelectorAll(".tx-ok").forEach(b => b.remove());
-
-    const container = document.createElement("div");
-    container.style.display = "flex";
-    container.style.flexDirection = "column";
-    container.style.gap = "10px";
-
-    const video = document.createElement("video");
-    video.autoplay = true;
-    video.playsInline = true;
-    video.style.width = "100%";
-    video.style.borderRadius = "12px";
     video.srcObject = stream;
 
-    container.appendChild(video);
-
-    const hint = document.createElement("div");
-    hint.className = "small muted";
-    hint.textContent = "Position the face clearly, then tap Capture.";
-    container.appendChild(hint);
-
-    bodyEl.appendChild(container);
-
-    // Buttons
-    cancelBtn.style.display = "inline-flex";
-
-    const captureBtn = document.createElement("button");
-    captureBtn.className = "btn solid tx-ok";
-    captureBtn.textContent = "Capture";
-    actions.appendChild(captureBtn);
-
-    back.style.display = "flex";
-
-    // Wait until video is actually playing (prevents black frames)
-    await new Promise((resolve) => {
-      const done = () => resolve();
-      if (video.readyState >= 2) return done();
-      video.onloadedmetadata = () => {
-        video.play().catch(() => {});
-        setTimeout(done, 250);
-      };
+    // wait for video dimensions to be ready
+    await new Promise((res) => {
+      const t = setInterval(() => {
+        if (video.videoWidth && video.videoHeight) {
+          clearInterval(t);
+          res(true);
+        }
+      }, 50);
+      setTimeout(() => {
+        clearInterval(t);
+        res(true);
+      }, 1500);
     });
 
-    const cleanup = () => {
-      if (stream) stream.getTracks().forEach(t => t.stop());
-      stream = null;
-      back.style.display = "none";
-      captureBtn.onclick = null;
-      cancelBtn.onclick = null;
-      back.onclick = null;
-    };
-
-    return await new Promise(resolve => {
-      captureBtn.onclick = (e) => {
-        e.stopPropagation();
-
-        // Capture BEFORE closing modal
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const base64 = canvas.toDataURL("image/jpeg", 0.9);
-
-        window.capturedKycPhoto = base64;
-        showToast("Photo captured successfully");
-
-        cleanup();
-        resolve(base64);
-      };
-
-      cancelBtn.onclick = (e) => {
-        e.stopPropagation();
+    return await new Promise((resolve) => {
+      btnCancel.onclick = () => {
         cleanup();
         resolve(null);
       };
 
-      back.onclick = (e) => {
-        if (e.target === back) {
+      btnCapture.onclick = () => {
+        try {
+          const w = video.videoWidth || 640;
+          const h = video.videoHeight || 480;
+
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(video, 0, 0, w, h);
+
+          const base64 = canvas.toDataURL("image/jpeg", 0.9);
+
+          // store globally for any other flow
+          window.capturedKycPhoto = base64;
+
+          cleanup();
+          showToast("Photo captured ✓");
+          resolve(base64);
+        } catch (e) {
+          console.error(e);
+          showToast("Could not capture photo");
+          cleanup();
+          resolve(null);
+        }
+      };
+
+      // click outside card closes
+      overlay.onclick = (e) => {
+        if (e.target === overlay) {
           cleanup();
           resolve(null);
         }
@@ -7537,8 +7594,8 @@ async function openCameraCapture() {
 
   } catch (err) {
     console.error(err);
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    showToast("Camera not available. Use file upload instead.");
+    cleanup();
+    showToast("Camera not available / permission denied");
     return null;
   }
 }
