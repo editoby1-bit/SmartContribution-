@@ -3692,6 +3692,10 @@ if (!canApprove()) {
   showToast("You are not authorized to approve transactions");
   return;
 }
+const closeTxModal = () => {
+  const back = document.getElementById("txModalBack");
+  if (back) back.style.display = "none";
+};
   const idx = state.approvals.findIndex(a => a.id === id);
   if (idx < 0) return showToast("Approval not found");
 
@@ -3782,9 +3786,8 @@ if (app.type === "customer_creation") {
   renderAudit?.();
   updateChartData?.();
 
-  // ✅ Ensure modal is gone even if anything re-renders fast
-  const back = document.getElementById("txModalBack");
-  if (back) back.style.display = "none";
+
+  closeTxModal();
 
   showToast(action === "approve" ? "Customer account opened successfully" : "Customer request rejected");
   return; // 🚨 stop normal approval flow
@@ -3901,7 +3904,7 @@ state.transactions.push({
 // =========================
 // CREDIT APPROVAL ONLY
 // =========================
-if (app.type === "credit") {
+if (action === "approve" && app.type === "credit") {
 
   let creditedToBalance = app.amount;
 
@@ -4038,6 +4041,8 @@ renderDashboardApprovals();      // dashboard approvals
 renderCustomers();
 renderAudit();
 renderDashboard();               // CRITICAL: fixes toggle delay
+
+closeTxModal();
 
   showToast(
     action === "approve"
