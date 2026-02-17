@@ -598,17 +598,15 @@ function sumByAccounts(accountIds) {
 
 
 async function confirmApproval(a, action) {
+  if (a.type === "customer_creation") {
+    const mapped = action === "approved" ? "approve" : "reject";
+    await processApproval(a.id, mapped);
+    return;
+  }
 
-// 🔥 ROUTE CUSTOMER KYC TO MASTER APPROVAL PIPELINE (WITH REVIEW CARD)
-if (a.type === "customer_creation") {
-  // Use the main approval engine so dashboard & main screen behave identically
-  processApproval(a.id, action === "approved" ? "approve" : "reject");
-  return;
+  // ✅ KEEP ALL YOUR OLD confirmApproval LOGIC HERE (for credit/withdraw/empowerment/etc)
+  // ... (your existing code continues)
 }
-
-  // 👇 KEEP YOUR EXISTING TRANSACTION APPROVAL LOGIC BELOW THIS LINE
-}
-
 
 function computeTodayStaffTotals(staffId) {
   const _today = new Date().toISOString().slice(0, 10);
@@ -1724,7 +1722,7 @@ function showDashboard() {
   if (dash) dash.style.display = "block";
   if (app) app.style.display = "none";
 
-  renderDashboard();
+  forceFullUIRefresh(); // enough
 }
 
 function hideDashboard() {
@@ -1734,8 +1732,11 @@ function hideDashboard() {
   const app = document.getElementById("app");
 
   if (dash) dash.style.display = "none";
-  if (app) app.style.display = "grid";
+  if (app) app.style.display = "block";
+
+  forceFullUIRefresh();
 }
+
 
 
 function renderAttentionRequired() {
@@ -2043,14 +2044,16 @@ function ensureEmpowermentModel(c) {
 }
 
 function forceFullUIRefresh() {
-  renderCustomers();
-  renderApprovals();
-  renderCustomerKycApprovals();
-  renderDashboardApprovals();
-  renderDashboardActivity && renderDashboardActivity();
-  renderAudit && renderAudit();
-  renderDashboard();
+  renderCustomerKycApprovals?.();
+  renderDashboardApprovals?.();
+  renderApprovals?.();
+  renderDashboard?.();
+  renderCustomers?.();
+  renderAudit?.();
+  updateChartData?.();
 }
+window.forceFullUIRefresh = forceFullUIRefresh;
+
 
 function calculateEmpowermentSchedule(c) {
   const e = c.empowerment;
@@ -3692,28 +3695,22 @@ if (!canApprove()) {
     return;
   }
 
-// 🔥 SPECIAL PIPELINE: CUSTOMER KYC APPROVAL (CRITICAL FIX)
+// =========================
+// CUSTOMER CREATION APPROVAL (KYC PIPELINE)
+// =========================
 if (app.type === "customer_creation") {
   const p = app.payload || {};
 
+  // Review card (Approve / Reject)
   const review = document.createElement("div");
   review.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:12px">
-
       <div style="display:flex;gap:12px;align-items:flex-start">
         ${
           p.photo
-            ? `<img src="${p.photo}"
-                 style="width:70px;height:70px;border-radius:12px;
-                        object-fit:cover;border:1px solid #e5e7eb;">`
-            : `<div style="width:70px;height:70px;border-radius:12px;
-                           background:#f3f4f6;display:flex;
-                           align-items:center;justify-content:center;
-                           font-size:11px;color:#9ca3af;">
-                 No Photo
-               </div>`
+            ? `<img src="${p.photo}" style="width:72px;height:72px;border-radius:12px;object-fit:cover;border:1px solid #e5e7eb;">`
+            : `<div style="width:72px;height:72px;border-radius:12px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:11px;color:#9ca3af;">No Photo</div>`
         }
-
         <div style="flex:1">
           <div><b>Name:</b> ${p.name || "—"}</div>
           <div><b>Phone:</b> ${p.phone || "—"}</div>
@@ -3722,73 +3719,71 @@ if (app.type === "customer_creation") {
           <div><b>Opening Balance:</b> ${fmt(Number(p.openingBalance || 0))}</div>
         </div>
       </div>
-
-      <div class="small muted">
-        Review customer details before opening account.
-      </div>
+      <div class="small muted">Please review before approving.</div>
     </div>
   `;
 
   const ok = await openModalGeneric(
-   "Review & Approve New Customer",
-   review,
-   action === "approve" ? "Approve & Open Account" : "Reject",
-   true
-);
+    action === "approve" ? "Review & Approve New Customer" : "Review & Reject New Customer",
+    review,
+    action === "approve" ? "Approve & Open Account" : "Reject",
+    true
+  );
 
-if (!ok) return;
+  if (!ok) return;
 
-// 🧼 CLOSE REVIEW MODAL AFTER DECISION (fix stuck card)
-document.getElementById("txModalBack").style.display = "none";
-
+  // Approve -> create real customer
   if (action === "approve") {
-    // 🔢 ACCOUNT NUMBER STARTS FROM 1000 (CLIENT REQUIREMENT)
-    const existingNumbers = state.customers
-      .map(c => Number(c.accountNumber) || 999);
-
-    const max = existingNumbers.length
-      ? Math.max(...existingNumbers)
-      : 999;
-
     const newCustomer = {
-      id: uid("cust"),
-      accountNumber: String(max + 1), // 1000, 1001, 1002...
-      name: p.name || "Unnamed",
+      id: uid("c"),
+      accountNumber: generateCustomerAccountNumber(), // ✅ starts at 1000
+      name: p.name || "",
       phone: p.phone || "",
       nin: p.nin || "",
       address: p.address || "",
       photo: p.photo || "",
       balance: Number(p.openingBalance || 0),
-      createdAt: new Date().toISOString(),
-      createdBy: app.createdByName || "System"
+      frozen: false,
+      transactions: []
     };
 
     state.customers.push(newCustomer);
+
+    // Link approval to created customer (optional but useful)
     app.resolvedCustomerId = newCustomer.id;
   }
 
+  // Mark approval resolved
   app.status = action === "approve" ? "approved" : "rejected";
   app.processedBy = staff.name;
   app.processedAt = new Date().toISOString();
 
-  save();
-
-  // 🔥 INSTANT UI SYNC (fixes dashboard + buttons delay)
-  renderCustomers();
-  renderCustomerKycApprovals();
-  renderDashboardApprovals();
-  renderApprovals();
-  renderDashboard();
-  renderAudit();
-
-  showToast(
-    action === "approve"
-      ? "Customer account opened successfully"
-      : "Customer request rejected"
+  await pushAudit(
+    staff.name,
+    staff.role,
+    `approval_${app.status}`,
+    { approvalId: app.id, decision: action, type: app.type }
   );
 
-  return; // 🚨 CRITICAL: stops "Customer missing" logic
+  save();
+
+  // ✅ Force UI refresh (no dashboard toggle needed)
+  renderCustomers();
+  renderCustomerKycApprovals?.();
+  renderDashboardApprovals?.();
+  renderApprovals();
+  renderDashboard?.();
+  renderAudit?.();
+  updateChartData?.();
+
+  // ✅ Ensure modal is gone even if anything re-renders fast
+  const back = document.getElementById("txModalBack");
+  if (back) back.style.display = "none";
+
+  showToast(action === "approve" ? "Customer account opened successfully" : "Customer request rejected");
+  return; // 🚨 stop normal approval flow
 }
+
 
   const cust = state.customers.find(c => c.id === app.customerId);
   if (!cust) return showToast("Customer missing");
@@ -6050,13 +6045,14 @@ function renderDashboard() {
 
  renderDashboardKPIs();
  renderAttentionRequired();
- renderDashboardApprovals();
- renderDashboardActivity();
+  renderDashboardActivity();
  initCODDatePicker();
  bindCODButtons();
  renderManagerCODSummary(window.activeCODDate);
  renderCODForDate(window.activeCODDate);
- renderCustomerKycApprovals(); // stays last
+ renderApprovals?.();
+renderDashboardApprovals?.();
+renderCustomerKycApprovals(); // stays last
 }
 
 
@@ -6987,7 +6983,7 @@ document.getElementById("btnNew").addEventListener("click", async () => {
   // 🧼 Reset any previous captured photo
   window.capturedKycPhoto = null;
 
-  // 🧱 FORM WRAPPER (SINGLE SOURCE — NO DUPLICATES)
+  // 🧱 SINGLE FORM WRAPPER (NO DUPLICATES, NO "f is not defined")
   const formWrapper = document.createElement("div");
   formWrapper.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px">
@@ -7011,100 +7007,164 @@ document.getElementById("btnNew").addEventListener("click", async () => {
         📷 Use Camera
       </button>
 
+      <!-- Live preview (camera or file) -->
+      <img id="photoPreview"
+           style="display:none;width:90px;height:90px;border-radius:12px;
+                  object-fit:cover;border:1px solid #e5e7eb;margin-top:4px;" />
+
       <input id="nBal" class="input" placeholder="Opening balance (optional)">
     </div>
   `;
 
-  // 🎥 CAMERA BUTTON BIND (AFTER DOM CREATION)
-  setTimeout(() => {
-    const camBtn = formWrapper.querySelector("#btnOpenCamera");
-    if (camBtn && typeof openCameraCapture === "function") {
-      camBtn.onclick = openCameraCapture;
-    }
-  }, 0);
+  // 🎥 CAMERA BUTTON BIND (IMMEDIATE — NO setTimeout BUG)
+  const camBtn = formWrapper.querySelector("#btnOpenCamera");
+  const previewImg = formWrapper.querySelector("#photoPreview");
+  const fileInput = formWrapper.querySelector("#nPhoto");
 
-  // 🪟 OPEN MODAL (CLIENT LABEL REQUIREMENT)
-  const ok = await openModalGeneric(
-    "Open Customer Account",
-    formWrapper,
-    "Create",
-    true
-  );
+  if (camBtn) {
+    camBtn.onclick = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-  // ❌ User cancelled
-  if (!ok) return;
+      if (typeof openCameraCapture !== "function") {
+        showToast("Camera feature not available");
+        return;
+      }
 
-  // 📥 COLLECT VALUES (AFTER CLICKING CREATE)
-  const name = formWrapper.querySelector("#nName").value.trim();
-  const phone = formWrapper.querySelector("#nPhone").value.trim();
-  const nin = formWrapper.querySelector("#nNIN").value.trim();
-  const address = formWrapper.querySelector("#nAddress").value.trim();
-  const bal = Number(formWrapper.querySelector("#nBal").value || 0);
-  const photoFile = formWrapper.querySelector("#nPhoto").files[0];
+      const photo = await openCameraCapture(); // sets window.capturedKycPhoto
 
-  // 🚨 STRICT KYC VALIDATION (MODAL STAYS OPEN)
-  if (!name) return showToast("Full name is required");
-  if (!phone) return showToast("Phone number is required");
-  if (!nin) return showToast("NIN is required");
-  if (!address) return showToast("Address is required");
-
-  let photoBase64 = "";
-
-  if (photoFile) {
-    photoBase64 = await toBase64(photoFile);
-  } else if (window.capturedKycPhoto) {
-    photoBase64 = window.capturedKycPhoto;
-  } else {
-    return showToast("Customer photo is required");
+      if (photo) {
+        previewImg.src = photo;
+        previewImg.style.display = "block";
+        fileInput.value = ""; // avoid conflict with file upload
+      }
+    };
   }
 
-  // 📤 SEND TO CUSTOMER KYC APPROVAL PIPELINE
-  state.approvals = state.approvals || [];
-  state.approvals.unshift({
-    id: uid("ap"),
-    type: "customer_creation",
-    status: "pending",
-    createdAt: new Date().toISOString(),
-    createdBy: currentStaff().id,
-    createdByName: currentStaff().name,
-    payload: {
-      name,
-      phone,
-      nin,
-      address,
-      photo: photoBase64,
-      openingBalance: bal
+  // 📁 FILE UPLOAD PREVIEW (nice UX)
+  fileInput.onchange = async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const base64 = await toBase64(file);
+    previewImg.src = base64;
+    previewImg.style.display = "block";
+    window.capturedKycPhoto = null; // prioritize file over camera
+  };
+
+  // 🔁 LOOP = MODAL STAYS OPEN UNTIL VALID (CRITICAL FIX)
+  while (true) {
+
+    const ok = await openModalGeneric(
+      "Open Customer Account", // client requirement ✔
+      formWrapper,
+      "Create",
+      true
+    );
+
+    // ❌ User cancelled modal
+    if (!ok) {
+      window.capturedKycPhoto = null;
+      return;
     }
-  });
 
-  // 🧼 CLEAR FORM TO PREVENT RESUBMISSION (CLIENT REQUIREMENT)
-  formWrapper.querySelector("#nName").value = "";
-  formWrapper.querySelector("#nPhone").value = "";
-  formWrapper.querySelector("#nNIN").value = "";
-  formWrapper.querySelector("#nAddress").value = "";
-  formWrapper.querySelector("#nBal").value = "";
-  formWrapper.querySelector("#nPhoto").value = "";
-  window.capturedKycPhoto = null;
+    // 📥 COLLECT VALUES AFTER CLICKING CREATE
+    const name = formWrapper.querySelector("#nName").value.trim();
+    const phone = formWrapper.querySelector("#nPhone").value.trim();
+    const nin = formWrapper.querySelector("#nNIN").value.trim();
+    const address = formWrapper.querySelector("#nAddress").value.trim();
+    const bal = Number(formWrapper.querySelector("#nBal").value || 0);
+    const photoFile = formWrapper.querySelector("#nPhoto").files[0];
 
-  await pushAudit(
-    currentStaff().name,
-    currentStaff().role,
-    "request_customer_creation",
-    name
-  );
+    // 🚨 STRICT VALIDATION (MODAL WILL REOPEN INSTEAD OF CLOSING)
+    if (!name) {
+      showToast("Full name is required");
+      continue;
+    }
 
-  save();
+    if (!phone) {
+      showToast("Phone number is required");
+      continue;
+    }
 
-  // 🔥 INSTANT GLOBAL SYNC (NO DASHBOARD TOGGLE EVER AGAIN)
-  renderCustomerKycApprovals();
-  renderDashboardApprovals?.();
-  renderApprovals();
-  renderDashboard();
-  renderCustomers();
+    if (!nin) {
+      showToast("NIN is required");
+      continue;
+    }
 
-  showToast("Customer sent for approval");
+    if (!address) {
+      showToast("Address is required");
+      continue;
+    }
+
+    // 📸 PHOTO HANDLING (Camera OR File)
+    let photoBase64 = "";
+
+    if (photoFile) {
+      photoBase64 = await toBase64(photoFile);
+    } else if (window.capturedKycPhoto) {
+      photoBase64 = window.capturedKycPhoto;
+    } else {
+      showToast("Customer photo is required");
+      continue;
+    }
+
+    // 📤 SEND TO KYC APPROVAL PIPELINE (NOT DIRECT CUSTOMER CREATION)
+    state.approvals = state.approvals || [];
+    state.approvals.unshift({
+      id: uid("ap"),
+      type: "customer_creation",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      createdBy: currentStaff().id,
+      createdByName: currentStaff().name,
+      payload: {
+        name,
+        phone,
+        nin,
+        address,
+        photo: photoBase64,
+        openingBalance: bal
+      }
+    });
+
+    // 🧼 CLEAR FORM AFTER SUCCESS (PREVENT RESUBMISSION BUG)
+    formWrapper.querySelector("#nName").value = "";
+    formWrapper.querySelector("#nPhone").value = "";
+    formWrapper.querySelector("#nNIN").value = "";
+    formWrapper.querySelector("#nAddress").value = "";
+    formWrapper.querySelector("#nBal").value = "";
+    formWrapper.querySelector("#nPhoto").value = "";
+    previewImg.style.display = "none";
+    previewImg.src = "";
+    window.capturedKycPhoto = null;
+
+    // 🧾 AUDIT
+    await pushAudit(
+      currentStaff().name,
+      currentStaff().role,
+      "request_customer_creation",
+      name
+    );
+
+    save();
+
+    // 🔥 GLOBAL INSTANT UI SYNC (NO DASHBOARD TOGGLE EVER AGAIN)
+    if (typeof forceFullUIRefresh === "function") {
+      forceFullUIRefresh();
+    } else {
+      renderCustomerKycApprovals?.();
+      renderDashboardApprovals?.();
+      renderApprovals?.();
+      renderDashboard?.();
+      renderCustomers?.();
+      renderAudit?.();
+    }
+
+    showToast("Customer sent for approval");
+
+    return; // ✅ EXIT LOOP AFTER SUCCESS (IMPORTANT)
+  }
 });
-
 
 
 document.getElementById("btnVerify").addEventListener("click", async () => {
@@ -7304,17 +7364,13 @@ state.operational.includeEmpowerment = state.operational.includeEmpowerment || f
   if (staffSelect) {
     staffSelect.value = state.activeStaffId;
 
-    staffSelect.onchange = (e) => {
-      state.activeStaffId = e.target.value;
-      save();
+   staffSelect.onchange = (e) => {
+  state.activeStaffId = e.target.value;
+  save();
 
-      hideDashboard();
-      renderCustomers();
-      renderApprovals();
-      renderAudit();
-      syncDashboardVisibility();
-      bindCODButtons();
-    };
+  hideDashboard();            // hide first so UI state is consistent
+  forceFullUIRefresh();       // then refresh everything
+};
   }
 
 function bindCODButtons() {
@@ -7371,11 +7427,28 @@ function resetCODDraftForStaffDate(staffId, dateStr) {
 window.resetCODDraftForStaffDate = resetCODDraftForStaffDate;
 
 async function openCameraCapture() {
+  let stream = null;
+
+  const back = document.getElementById("txModalBack");
+  const modal = document.getElementById("txModal");
+  const titleEl = document.getElementById("txTitle");
+  const bodyEl = document.getElementById("txBody");
+  const actions = modal.querySelector(".modal-actions");
+  const cancelBtn = document.getElementById("txCancel");
+
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
+    // ⚠️ On PC, camera usually requires HTTPS or localhost
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
       audio: false
     });
+
+    // Build UI
+    titleEl.textContent = "Capture Photo";
+    bodyEl.innerHTML = "";
+
+    // Remove any previous OK buttons
+    actions.querySelectorAll(".tx-ok").forEach(b => b.remove());
 
     const container = document.createElement("div");
     container.style.display = "flex";
@@ -7391,46 +7464,84 @@ async function openCameraCapture() {
 
     container.appendChild(video);
 
-    const ok = await openModalGeneric(
-      "Capture Photo",
-      container,
-      "Capture",
-      true
-    );
+    const hint = document.createElement("div");
+    hint.className = "small muted";
+    hint.textContent = "Position the face clearly, then tap Capture.";
+    container.appendChild(hint);
 
-    if (!ok) {
-      stream.getTracks().forEach(t => t.stop());
-      return null;
-    }
+    bodyEl.appendChild(container);
 
-    // Wait for video to be ready (CRITICAL for black screen fix)
-    await new Promise(res => setTimeout(res, 300));
+    // Buttons
+    cancelBtn.style.display = "inline-flex";
 
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    const captureBtn = document.createElement("button");
+    captureBtn.className = "btn solid tx-ok";
+    captureBtn.textContent = "Capture";
+    actions.appendChild(captureBtn);
 
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    back.style.display = "flex";
 
-    stream.getTracks().forEach(t => t.stop());
+    // Wait until video is actually playing (prevents black frames)
+    await new Promise((resolve) => {
+      const done = () => resolve();
+      if (video.readyState >= 2) return done();
+      video.onloadedmetadata = () => {
+        video.play().catch(() => {});
+        setTimeout(done, 250);
+      };
+    });
 
-    const base64 = canvas.toDataURL("image/jpeg", 0.9);
+    const cleanup = () => {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      stream = null;
+      back.style.display = "none";
+      captureBtn.onclick = null;
+      cancelBtn.onclick = null;
+      back.onclick = null;
+    };
 
-    // Store globally for the form
-    window.capturedKycPhoto = base64;
+    return await new Promise(resolve => {
+      captureBtn.onclick = (e) => {
+        e.stopPropagation();
 
-    showToast("Photo captured successfully");
+        // Capture BEFORE closing modal
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
 
-    return base64;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const base64 = canvas.toDataURL("image/jpeg", 0.9);
+
+        window.capturedKycPhoto = base64;
+        showToast("Photo captured successfully");
+
+        cleanup();
+        resolve(base64);
+      };
+
+      cancelBtn.onclick = (e) => {
+        e.stopPropagation();
+        cleanup();
+        resolve(null);
+      };
+
+      back.onclick = (e) => {
+        if (e.target === back) {
+          cleanup();
+          resolve(null);
+        }
+      };
+    });
 
   } catch (err) {
     console.error(err);
-    showToast("Camera not available on this device/browser");
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    showToast("Camera not available. Use file upload instead.");
     return null;
   }
 }
-
 window.openCameraCapture = openCameraCapture;
 
 
