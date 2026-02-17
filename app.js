@@ -2810,23 +2810,29 @@ async function openActionModal(type) {
       type === "credit" ? "Credit" : "Withdraw"
     );
 
-    if (!ok) return; // user cancelled
+    if (!ok) {
+      closeTxModal?.();
+      return;
+    }
 
-    const amt = Number(f.querySelector("#actAmt").value || 0);
-    const desc = f.querySelector("#actDesc").value.trim();
+    const amtRaw = f.querySelector("#actAmt").value;
+    const descRaw = f.querySelector("#actDesc").value;
 
-    // retain values on loop
-    lastAmount = f.querySelector("#actAmt").value;
-    lastDesc = desc;
+    const amt = Number(amtRaw || 0);
+    const desc = (descRaw || "").trim();
+
+    // preserve for next loop
+    lastAmount = amtRaw;
+    lastDesc = descRaw;
 
     if (amt <= 0) {
       showToast("Enter valid amount");
-      continue; // 🔁 modal reopens, values retained
+      continue;
     }
 
     if (!desc) {
       showToast("Description is required for audit");
-      continue; // 🔁 modal reopens, values retained
+      continue;
     }
 
     await processTransaction({
@@ -2836,10 +2842,14 @@ async function openActionModal(type) {
       desc
     });
 
-    // ✅ SUCCESS → break loop → modal closes ON PURPOSE
+    // ✅ success: stop loop
     break;
   }
+
+  // Extra safety: ensure modal is closed even if processTransaction changes later
+  closeTxModal?.();
 }
+
 
 // 4. Reload profile tab after credit / withdraw
 function refreshAfterTransaction() {
@@ -2997,6 +3007,7 @@ function printStatement(id) {
       txBody.appendChild(dangerZone);
     }
   }
+  
   function closeTxModal() {
   const back = document.getElementById("txModalBack");
   if (back) back.style.display = "none";
@@ -3072,7 +3083,6 @@ window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
   let lastPurpose = "";
   let lastInterest = "";
 
-
   while (true) {
     const box = document.createElement("div");
     box.innerHTML = `
@@ -3080,13 +3090,7 @@ window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
 
       <div style="margin-top:8px">
         <input id="empAmt" class="input" placeholder="Amount" value="${lastAmount}"/>
-        <input
-  id="empInterest"
-  class="input"
-  placeholder="Interest (₦)"
-  value="${lastInterest}"
-/>
-
+        <input id="empInterest" class="input" placeholder="Interest (₦)" value="${lastInterest}"/>
       </div>
 
       <div style="margin-top:8px">
@@ -3094,54 +3098,55 @@ window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
       </div>
     `;
 
-    const ok = await openModalGeneric(
-      "Empowerment Request",
-      box,
-      "Submit"
-    );
+    const ok = await openModalGeneric("Empowerment Request", box, "Submit");
+    if (!ok) {
+      closeTxModal?.();
+      return;
+    }
 
-    // User cancelled
-    if (!ok) return;
+    const amtRaw = box.querySelector("#empAmt").value;
+    const purposeRaw = box.querySelector("#empPurpose").value;
+    const interestRaw = box.querySelector("#empInterest").value;
 
-    const amount = Number(box.querySelector("#empAmt").value || 0);
-    const purpose = box.querySelector("#empPurpose").value || "";
-    const interest = Number(
-  document.getElementById("empInterest").value || 0
-);
-lastInterest = document.getElementById("empInterest").value;
-if (interest < 0) {
-  showToast("Interest cannot be negative");
-  continue;
-}
+    const amount = Number(amtRaw || 0);
+    const purpose = (purposeRaw || "").trim();
+    const interest = Number(interestRaw || 0);
 
-
-    // Preserve values for next loop
-    lastAmount = box.querySelector("#empAmt").value;
-    lastPurpose = purpose;
+    // preserve for next loop
+    lastAmount = amtRaw;
+    lastPurpose = purposeRaw;
+    lastInterest = interestRaw;
 
     if (amount <= 0) {
       showToast("Enter a valid amount");
-      continue; // 🔁 modal reopens with values preserved
+      continue;
     }
 
-    if (!purpose.trim()) {
-  showToast("Purpose is required for empowerment audit");
-  continue; // 🔁 reopens modal with preserved values
-}
+    if (!purpose) {
+      showToast("Purpose is required for empowerment audit");
+      continue;
+    }
 
+    if (interest < 0) {
+      showToast("Interest cannot be negative");
+      continue;
+    }
 
-
-    // ✅ Valid → send for approval
     await processTransaction({
-  type: "empowerment",
-  customerId: c.id,
-  amount,
-  desc: purpose,
-  interest
-});
-    return; // exit loop on success
+      type: "empowerment",
+      customerId: c.id,
+      amount,
+      desc: purpose,
+      interest
+    });
+
+    // ✅ success: exit loop and ensure closed
+    break;
   }
+
+  closeTxModal?.();
 }
+
 
 function openTransactionSummaryModal() {
   const entries = (state.accountEntries || [])
@@ -3558,9 +3563,10 @@ function printCustomerStatement(customerId) {
 // =========================
 async function processTransaction({ type, customerId, amount, desc, interest = 0 }) {
   if (isMarketer()) {
-  showToast("Marketers cannot post financial transactions");
-  return;
-}
+    showToast("Marketers cannot post financial transactions");
+    return;
+  }
+
   const staff = currentStaff();
   if (!staff) return showToast("Select staff");
 
@@ -3591,42 +3597,51 @@ async function processTransaction({ type, customerId, amount, desc, interest = 0
 
   const now = new Date().toISOString();
 
- // 🔑 ALL TRANSACTIONS GO FOR APPROVAL (CLIENT REQUIREMENT)
-state.approvals.push({
-  id: uid("ap"),
-  type,
-  amount,
-  interest: typeof interest === "number" ? interest : 0,
-  customerId,
-  desc,
-  requestedBy: staff.id,
-  requestedByName: staff.name,
-  requestedAt: now,
-  status: "pending"
-});
+  // 🔑 Ensure approvals array exists
+  state.approvals = state.approvals || [];
 
-// ✅ AUDIT — TELLER ACTION (ADD THIS, DO NOT REPLACE)
-await pushAudit(
-  staff.name,
-  staff.role,
-  "tx_sent_for_approval",
-  {
-    txType: type,
+  // 🔑 ALL TRANSACTIONS GO FOR APPROVAL
+  state.approvals.push({
+    id: uid("ap"),
+    type,
     amount,
-    customerId: cust.id,
-    customerName: cust.name,
-    description: desc
-  }
-);
+    interest: Number(interest || 0),
+    customerId,
+    desc,
+    requestedBy: staff.id,
+    requestedByName: staff.name,
+    requestedAt: now,
+    status: "pending"
+  });
 
-// 🔑 reset after use
-window.currentEmpowermentInterest = null;
+  await pushAudit(
+    staff.name,
+    staff.role,
+    "tx_sent_for_approval",
+    {
+      txType: type,
+      amount,
+      customerId: cust.id,
+      customerName: cust.name,
+      description: desc
+    }
+  );
 
-// persist + UI
-save();
-renderApprovals();
-showToast("Transaction sent for approval");
-return;
+  window.currentEmpowermentInterest = null;
+
+  save();
+
+  // 🔥 FULL UI SYNC
+  renderApprovals?.();
+  renderDashboardApprovals?.();
+  renderCustomerKycApprovals?.();
+  renderCustomers?.();
+  renderDashboard?.();
+  renderAudit?.();
+  updateChartData?.();
+
+  closeTxModal(); // ✅ closes confirm modal
+  showToast("Transaction sent for approval");
 }
 
 function drillDownApproval(approval) {
