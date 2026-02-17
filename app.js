@@ -6986,15 +6986,12 @@ window.renderMiniBar = renderMiniBar;
 
  // ===== OPEN CUSTOMER ACCOUNT (CLEAN SINGLE HANDLER) =====
 document.getElementById("btnNew").addEventListener("click", async () => {
-  // ✅ Prevent double-send if user clicks too fast
   if (window.__sendingNewCustomer) return;
   window.__sendingNewCustomer = true;
 
   try {
-    // 🧼 reset any previous captured photo
     window.capturedKycPhoto = null;
 
-    // 🧱 Build form (single, clean wrapper)
     const formWrapper = document.createElement("div");
     formWrapper.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:10px">
@@ -7024,6 +7021,22 @@ document.getElementById("btnNew").addEventListener("click", async () => {
           <input id="nPhoto" type="file" accept="image/*" capture="user" class="input">
         </div>
 
+        <!-- ✅ LIVE PREVIEW (hidden until photo is available) -->
+        <div id="kycPreviewBox" style="
+          display:none;
+          margin-top:4px;
+          padding:8px;
+          border:1px solid #e5e7eb;
+          border-radius:12px;
+          background:#f9fafb;
+        ">
+          <div class="small muted" style="margin-bottom:6px">Photo preview</div>
+          <img id="kycPreviewImg"
+               src=""
+               alt="Preview"
+               style="width:110px;height:110px;border-radius:12px;object-fit:cover;border:1px solid #e5e7eb;">
+        </div>
+
         <button
           id="btnOpenCamera"
           class="btn solid"
@@ -7041,60 +7054,73 @@ document.getElementById("btnNew").addEventListener("click", async () => {
       </div>
     `;
 
-    // ✨ Bank-grade live error clearing
+    // Live invalid clearing
     ["#nName", "#nPhone", "#nNIN", "#nAddress"].forEach((id) => {
       const el = formWrapper.querySelector(id);
       if (!el) return;
       el.addEventListener("input", () => el.classList.remove("invalid"));
     });
 
-    // 🎥 Camera button bind (no setTimeout)
+    // ✅ Preview helpers
+    const previewBox = formWrapper.querySelector("#kycPreviewBox");
+    const previewImg = formWrapper.querySelector("#kycPreviewImg");
+    const showPreview = (src) => {
+      if (!previewBox || !previewImg) return;
+      previewImg.src = src || "";
+      previewBox.style.display = src ? "block" : "none";
+    };
+
+    // ✅ File upload → preview immediately
+    const photoInput = formWrapper.querySelector("#nPhoto");
+    if (photoInput) {
+      photoInput.onchange = async () => {
+        const f = photoInput.files?.[0];
+        if (!f) return showPreview("");
+        const b64 = await toBase64(f);
+        window.capturedKycPhoto = b64; // unify pipeline
+        showPreview(b64);
+      };
+    }
+
+    // ✅ Camera capture → preview immediately
     const camBtn = formWrapper.querySelector("#btnOpenCamera");
     if (camBtn) {
       camBtn.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (typeof openCameraCapture === "function") {
-          await openCameraCapture(); // sets window.capturedKycPhoto
-        } else {
+
+        if (typeof openCameraCapture !== "function") {
           showToast("Camera function not available");
+          return;
         }
+
+        const b64 = await openCameraCapture(); // your function sets window.capturedKycPhoto too
+        if (b64) showPreview(b64);
       };
     }
 
-    // 🪟 Open modal (Create)
-    const ok = await openModalGeneric(
-      "Open Customer Account",
-      formWrapper,
-      "Create",
-      true
-    );
-
-    // User cancelled
+    // Open main form modal
+    const ok = await openModalGeneric("Open Customer Account", formWrapper, "Create", true);
     if (!ok) return;
 
-    // 🔎 Collect inputs
+    // Collect values
     const nameInput = formWrapper.querySelector("#nName");
     const phoneInput = formWrapper.querySelector("#nPhone");
     const ninInput = formWrapper.querySelector("#nNIN");
     const addressInput = formWrapper.querySelector("#nAddress");
     const balInput = formWrapper.querySelector("#nBal");
-    const photoInput = formWrapper.querySelector("#nPhoto");
 
-    // 🧼 Clear previous invalid state
+    // Clear invalid state
     [nameInput, phoneInput, ninInput, addressInput].forEach((inp) =>
       inp?.classList.remove("invalid")
     );
 
-    // Values
     const name = (nameInput?.value || "").trim();
     const phone = (phoneInput?.value || "").trim();
     const nin = (ninInput?.value || "").trim();
     const address = (addressInput?.value || "").trim();
     const bal = Number((balInput?.value || "0").trim() || 0);
-    const photoFile = photoInput?.files?.[0];
 
-    // ✅ Bank-grade validation
     if (!name) {
       nameInput.classList.add("invalid");
       nameInput.focus();
@@ -7120,10 +7146,14 @@ document.getElementById("btnNew").addEventListener("click", async () => {
       return;
     }
 
-    // Photo (file OR camera capture)
+    // Photo source: uploaded OR camera OR stored preview base64
     let photoBase64 = "";
-    if (photoFile) {
-      photoBase64 = await toBase64(photoFile);
+    const uploadedFile = photoInput?.files?.[0];
+
+    if (uploadedFile) {
+      photoBase64 = await toBase64(uploadedFile);
+      window.capturedKycPhoto = photoBase64;
+      showPreview(photoBase64);
     } else if (window.capturedKycPhoto) {
       photoBase64 = window.capturedKycPhoto;
     } else {
@@ -7131,7 +7161,7 @@ document.getElementById("btnNew").addEventListener("click", async () => {
       return;
     }
 
-    // ✅ Review / confirm before sending for approval
+    // Review modal
     const review = document.createElement("div");
     review.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:12px">
@@ -7164,7 +7194,11 @@ document.getElementById("btnNew").addEventListener("click", async () => {
 
     if (!confirmSend) return;
 
-    // 📤 Push approval
+    // ✅ FORCE-CLOSE the review modal so you return to the previous state cleanly
+    const back = document.getElementById("txModalBack");
+    if (back) back.style.display = "none";
+
+    // Push approval
     state.approvals = state.approvals || [];
     state.approvals.unshift({
       id: uid("ap"),
@@ -7183,7 +7217,7 @@ document.getElementById("btnNew").addEventListener("click", async () => {
       },
     });
 
-    // 🧼 Clear capture + form to prevent re-submission
+    // Clear form + preview to prevent re-submission
     window.capturedKycPhoto = null;
     if (nameInput) nameInput.value = "";
     if (phoneInput) phoneInput.value = "";
@@ -7191,8 +7225,8 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     if (addressInput) addressInput.value = "";
     if (balInput) balInput.value = "";
     if (photoInput) photoInput.value = "";
+    showPreview("");
 
-    // ✅ Audit + persist
     await pushAudit(
       currentStaff().name,
       currentStaff().role,
@@ -7205,11 +7239,9 @@ document.getElementById("btnNew").addEventListener("click", async () => {
 
     showToast("Customer sent for approval");
   } finally {
-    // Always release lock
     window.__sendingNewCustomer = false;
   }
 });
-
 
 document.getElementById("btnVerify").addEventListener("click", async () => {
     const probs = await verifyAudit();
