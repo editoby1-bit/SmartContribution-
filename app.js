@@ -3716,16 +3716,17 @@ function printCustomerStatement(customerId) {
   w.document.close();
 }
 
-// ✅ CLEAN MODAL PREVIEW (professional layout + fixed footer buttons)
+// ✅ IN-APP MODAL PREVIEW (fixed columns + fixed footer buttons)
 function openCustomerStatement(customerId) {
   const customer = (state.customers || []).find(c => c.id === customerId);
   if (!customer) return showToast("Customer not found");
 
   const txns = _statementTxns(customer);
 
-  // Totals
+  // Savings totals
   let credits = 0;
   let withdrawals = 0;
+
   for (const t of txns) {
     if (t.type === "credit") credits += Number(t.amount || 0);
     if (t.type === "withdraw") withdrawals += Number(t.amount || 0);
@@ -3750,7 +3751,7 @@ function openCustomerStatement(customerId) {
   const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
   const empOutstanding = empDisbursed - empRepaidPrincipal;
 
-  // Running balance
+  // Running balance (savings only)
   let rb = openingBal;
 
   const rows = txns.map((t, i) => {
@@ -3765,34 +3766,31 @@ function openCustomerStatement(customerId) {
       .replace(/>/g, "&gt;");
 
     return `
-  <tr>
-    <td>${i + 1}</td>
-    <td>${dateStr}</td>
-    <td>${customer.name}</td>
-    <td class="amount">${fmt(t.amount)}</td>
-    <td class="type">${prettyTxType(t.type)}</td>
-    <td class="desc">${desc}</td>
-    <td class="rb">${fmt(rb)}</td>
-  </tr>
-`;
+      <tr>
+        <td>${i + 1}</td>
+        <td>${dateStr}</td>
+        <td>${customer.name}</td>
+        <td class="amount">${fmt(t.amount)}</td>
+        <td class="type">${prettyTxType(t.type)}</td>
+        <td class="desc">${desc}</td>
+        <td class="rb">${fmt(rb)}</td>
+      </tr>
+    `;
   }).join("");
 
   const wrapper = document.createElement("div");
 
   wrapper.innerHTML = `
-    <!-- Currency Note -->
     <div style="font-size:12px;color:#555;margin-bottom:8px">
       <b>Amounts in Naira (₦)</b>
     </div>
 
-    <!-- Customer Header -->
     <div style="margin-bottom:12px;line-height:1.4">
       <div style="font-weight:700;font-size:15px">${customer.name}</div>
       <div class="small">Account No: ${customer.accountNumber || "—"}</div>
       <div class="small">Phone: ${customer.phone || "—"}</div>
     </div>
 
-    <!-- Savings Summary -->
     <div style="font-weight:700;margin:10px 0 6px 0;">Savings Summary</div>
     <div style="
       display:grid;
@@ -3807,7 +3805,6 @@ function openCustomerStatement(customerId) {
       <div class="badge">Closing: ${fmt(closingBal)}</div>
     </div>
 
-    <!-- Empowerment Summary -->
     <div style="font-weight:700;margin:6px 0 6px 0;">Empowerment Summary</div>
     <div style="
       display:grid;
@@ -3822,120 +3819,85 @@ function openCustomerStatement(customerId) {
       <div class="badge">Principal Outstanding: ${fmt(empOutstanding)}</div>
     </div>
 
-    <!-- TABLE + FIXED FOOTER LAYOUT (HARD FIX FOR DESCRIPTION COLUMN) -->
-<div style="
-  display:flex;
-  flex-direction:column;
-  height:60vh;
-  min-width:0; /* 🔥 CRITICAL: prevents flex from crushing table */
-">
+    <style>
+      /* ✅ scoped to only this modal table */
+      table.stmt-modal {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 13px;
+      }
+      table.stmt-modal th, table.stmt-modal td {
+        padding: 8px;
+        border-bottom: 1px solid #eef2f7;
+        vertical-align: top;
+      }
+      table.stmt-modal th {
+        background: #f8fafc;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        text-align: left;
+      }
+      table.stmt-modal td.amount,
+      table.stmt-modal td.rb {
+        text-align: right;
+        white-space: nowrap;
+      }
+      table.stmt-modal td.type {
+        white-space: nowrap;
+      }
+      table.stmt-modal td.desc {
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: anywhere !important;
+      }
+    </style>
 
-  <style>
-    .stmt-modal {
-      width:100%;
-      border-collapse:collapse;
-      table-layout:fixed;
-      font-size:13px;
-    }
+    <!-- TABLE + FIXED FOOTER -->
+    <div style="display:flex;flex-direction:column;height:60vh;min-width:0;">
+      <div style="flex:1;overflow:auto;min-width:0;border:1px solid #e5e7eb;border-radius:10px;background:#fff;">
+        <table class="stmt-modal">
+          <colgroup>
+            <col style="width:60px">   <!-- S/N -->
+            <col style="width:170px">  <!-- Date -->
+            <col style="width:160px">  <!-- Customer -->
+            <col style="width:130px">  <!-- Amount -->
+            <col style="width:220px">  <!-- Type -->
+            <col style="width:280px">  <!-- Description (IMPORTANT: give it real width) -->
+            <col style="width:150px">  <!-- Running Balance -->
+          </colgroup>
 
-    .stmt-modal th,
-    .stmt-modal td {
-      padding:8px;
-      border-bottom:1px solid #eef2f7;
-      vertical-align:top;
-    }
+          <thead>
+            <tr>
+              <th>S/N</th>
+              <th>Date</th>
+              <th>Customer Name</th>
+              <th style="text-align:right">Amount</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th style="text-align:right;white-space:nowrap;">Running Balance</th>
+            </tr>
+          </thead>
 
-    .stmt-modal th {
-      background:#f8fafc;
-      position:sticky;
-      top:0;
-      z-index:1;
-      text-align:left;
-    }
+          <tbody>
+            ${rows || `<tr><td colspan="7" style="text-align:center;color:#666;padding:14px">No transactions yet</td></tr>`}
+          </tbody>
+        </table>
+      </div>
 
-    /* 🔥 FORCE PROPER COLUMN BEHAVIOUR */
-    .stmt-modal td.amount,
-    .stmt-modal td.rb {
-      text-align:right;
-      white-space:nowrap;
-      width:150px;
-    }
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;background:#fff;">
+        <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">Close</button>
+        <button class="btn solid" onclick="printCustomerStatement('${customerId}')">Print</button>
+      </div>
+    </div>
+  `;
 
-    .stmt-modal td.type {
-      white-space:nowrap;
-      width:200px;
-    }
-
-    /* 🔥 THE REAL FIX: stop vertical letter stacking */
-    .stmt-modal td.desc {
-      white-space:normal !important;
-      word-break:break-word !important;
-      overflow-wrap:anywhere !important;
-      min-width:220px; /* prevents collapse */
-    }
-  </style>
-
-  <!-- SCROLLABLE TABLE -->
-  <div style="
-    flex:1;
-    overflow:auto;
-    min-width:0; /* 🔥 SECOND CRITICAL FIX */
-    border:1px solid #e5e7eb;
-    border-radius:10px;
-    background:#fff;
-  ">
-    <table class="stmt-modal">
-      <colgroup>
-        <col style="width:60px">      <!-- S/N -->
-        <col style="width:170px">     <!-- Date -->
-        <col style="width:160px">     <!-- Customer -->
-        <col style="width:130px">     <!-- Amount -->
-        <col style="width:220px">     <!-- Type -->
-        <col style="width:auto">      <!-- Description (flex column) -->
-        <col style="width:150px">     <!-- Running Balance -->
-      </colgroup>
-
-      <thead>
-        <tr>
-          <th>S/N</th>
-          <th>Date</th>
-          <th>Customer Name</th>
-          <th style="text-align:right">Amount</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th style="text-align:right;white-space:nowrap;">Running Balance</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        ${rows || `<tr><td colspan="7" style="text-align:center;color:#666;padding:14px">No transactions yet</td></tr>`}
-      </tbody>
-    </table>
-  </div>
-
-  <!-- FIXED BUTTON BAR (NO SCROLLING) -->
-  <div style="
-    display:flex;
-    justify-content:flex-end;
-    gap:10px;
-    margin-top:12px;
-    padding-top:10px;
-    border-top:1px solid #e5e7eb;
-    background:#fff;
-  ">
-    <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">
-      Close
-    </button>
-    <button class="btn solid" onclick="printCustomerStatement('${customerId}')">
-      Print
-    </button>
-  </div>
-
-</div>
-`; // ✅ CLOSE THE TEMPLATE STRING
-
-openModalGeneric("Account Statement", wrapper, "", false);
+  // IMPORTANT: close label blank because we already have our own Close button
+  openModalGeneric("Account Statement", wrapper, "", false);
 }
+
+window.openCustomerStatement = openCustomerStatement;
 
 window.openCustomerStatement = openCustomerStatement;
 window.printCustomerStatement = printCustomerStatement;
