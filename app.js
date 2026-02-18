@@ -3765,16 +3765,16 @@ function openCustomerStatement(customerId) {
       .replace(/>/g, "&gt;");
 
     return `
-      <tr>
-        <td>${i + 1}</td>
-        <td>${dateStr}</td>
-        <td>${customer.name}</td>
-        <td class="amt">${fmt(t.amount)}</td>
-        <td class="type">${prettyTxType(t.type)}</td>
-        <td class="desc">${desc}</td>
-        <td class="rb">${fmt(rb)}</td>
-      </tr>
-    `;
+  <tr>
+    <td>${i + 1}</td>
+    <td>${dateStr}</td>
+    <td>${customer.name}</td>
+    <td class="amount">${fmt(t.amount)}</td>
+    <td class="type">${prettyTxType(t.type)}</td>
+    <td class="desc">${desc}</td>
+    <td class="rb">${fmt(rb)}</td>
+  </tr>
+`;
   }).join("");
 
   const wrapper = document.createElement("div");
@@ -3822,7 +3822,7 @@ function openCustomerStatement(customerId) {
       <div class="badge">Principal Outstanding: ${fmt(empOutstanding)}</div>
     </div>
 
-   <!-- TABLE + FIXED FOOTER LAYOUT (HARD FIX FOR DESCRIPTION COLUMN) -->
+    <!-- TABLE + FIXED FOOTER LAYOUT (HARD FIX FOR DESCRIPTION COLUMN) -->
 <div style="
   display:flex;
   flex-direction:column;
@@ -3870,7 +3870,7 @@ function openCustomerStatement(customerId) {
     .stmt-modal td.desc {
       white-space:normal !important;
       word-break:break-word !important;
-      overflow-wrap:break-word !important;
+      overflow-wrap:anywhere !important;
       min-width:220px; /* prevents collapse */
     }
   </style>
@@ -3932,8 +3932,9 @@ function openCustomerStatement(customerId) {
   </div>
 
 </div>
+`; // ✅ CLOSE THE TEMPLATE STRING
 
-  openModalGeneric("Account Statement", wrapper, "", false);
+openModalGeneric("Account Statement", wrapper, "", false);
 }
 
 window.openCustomerStatement = openCustomerStatement;
