@@ -3823,59 +3823,46 @@ function openCustomerStatement(customerId) {
     </div>
 
    <!-- TABLE + FIXED FOOTER LAYOUT (FIXED COLUMNS + CLEAN WRAP) -->
-<div style="
-  display:flex;
-  flex-direction:column;
-  height:60vh;
-">
+<div style="display:flex;flex-direction:column;height:60vh;">
+
+  <!-- ✅ modal-only CSS (apply correctly because you have td.desc) -->
+  <style>
+    .stmt-modal { width:100%; border-collapse:collapse; table-layout:fixed; font-size:13px; }
+    .stmt-modal th, .stmt-modal td { padding:8px; border-bottom:1px solid #eef2f7; vertical-align:top; }
+    .stmt-modal th { background:#f8fafc; position:sticky; top:0; z-index:1; text-align:left; }
+    .stmt-modal td.amount, .stmt-modal td.rb { text-align:right; white-space:nowrap; }
+    .stmt-modal td.type { white-space:nowrap; }
+    .stmt-modal td.desc { white-space:normal; word-break:break-word; overflow-wrap:anywhere; }
+  </style>
+
   <!-- SCROLLABLE TABLE -->
-  <div style="
-    flex:1;
-    overflow:auto;
-    border:1px solid #e5e7eb;
-    border-radius:10px;
-    background:#fff;
-  ">
-    <table style="
-      width:100%;
-      border-collapse:collapse;
-      table-layout:fixed;
-      font-size:13px;
-    ">
-      <!-- 🔥 HARD COLUMN CONTROL (THIS FIXES THE STACKING BUG) -->
+  <div style="flex:1;overflow:auto;border:1px solid #e5e7eb;border-radius:10px;background:#fff;">
+    <table class="stmt-modal">
+      <!-- 🔥 HARD COLUMN CONTROL -->
       <colgroup>
-        <col style="width:60px">    <!-- S/N -->
-        <col style="width:170px">   <!-- Date -->
-        <col style="width:160px">   <!-- Customer -->
-        <col style="width:130px">   <!-- Amount -->
-        <col style="width:200px">   <!-- Type -->
-        <col style="width:auto">    <!-- Description (flex) -->
-        <col style="width:150px">   <!-- Running Balance -->
+        <col style="width:60px">     <!-- S/N -->
+        <col style="width:170px">    <!-- Date -->
+        <col style="width:160px">    <!-- Customer -->
+        <col style="width:130px">    <!-- Amount -->
+        <col style="width:200px">    <!-- Type -->
+        <col style="width:auto">     <!-- Description -->
+        <col style="width:150px">    <!-- Running Balance -->
       </colgroup>
 
-      <thead style="
-        background:#f8fafc;
-        position:sticky;
-        top:0;
-        z-index:1;
-      ">
+      <thead>
         <tr>
-          <th style="text-align:left;">S/N</th>
-          <th style="text-align:left;">Date</th>
-          <th style="text-align:left;">Customer Name</th>
-          <th style="text-align:right;">Amount</th>
-          <th style="text-align:left;">Type</th>
-          <th style="text-align:left;">Description</th>
-          <th style="text-align:right; white-space:nowrap;">Running Balance</th>
+          <th>S/N</th>
+          <th>Date</th>
+          <th>Customer Name</th>
+          <th style="text-align:right">Amount</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th style="text-align:right;white-space:nowrap">Running Balance</th>
         </tr>
       </thead>
 
       <tbody>
-        ${rows || `<tr>
-          <td colspan="7" style="text-align:center;color:#666;padding:14px">
-            No transactions yet
-          </td>
-        </tr>`}
+        ${rows || `<tr><td colspan="7" style="text-align:center;color:#666;padding:14px">No transactions yet</td></tr>`}
       </tbody>
     </table>
   </div>
@@ -3890,15 +3877,13 @@ function openCustomerStatement(customerId) {
     border-top:1px solid #e5e7eb;
     background:#fff;
   ">
-    <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">
-      Close
-    </button>
-    <button class="btn solid" onclick="printCustomerStatement('${customerId}')">
-      Print
-    </button>
+    <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">Close</button>
+    <button class="btn solid" onclick="printCustomerStatement('${customerId}')">Print</button>
   </div>
+
 </div>
 `;
+
   openModalGeneric("Account Statement", wrapper, "", false);
 }
 
