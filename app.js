@@ -3822,76 +3822,83 @@ function openCustomerStatement(customerId) {
       <div class="badge">Principal Outstanding: ${fmt(empOutstanding)}</div>
     </div>
 
-    <!-- TABLE + FIXED FOOTER LAYOUT -->
-    <div style="
-      display:flex;
-      flex-direction:column;
-      height:60vh;
-    ">
-      <div style="
-        flex:1;
-        overflow:auto;
-        border:1px solid #e5e7eb;
-        border-radius:10px;
-      ">
-        <table class="stmt-modal" style="
-  width:100%;
-  border-collapse:collapse;
-  table-layout:fixed;
-  font-size:13px;
+   <!-- TABLE + FIXED FOOTER LAYOUT (FIXED COLUMNS + CLEAN WRAP) -->
+<div style="
+  display:flex;
+  flex-direction:column;
+  height:60vh;
 ">
-<style>
-  /* ✅ modal-only column control */
-  .stmt-modal td { vertical-align: top; }
-  .stmt-modal td.desc {
-    white-space: normal;
-    word-break: break-word;
-    overflow-wrap: anywhere;
-  }
-  .stmt-modal td.rb {
-    width:140px;
-    min-width:140px;
-    text-align:right;
-    white-space: nowrap;
-  }
-</style>
-          <thead style="background:#f8fafc;position:sticky;top:0;z-index:1">
-            <tr>
-              <th style="width:50px">S/N</th>
-              <th style="width:160px">Date</th>
-              <th style="width:150px">Customer Name</th>
-              <th style="width:120px;text-align:right">Amount</th>
-              <th style="width:200px">Type</th>
-            <th style="min-width:220px">Description</th>
-<th style="width:140px;min-width:140px;text-align:right;white-space:nowrap">Running Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows || `<tr><td colspan="7" style="text-align:center;color:#666">No transactions yet</td></tr>`}
-          </tbody>
-        </table>
-      </div>
+  <!-- SCROLLABLE TABLE -->
+  <div style="
+    flex:1;
+    overflow:auto;
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    background:#fff;
+  ">
+    <table style="
+      width:100%;
+      border-collapse:collapse;
+      table-layout:fixed;
+      font-size:13px;
+    ">
+      <!-- 🔥 HARD COLUMN CONTROL (THIS FIXES THE STACKING BUG) -->
+      <colgroup>
+        <col style="width:60px">    <!-- S/N -->
+        <col style="width:170px">   <!-- Date -->
+        <col style="width:160px">   <!-- Customer -->
+        <col style="width:130px">   <!-- Amount -->
+        <col style="width:200px">   <!-- Type -->
+        <col style="width:auto">    <!-- Description (flex) -->
+        <col style="width:150px">   <!-- Running Balance -->
+      </colgroup>
 
-      <!-- FIXED BUTTON BAR (NO SCROLLING) -->
-      <div style="
-        display:flex;
-        justify-content:flex-end;
-        gap:10px;
-        margin-top:12px;
-        padding-top:10px;
-        border-top:1px solid #e5e7eb;
-        background:#fff;
+      <thead style="
+        background:#f8fafc;
+        position:sticky;
+        top:0;
+        z-index:1;
       ">
-        <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">
-          Close
-        </button>
-        <button class="btn solid" onclick="printCustomerStatement('${customerId}')">
-          Print
-        </button>
-      </div>
-    </div>
-  `;
+        <tr>
+          <th style="text-align:left;">S/N</th>
+          <th style="text-align:left;">Date</th>
+          <th style="text-align:left;">Customer Name</th>
+          <th style="text-align:right;">Amount</th>
+          <th style="text-align:left;">Type</th>
+          <th style="text-align:left;">Description</th>
+          <th style="text-align:right; white-space:nowrap;">Running Balance</th>
+        </tr>
+      </thead>
 
+      <tbody>
+        ${rows || `<tr>
+          <td colspan="7" style="text-align:center;color:#666;padding:14px">
+            No transactions yet
+          </td>
+        </tr>`}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- FIXED BUTTON BAR (NO SCROLLING) -->
+  <div style="
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top:12px;
+    padding-top:10px;
+    border-top:1px solid #e5e7eb;
+    background:#fff;
+  ">
+    <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">
+      Close
+    </button>
+    <button class="btn solid" onclick="printCustomerStatement('${customerId}')">
+      Print
+    </button>
+  </div>
+</div>
+`;
   openModalGeneric("Account Statement", wrapper, "", false);
 }
 
