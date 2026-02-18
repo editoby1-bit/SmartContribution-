@@ -3469,6 +3469,84 @@ document.getElementById("submitTx").onclick = () => {
   console.log("🔥 SUBMIT BUTTON CLICKED");
 };
 
+function _stmtPeriodLine(fromISO, toISO) {
+  const f = (fromISO || "").trim();
+  const t = (toISO || "").trim();
+  if (!f && !t) return ""; // nothing to show
+  return `Statement Period: <b>${f || "—"}</b> to <b>${t || "—"}</b>`;
+}
+
+
+function _txInRange(txDate, fromISO, toISO) {
+  if (!txDate) return false;
+  const d = new Date(txDate);
+  if (isNaN(d)) return false;
+
+  // fromISO/toISO are "YYYY-MM-DD"
+  const from = fromISO ? new Date(fromISO + "T00:00:00") : null;
+  const to = toISO ? new Date(toISO + "T23:59:59") : null;
+
+  if (from && d < from) return false;
+  if (to && d > to) return false;
+  return true;
+}
+
+function _isSavingsTx(t) {
+  return t && (t.type === "credit" || t.type === "withdraw");
+}
+
+function _savingsTxns(customer) {
+  // only credit/withdraw affect savings balance
+  return (customer.transactions || [])
+    .filter(_isSavingsTx)
+    .map(t => ({
+      ...t,
+      amount: Number(t.amount || 0),
+      date: t.date
+    }))
+    .filter(t => t.date) // avoid Invalid Date
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+function _netMovement(txns, fromISO, toISO) {
+  // net = credits - withdrawals within range
+  let net = 0;
+  for (const t of txns) {
+    if (!_txInRange(t.date, fromISO, toISO)) continue;
+    if (t.type === "credit") net += Number(t.amount || 0);
+    if (t.type === "withdraw") net -= Number(t.amount || 0);
+  }
+  return net;
+}
+
+function _balanceAtStartOf(customer, fromISO) {
+  // Opening at start of "from" = currentBalance - net(from -> today)
+  const currentBal = Number(customer.balance || 0);
+  if (!fromISO) return currentBal;
+
+  const savings = _savingsTxns(customer);
+  const todayISO = new Date().toISOString().slice(0, 10);
+
+  const netFromToToday = _netMovement(savings, fromISO, todayISO);
+  return currentBal - netFromToToday;
+}
+
+function _balanceAtEndOf(customer, toISO) {
+  // Closing at end of "to" = currentBalance - net((to+1 day) -> today)
+  const currentBal = Number(customer.balance || 0);
+  if (!toISO) return currentBal;
+
+  const savings = _savingsTxns(customer);
+  const todayISO = new Date().toISOString().slice(0, 10);
+
+  const nextDay = new Date(toISO + "T00:00:00");
+  nextDay.setDate(nextDay.getDate() + 1);
+  const afterToISO = nextDay.toISOString().slice(0, 10);
+
+  const netAfterToToToday = _netMovement(savings, afterToISO, todayISO);
+  return currentBal - netAfterToToToday;
+}
+
 
 // ✅ Legacy compatibility — DO NOT delete old calls
 function printStatement(x) {
@@ -3540,24 +3618,37 @@ function _statementTxns(customer) {
 }
 
 // ✅ PRINTABLE STATEMENT (bank-style layout)
-function printCustomerStatement(customerId) {
+function printCustomerStatement(customerId, fromISO = "", toISO = "") {
   const customer = (state.customers || []).find(c => c.id === customerId);
   if (!customer) return showToast("Customer not found");
 
-  const txns = _statementTxns(customer);
+  let txns = _statementTxns(customer);
+if (fromISO || toISO) {
+  txns = txns.filter(t => _txInRange(t.date, fromISO, toISO));
+}
 
   // SAVINGS totals
-  let credits = 0;
-  let withdrawals = 0;
+  // Savings totals (BANK STYLE)
+const savingsAll = _savingsTxns(customer);
 
-  for (const t of txns) {
-    if (t.type === "credit") credits += Number(t.amount || 0);
-    if (t.type === "withdraw") withdrawals += Number(t.amount || 0);
-  }
+// Range credits/withdrawals
+let credits = 0;
+let withdrawals = 0;
 
-  const closingBal = Number(customer.balance || 0);
-  const net = credits - withdrawals;
-  const openingBal = closingBal - net;
+for (const t of savingsAll) {
+  if (!_txInRange(t.date, fromISO, toISO)) continue;
+  if (t.type === "credit") credits += Number(t.amount || 0);
+  if (t.type === "withdraw") withdrawals += Number(t.amount || 0);
+}
+
+const net = credits - withdrawals;
+
+// ✅ true balances at range boundaries
+const openingBal = _balanceAtStartOf(customer, fromISO);
+const closingBal = _balanceAtEndOf(customer, toISO);
+
+// ✅ running balance starts from true opening balance
+let rb = openingBal;
 
   // EMPOWERMENT totals
   let empDisbursed = 0;
@@ -3573,9 +3664,6 @@ function printCustomerStatement(customerId) {
 
   const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
   const empOutstanding = empDisbursed - empRepaidPrincipal;
-
-  // Running balance (savings only)
-  let rb = openingBal;
 
   const rows = txns.map((t, i) => {
     if (t.type === "credit") rb += Number(t.amount || 0);
@@ -3667,6 +3755,7 @@ function printCustomerStatement(customerId) {
     Account No: <b>${customer.accountNumber || "—"}</b><br/>
     Phone: ${customer.phone || "—"} &nbsp; • &nbsp;
     Date Printed: ${new Date().toLocaleString()}
+    <div class="note">${_stmtPeriodLine(fromISO, toISO)}</div>
     <div class="note"><b>Amounts in Naira (₦)</b></div>
   </div>
 
@@ -3717,42 +3806,58 @@ function printCustomerStatement(customerId) {
 }
 
 // ✅ IN-APP MODAL PREVIEW (fixed columns + fixed footer buttons)
-function openCustomerStatement(customerId) {
+function openCustomerStatement(customerId, fromISO = "", toISO = "") {
   const customer = (state.customers || []).find(c => c.id === customerId);
   if (!customer) return showToast("Customer not found");
 
-  const txns = _statementTxns(customer);
-
-  // Savings totals
-  let credits = 0;
-  let withdrawals = 0;
-
-  for (const t of txns) {
-    if (t.type === "credit") credits += Number(t.amount || 0);
-    if (t.type === "withdraw") withdrawals += Number(t.amount || 0);
+  // default: last 30 days if no dates provided
+  if (!fromISO && !toISO) {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 30);
+    fromISO = from.toISOString().slice(0, 10);
+    toISO = to.toISOString().slice(0, 10);
   }
 
-  const closingBal = Number(customer.balance || 0);
-  const net = credits - withdrawals;
-  const openingBal = closingBal - net;
+  const allTxns = _statementTxns(customer);
+  const txns = allTxns.filter(t => _txInRange(t.date, fromISO, toISO));
 
-  // Empowerment totals
-  let empDisbursed = 0;
-  let empRepaidPrincipal = 0;
-  let empRepaidInterest = 0;
+  // Savings totals (BANK STYLE)
+const savingsAll = _savingsTxns(customer);
 
-  for (const t of txns) {
-    const amt = Number(t.amount || 0);
-    if (t.type === "empowerment_disbursement") empDisbursed += amt;
-    if (t.type === "empowerment_repayment_principal") empRepaidPrincipal += amt;
-    if (t.type === "empowerment_repayment_interest") empRepaidInterest += amt;
-  }
+// Range credits/withdrawals
+let credits = 0;
+let withdrawals = 0;
 
-  const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
-  const empOutstanding = empDisbursed - empRepaidPrincipal;
+for (const t of savingsAll) {
+  if (!_txInRange(t.date, fromISO, toISO)) continue;
+  if (t.type === "credit") credits += Number(t.amount || 0);
+  if (t.type === "withdraw") withdrawals += Number(t.amount || 0);
+}
 
-  // Running balance (savings only)
-  let rb = openingBal;
+const net = credits - withdrawals;
+
+// ✅ true balances at range boundaries
+const openingBal = _balanceAtStartOf(customer, fromISO);
+const closingBal = _balanceAtEndOf(customer, toISO);
+
+// ✅ running balance starts from true opening balance
+let rb = openingBal;
+
+// Empowerment totals
+let empDisbursed = 0;
+let empRepaidPrincipal = 0;
+let empRepaidInterest = 0;
+
+for (const t of txns) {
+  const amt = Number(t.amount || 0);
+  if (t.type === "empowerment_disbursement") empDisbursed += amt;
+  if (t.type === "empowerment_repayment_principal") empRepaidPrincipal += amt;
+  if (t.type === "empowerment_repayment_interest") empRepaidInterest += amt;
+}
+
+const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
+const empOutstanding = empDisbursed - empRepaidPrincipal;
 
   const rows = txns.map((t, i) => {
     if (t.type === "credit") rb += Number(t.amount || 0);
@@ -3785,19 +3890,32 @@ function openCustomerStatement(customerId) {
       <b>Amounts in Naira (₦)</b>
     </div>
 
-    <div style="margin-bottom:12px;line-height:1.4">
+    <div style="margin-bottom:10px;line-height:1.4">
       <div style="font-weight:700;font-size:15px">${customer.name}</div>
       <div class="small">Account No: ${customer.accountNumber || "—"}</div>
       <div class="small">Phone: ${customer.phone || "—"}</div>
+      <div class="small muted">${_stmtPeriodLine(fromISO, toISO)}</div>
+    </div>
+
+    <!-- DATE RANGE FILTER -->
+    <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:10px 0 12px 0">
+      <div>
+        <div class="small muted">From</div>
+        <input id="stmtFrom" type="date" class="input" value="${fromISO}">
+      </div>
+      <div>
+        <div class="small muted">To</div>
+        <input id="stmtTo" type="date" class="input" value="${toISO}">
+      </div>
+      <button class="btn" id="stmtApply">Filter</button>
+      <button class="btn ghost" id="stmtReset">Reset</button>
+      <div class="small muted" style="margin-left:auto">
+        Showing: <b>${txns.length}</b> of ${allTxns.length}
+      </div>
     </div>
 
     <div style="font-weight:700;margin:10px 0 6px 0;">Savings Summary</div>
-    <div style="
-      display:grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap:8px;
-      margin-bottom:14px;
-    ">
+    <div style="display:grid;grid-template-columns: repeat(5, minmax(0, 1fr));gap:8px;margin-bottom:14px;">
       <div class="badge">Opening: ${fmt(openingBal)}</div>
       <div class="badge">Credits: ${fmt(credits)}</div>
       <div class="badge">Withdrawals: ${fmt(withdrawals)}</div>
@@ -3806,12 +3924,7 @@ function openCustomerStatement(customerId) {
     </div>
 
     <div style="font-weight:700;margin:6px 0 6px 0;">Empowerment Summary</div>
-    <div style="
-      display:grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap:8px;
-      margin-bottom:14px;
-    ">
+    <div style="display:grid;grid-template-columns: repeat(5, minmax(0, 1fr));gap:8px;margin-bottom:14px;">
       <div class="badge">Disbursed: ${fmt(empDisbursed)}</div>
       <div class="badge">Repaid Principal: ${fmt(empRepaidPrincipal)}</div>
       <div class="badge">Repaid Interest: ${fmt(empRepaidInterest)}</div>
@@ -3820,54 +3933,26 @@ function openCustomerStatement(customerId) {
     </div>
 
     <style>
-      /* ✅ scoped to only this modal table */
-      table.stmt-modal {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-        font-size: 13px;
-      }
-      table.stmt-modal th, table.stmt-modal td {
-        padding: 8px;
-        border-bottom: 1px solid #eef2f7;
-        vertical-align: top;
-      }
-      table.stmt-modal th {
-        background: #f8fafc;
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        text-align: left;
-      }
-      table.stmt-modal td.amount,
-      table.stmt-modal td.rb {
-        text-align: right;
-        white-space: nowrap;
-      }
-      table.stmt-modal td.type {
-        white-space: nowrap;
-      }
-      table.stmt-modal td.desc {
-        white-space: normal !important;
-        word-break: break-word !important;
-        overflow-wrap: anywhere !important;
-      }
+      table.stmt-modal { width:100%; border-collapse:collapse; table-layout:fixed; font-size:13px; }
+      table.stmt-modal th, table.stmt-modal td { padding:8px; border-bottom:1px solid #eef2f7; vertical-align:top; }
+      table.stmt-modal th { background:#f8fafc; position:sticky; top:0; z-index:1; text-align:left; }
+      table.stmt-modal td.amount, table.stmt-modal td.rb { text-align:right; white-space:nowrap; }
+      table.stmt-modal td.type { white-space:nowrap; }
+      table.stmt-modal td.desc { white-space:normal !important; word-break:break-word !important; overflow-wrap:anywhere !important; }
     </style>
 
-    <!-- TABLE + FIXED FOOTER -->
-    <div style="display:flex;flex-direction:column;height:60vh;min-width:0;">
+    <div style="display:flex;flex-direction:column;height:55vh;min-width:0;">
       <div style="flex:1;overflow:auto;min-width:0;border:1px solid #e5e7eb;border-radius:10px;background:#fff;">
         <table class="stmt-modal">
           <colgroup>
-            <col style="width:60px">   <!-- S/N -->
-            <col style="width:170px">  <!-- Date -->
-            <col style="width:160px">  <!-- Customer -->
-            <col style="width:130px">  <!-- Amount -->
-            <col style="width:220px">  <!-- Type -->
-            <col style="width:280px">  <!-- Description (IMPORTANT: give it real width) -->
-            <col style="width:150px">  <!-- Running Balance -->
+            <col style="width:60px">
+            <col style="width:170px">
+            <col style="width:160px">
+            <col style="width:130px">
+            <col style="width:220px">
+            <col style="width:280px">
+            <col style="width:150px">
           </colgroup>
-
           <thead>
             <tr>
               <th>S/N</th>
@@ -3879,22 +3964,40 @@ function openCustomerStatement(customerId) {
               <th style="text-align:right;white-space:nowrap;">Running Balance</th>
             </tr>
           </thead>
-
           <tbody>
-            ${rows || `<tr><td colspan="7" style="text-align:center;color:#666;padding:14px">No transactions yet</td></tr>`}
+            ${rows || `<tr><td colspan="7" style="text-align:center;color:#666;padding:14px">No transactions in this range</td></tr>`}
           </tbody>
         </table>
       </div>
 
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;background:#fff;">
         <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">Close</button>
-        <button class="btn solid" onclick="printCustomerStatement('${customerId}')">Print</button>
+        <button class="btn solid" onclick="printCustomerStatement('${customerId}','${fromISO}','${toISO}')">Print</button>
       </div>
     </div>
   `;
 
-  // IMPORTANT: close label blank because we already have our own Close button
   openModalGeneric("Account Statement", wrapper, "", false);
+
+  // Bind filter buttons AFTER modal mounts
+  const btnApply = wrapper.querySelector("#stmtApply");
+  const btnReset = wrapper.querySelector("#stmtReset");
+  const fromEl = wrapper.querySelector("#stmtFrom");
+  const toEl = wrapper.querySelector("#stmtTo");
+
+  if (btnApply) {
+    btnApply.onclick = () => {
+      const f = (fromEl && fromEl.value) || "";
+      const t = (toEl && toEl.value) || "";
+      openCustomerStatement(customerId, f, t);
+    };
+  }
+
+  if (btnReset) {
+    btnReset.onclick = () => {
+      openCustomerStatement(customerId, "", "");
+    };
+  }
 }
 
 window.openCustomerStatement = openCustomerStatement;
