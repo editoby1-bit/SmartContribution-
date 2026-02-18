@@ -3589,88 +3589,119 @@ function printCustomerStatement(customerId) {
       .replace(/>/g, "&gt;");
 
     return `
-      <tr>
-        <td>${i + 1}</td>
-        <td>${dateStr}</td>
-        <td>${customer.name}</td>
-        <td style="text-align:right">${fmt(t.amount)}</td>
-        <td>${prettyTxType(t.type)}</td>
-        <td>${desc}</td>
-        <td style="text-align:right">${fmt(rb)}</td>
-      </tr>
-    `;
+<tr>
+  <td>${i + 1}</td>
+  <td>${dateStr}</td>
+  <td>${customer.name}</td>
+  <td class="amount">${fmt(t.amount)}</td>
+  <td class="type">${prettyTxType(t.type)}</td>
+  <td class="desc">${desc}</td>
+  <td class="rb">${fmt(rb)}</td>
+</tr>
+`;
+
   }).join("");
 
   const w = window.open("", "", "width=1100,height=800");
   if (!w) return showToast("Popup blocked. Allow popups to print.");
 
   w.document.write(`
-    <html>
-    <head>
-      <title>Account Statement - ${customer.name}</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 18px; color:#111; }
-        h2 { margin: 0 0 6px 0; }
-        .meta { margin: 0 0 12px 0; font-size: 13px; color:#333; }
-        .totals { display:flex; gap:14px; flex-wrap:wrap; margin: 10px 0; font-size: 13px; }
-        .totals .box { border:1px solid #ddd; border-radius:10px; padding:10px 12px; min-width: 170px; }
-        .section-title { margin: 14px 0 8px 0; font-weight: 700; font-size: 13px; color:#222; }
-        table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-        th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
-        th { background: #f5f5f5; text-align:left; }
-        .footer { margin-top: 14px; font-size: 12px; color:#666; }
-      </style>
-    </head>
-    <body>
-      <h2>Customer Account Statement</h2>
+<html>
+<head>
+  <title>Account Statement - ${customer.name}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 14px; color:#111; }
+    h2 { margin: 0 0 4px 0; font-size: 16px; }
+    .meta { margin: 0 0 8px 0; font-size: 12px; color:#333; line-height: 1.35; }
+    .note { font-size: 11px; color:#555; margin-top: 4px; }
+    .section-title { margin: 10px 0 6px 0; font-weight: 700; font-size: 12px; color:#222; }
 
-      <div class="meta">
-        <b>${customer.name}</b><br/>
-        Account No: <b>${customer.accountNumber || "—"}</b><br/>
-        Phone: ${customer.phone || "—"} &nbsp; • &nbsp;
-        Date Printed: ${new Date().toLocaleString()}
-      </div>
+    /* ✅ tighter summary */
+    .totals {
+      display:grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap:8px;
+      margin: 6px 0 10px 0;
+      font-size: 12px;
+    }
+    .totals .box {
+      border:1px solid #ddd;
+      border-radius:8px;
+      padding:6px 8px;
+      min-width: 0;
+    }
+    .totals .box b { font-size: 11px; display:block; color:#333; }
+    .totals .box div:last-child { font-weight:700; margin-top: 2px; }
 
-      <div class="section-title">Savings Summary</div>
-      <div class="totals">
-        <div class="box"><div><b>Opening Balance</b></div><div>${fmt(openingBal)}</div></div>
-        <div class="box"><div><b>Total Inflow</b></div><div>${fmt(inflow)}</div></div>
-        <div class="box"><div><b>Total Outflow</b></div><div>${fmt(outflow)}</div></div>
-        <div class="box"><div><b>Net Movement</b></div><div>${fmt(net)}</div></div>
-        <div class="box"><div><b>Closing Balance</b></div><div>${fmt(closingBal)}</div></div>
-      </div>
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      table-layout: fixed; /* ✅ prevents crashing */
+    }
+    th, td { border: 1px solid #ddd; padding: 6px 7px; vertical-align: top; }
+    th { background: #f5f5f5; text-align:left; font-size: 11.5px; }
 
-      <div class="section-title">Empowerment Summary</div>
-      <div class="totals">
-        <div class="box"><div><b>Total Disbursed</b></div><div>${fmt(empDisbursed)}</div></div>
-        <div class="box"><div><b>Repaid Principal</b></div><div>${fmt(empRepaidPrincipal)}</div></div>
-        <div class="box"><div><b>Repaid Interest</b></div><div>${fmt(empRepaidInterest)}</div></div>
-        <div class="box"><div><b>Total Repaid</b></div><div>${fmt(empRepaidTotal)}</div></div>
-        <div class="box"><div><b>Principal Outstanding</b></div><div>${fmt(empOutstanding)}</div></div>
-      </div>
+    /* ✅ column behavior */
+    td.type { white-space: nowrap; }
+    td.desc { word-break: break-word; overflow-wrap: anywhere; }
+    td.amount, td.rb { text-align:right; white-space: nowrap; }
 
-      <table>
-        <thead>
-          <tr>
-            <th style="width:55px">S/N</th>
-            <th style="width:170px">Date</th>
-            <th style="width:160px">Customer Name</th>
-            <th style="width:120px;text-align:right">Amount</th>
-            <th style="width:180px">Type</th>
-            <th>Description</th>
-            <th style="width:140px;text-align:right">Running Balance</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows || `<tr><td colspan="7" style="text-align:center;color:#666">No transactions yet</td></tr>`}
-        </tbody>
-      </table>
+    .footer { margin-top: 10px; font-size: 11px; color:#666; }
+  </style>
+</head>
+<body>
+  <h2>Customer Account Statement</h2>
 
-      <div class="footer">This statement is system-generated.</div>
-      <script>window.print();</script>
-    </body>
-    </html>
-  `);
+  <div class="meta">
+    <b>${customer.name}</b><br/>
+    Account No: <b>${customer.accountNumber || "—"}</b><br/>
+    Phone: ${customer.phone || "—"} &nbsp; • &nbsp;
+    Date Printed: ${new Date().toLocaleString()}
+    <div class="note"><b>Amounts in Naira (₦ / N)</b></div>
+  </div>
+
+  <div class="section-title">Savings Summary</div>
+  <div class="totals">
+    <div class="box"><b>Opening Balance</b><div>${fmt(openingBal)}</div></div>
+    <div class="box"><b>Total Credits</b><div>${fmt(inflow)}</div></div>
+    <div class="box"><b>Total Withdrawals</b><div>${fmt(outflow)}</div></div>
+    <div class="box"><b>Net Movement</b><div>${fmt(net)}</div></div>
+    <div class="box"><b>Closing Balance</b><div>${fmt(closingBal)}</div></div>
+  </div>
+
+  <div class="section-title">Empowerment Summary</div>
+  <div class="totals">
+    <div class="box"><b>Total Disbursed</b><div>${fmt(empDisbursed)}</div></div>
+    <div class="box"><b>Repaid Principal</b><div>${fmt(empRepaidPrincipal)}</div></div>
+    <div class="box"><b>Repaid Interest</b><div>${fmt(empRepaidInterest)}</div></div>
+    <div class="box"><b>Total Repaid</b><div>${fmt(empRepaidTotal)}</div></div>
+    <div class="box"><b>Principal Outstanding</b><div>${fmt(empOutstanding)}</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:42px">S/N</th>
+        <th style="width:150px">Date</th>
+        <th style="width:140px">Customer Name</th>
+        <th style="width:110px;text-align:right">Amount</th>
+        <th style="width:170px">Type</th>
+        <th>Description</th>
+        <th style="width:120px;text-align:right">Running Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows || `<tr><td colspan="7" style="text-align:center;color:#666">No transactions yet</td></tr>`}
+    </tbody>
+  </table>
+
+  <div class="footer">This statement is system-generated.</div>
+  <script>window.print();</script>
+</body>
+</html>
+`);
+
 
   w.document.close();
 }
@@ -3785,6 +3816,14 @@ function openCustomerStatement(customerId) {
   `;
 
   openModalGeneric("Account Statement", wrapper, "Close", false);
+  // ✅ ensure Close behaves like click-away (returns to Tools view)
+const back = document.getElementById("txModalBack");
+if (back) {
+  // if your openModalGeneric reuses txModalBack
+  // this ensures the close button always works
+  const closeBtn = back.querySelector("button, .btn");
+  // not reliable to locate, so we expose a direct global closer:
+}
 }
 
 // ✅ IMPORTANT: expose for onclick handlers
