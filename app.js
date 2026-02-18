@@ -3822,31 +3822,77 @@ function openCustomerStatement(customerId) {
       <div class="badge">Principal Outstanding: ${fmt(empOutstanding)}</div>
     </div>
 
-   <!-- TABLE + FIXED FOOTER LAYOUT (FIXED COLUMNS + CLEAN WRAP) -->
-<div style="display:flex;flex-direction:column;height:60vh;">
+   <!-- TABLE + FIXED FOOTER LAYOUT (HARD FIX FOR DESCRIPTION COLUMN) -->
+<div style="
+  display:flex;
+  flex-direction:column;
+  height:60vh;
+  min-width:0; /* 🔥 CRITICAL: prevents flex from crushing table */
+">
 
-  <!-- ✅ modal-only CSS (apply correctly because you have td.desc) -->
   <style>
-    .stmt-modal { width:100%; border-collapse:collapse; table-layout:fixed; font-size:13px; }
-    .stmt-modal th, .stmt-modal td { padding:8px; border-bottom:1px solid #eef2f7; vertical-align:top; }
-    .stmt-modal th { background:#f8fafc; position:sticky; top:0; z-index:1; text-align:left; }
-    .stmt-modal td.amount, .stmt-modal td.rb { text-align:right; white-space:nowrap; }
-    .stmt-modal td.type { white-space:nowrap; }
-    .stmt-modal td.desc { white-space:normal; word-break:break-word; overflow-wrap:anywhere; }
+    .stmt-modal {
+      width:100%;
+      border-collapse:collapse;
+      table-layout:fixed;
+      font-size:13px;
+    }
+
+    .stmt-modal th,
+    .stmt-modal td {
+      padding:8px;
+      border-bottom:1px solid #eef2f7;
+      vertical-align:top;
+    }
+
+    .stmt-modal th {
+      background:#f8fafc;
+      position:sticky;
+      top:0;
+      z-index:1;
+      text-align:left;
+    }
+
+    /* 🔥 FORCE PROPER COLUMN BEHAVIOUR */
+    .stmt-modal td.amount,
+    .stmt-modal td.rb {
+      text-align:right;
+      white-space:nowrap;
+      width:150px;
+    }
+
+    .stmt-modal td.type {
+      white-space:nowrap;
+      width:200px;
+    }
+
+    /* 🔥 THE REAL FIX: stop vertical letter stacking */
+    .stmt-modal td.desc {
+      white-space:normal !important;
+      word-break:break-word !important;
+      overflow-wrap:break-word !important;
+      min-width:220px; /* prevents collapse */
+    }
   </style>
 
   <!-- SCROLLABLE TABLE -->
-  <div style="flex:1;overflow:auto;border:1px solid #e5e7eb;border-radius:10px;background:#fff;">
+  <div style="
+    flex:1;
+    overflow:auto;
+    min-width:0; /* 🔥 SECOND CRITICAL FIX */
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    background:#fff;
+  ">
     <table class="stmt-modal">
-      <!-- 🔥 HARD COLUMN CONTROL -->
       <colgroup>
-        <col style="width:60px">     <!-- S/N -->
-        <col style="width:170px">    <!-- Date -->
-        <col style="width:160px">    <!-- Customer -->
-        <col style="width:130px">    <!-- Amount -->
-        <col style="width:200px">    <!-- Type -->
-        <col style="width:auto">     <!-- Description -->
-        <col style="width:150px">    <!-- Running Balance -->
+        <col style="width:60px">      <!-- S/N -->
+        <col style="width:170px">     <!-- Date -->
+        <col style="width:160px">     <!-- Customer -->
+        <col style="width:130px">     <!-- Amount -->
+        <col style="width:220px">     <!-- Type -->
+        <col style="width:auto">      <!-- Description (flex column) -->
+        <col style="width:150px">     <!-- Running Balance -->
       </colgroup>
 
       <thead>
@@ -3857,7 +3903,7 @@ function openCustomerStatement(customerId) {
           <th style="text-align:right">Amount</th>
           <th>Type</th>
           <th>Description</th>
-          <th style="text-align:right;white-space:nowrap">Running Balance</th>
+          <th style="text-align:right;white-space:nowrap;">Running Balance</th>
         </tr>
       </thead>
 
@@ -3877,12 +3923,15 @@ function openCustomerStatement(customerId) {
     border-top:1px solid #e5e7eb;
     background:#fff;
   ">
-    <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">Close</button>
-    <button class="btn solid" onclick="printCustomerStatement('${customerId}')">Print</button>
+    <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">
+      Close
+    </button>
+    <button class="btn solid" onclick="printCustomerStatement('${customerId}')">
+      Print
+    </button>
   </div>
 
 </div>
-`;
 
   openModalGeneric("Account Statement", wrapper, "", false);
 }
