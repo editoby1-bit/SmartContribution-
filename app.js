@@ -587,14 +587,22 @@ function sumByAccounts(accountIds) {
 
   function syncDashboardVisibility() {
   const btn = document.getElementById("btnDashboard");
+  const dash = document.getElementById("dashboardView");
+  const app = document.getElementById("app");
   if (!btn) return;
 
-  // if you have canViewDashboard(), use it. Else fallback:
-  const allowed = (typeof canViewDashboard === "function")
-    ? canViewDashboard()
-    : (currentStaff() && ["manager", "ceo"].includes(currentStaff().role));
+  const allowed = (typeof canViewDashboard === "function") ? canViewDashboard() : false;
 
   btn.style.display = allowed ? "inline-block" : "none";
+
+  // If user is NOT allowed, force dashboard closed immediately
+  if (!allowed && dash && app) {
+    dash.style.display = "none";
+    app.style.display = "grid";
+    state.ui = state.ui || {};
+    state.ui.dashboardMode = false;
+    save?.();
+  }
 }
 window.syncDashboardVisibility = syncDashboardVisibility;
 
@@ -3461,10 +3469,27 @@ document.getElementById("submitTx").onclick = () => {
   console.log("🔥 SUBMIT BUTTON CLICKED");
 };
 
+
 // ✅ Legacy compatibility — do NOT delete old calls
-function printStatement(id) {
-  printCustomerStatement(id);
+// ✅ Legacy compatibility — DO NOT delete old calls
+function printStatement(x) {
+  // Accept: customerId | accountNumber | customer object
+  let customerId = x;
+
+  if (x && typeof x === "object" && x.id) {
+    customerId = x.id;
+  }
+
+  // If they passed accountNumber instead of id
+  if (typeof customerId === "string" && !customerId.startsWith("c")) {
+    const byAcc = (state.customers || []).find(c => String(c.accountNumber) === String(customerId));
+    if (byAcc) customerId = byAcc.id;
+  }
+
+  return printCustomerStatement(customerId);
 }
+window.printStatement = printStatement;
+
 
 // Helper: normalize types for display
 function prettyTxType(t) {
@@ -3509,41 +3534,32 @@ function _statementTxns(customer) {
     }));
 
   // merge + sort oldest -> newest
-  return [...custTx, ...empTx].sort((a, b) => new Date(a.date) - new Date(b.date));
+  return [...custTx, ...empTx]
+    .filter(t => t.date) // ✅ avoid "Invalid Date" sort bugs
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
-// ✅ PRINTABLE STATEMENT (bank-style layout, your requested columns)
+// ✅ PRINTABLE STATEMENT (bank-style layout)
 function printCustomerStatement(customerId) {
-  const customer = state.customers.find(c => c.id === customerId);
+  const customer = (state.customers || []).find(c => c.id === customerId);
   if (!customer) return showToast("Customer not found");
 
   const txns = _statementTxns(customer);
 
-  // -------------------------
-  // SAVINGS TOTALS (credit/withdraw only)
-  // -------------------------
+  // SAVINGS totals (credit/withdraw only)
   let inflow = 0;
   let outflow = 0;
 
-  let running = 0;
   for (const t of txns) {
-    if (t.type === "credit") {
-      inflow += Number(t.amount || 0);
-      running += Number(t.amount || 0);
-    }
-    if (t.type === "withdraw") {
-      outflow += Number(t.amount || 0);
-      running -= Number(t.amount || 0);
-    }
+    if (t.type === "credit") inflow += Number(t.amount || 0);
+    if (t.type === "withdraw") outflow += Number(t.amount || 0);
   }
 
   const closingBal = Number(customer.balance || 0);
   const net = inflow - outflow;
   const openingBal = closingBal - net;
 
-  // -------------------------
-  // EMPOWERMENT TOTALS (from state.transactions)
-  // -------------------------
+  // EMPOWERMENT totals
   let empDisbursed = 0;
   let empRepaidPrincipal = 0;
   let empRepaidInterest = 0;
@@ -3556,12 +3572,9 @@ function printCustomerStatement(customerId) {
   }
 
   const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
-  const empOutstanding = empDisbursed - empRepaidPrincipal; // principal outstanding (clean + simple)
-  // If you want "total outstanding including interest", say so and I’ll compute it from state.empowerments.
+  const empOutstanding = empDisbursed - empRepaidPrincipal;
 
-  // -------------------------
   // Rows with running balance (savings only)
-  // -------------------------
   let rb = openingBal;
 
   const rows = txns.map((t, i) => {
@@ -3571,7 +3584,9 @@ function printCustomerStatement(customerId) {
     const when = t.date ? new Date(t.date) : null;
     const dateStr = when && !isNaN(when) ? when.toLocaleString() : "—";
 
-    const desc = (t.desc || "").toString();
+    const desc = (t.desc || "").toString()
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
 
     return `
       <tr>
@@ -3580,7 +3595,7 @@ function printCustomerStatement(customerId) {
         <td>${customer.name}</td>
         <td style="text-align:right">${fmt(t.amount)}</td>
         <td>${prettyTxType(t.type)}</td>
-        <td>${desc.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
+        <td>${desc}</td>
         <td style="text-align:right">${fmt(rb)}</td>
       </tr>
     `;
@@ -3597,26 +3612,13 @@ function printCustomerStatement(customerId) {
         body { font-family: Arial, sans-serif; padding: 18px; color:#111; }
         h2 { margin: 0 0 6px 0; }
         .meta { margin: 0 0 12px 0; font-size: 13px; color:#333; }
-        .totals {
-          display:flex; gap:14px; flex-wrap:wrap;
-          margin: 10px 0 10px 0;
-          font-size: 13px;
-        }
-        .totals .box {
-          border:1px solid #ddd; border-radius:10px; padding:10px 12px;
-          min-width: 170px;
-        }
-        .section-title {
-          margin: 14px 0 8px 0;
-          font-weight: 700;
-          font-size: 13px;
-          color:#222;
-        }
+        .totals { display:flex; gap:14px; flex-wrap:wrap; margin: 10px 0; font-size: 13px; }
+        .totals .box { border:1px solid #ddd; border-radius:10px; padding:10px 12px; min-width: 170px; }
+        .section-title { margin: 14px 0 8px 0; font-weight: 700; font-size: 13px; color:#222; }
         table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
         th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
         th { background: #f5f5f5; text-align:left; }
         .footer { margin-top: 14px; font-size: 12px; color:#666; }
-        @media print { button { display:none; } }
       </style>
     </head>
     <body>
@@ -3664,10 +3666,7 @@ function printCustomerStatement(customerId) {
         </tbody>
       </table>
 
-      <div class="footer">
-        This statement is system-generated.
-      </div>
-
+      <div class="footer">This statement is system-generated.</div>
       <script>window.print();</script>
     </body>
     </html>
@@ -3679,12 +3678,11 @@ function printCustomerStatement(customerId) {
 
 // ✅ IN-APP MODAL PREVIEW + PRINT BUTTON
 function openCustomerStatement(customerId) {
-  const customer = state.customers.find(c => c.id === customerId);
+  const customer = (state.customers || []).find(c => c.id === customerId);
   if (!customer) return showToast("Customer not found");
 
   const txns = _statementTxns(customer);
 
-  // Savings totals
   let inflow = 0;
   let outflow = 0;
   for (const t of txns) {
@@ -3696,7 +3694,6 @@ function openCustomerStatement(customerId) {
   const net = inflow - outflow;
   const openingBal = closingBal - net;
 
-  // Empowerment totals
   let empDisbursed = 0;
   let empRepaidPrincipal = 0;
   let empRepaidInterest = 0;
@@ -3711,7 +3708,6 @@ function openCustomerStatement(customerId) {
   const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
   const empOutstanding = empDisbursed - empRepaidPrincipal;
 
-  // Running balance display (savings only)
   let rb = openingBal;
 
   const rows = txns.map((t, i) => {
@@ -3721,6 +3717,10 @@ function openCustomerStatement(customerId) {
     const when = t.date ? new Date(t.date) : null;
     const dateStr = when && !isNaN(when) ? when.toLocaleString() : "—";
 
+    const desc = (t.desc || "").toString()
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
     return `
       <tr>
         <td>${i + 1}</td>
@@ -3728,14 +3728,13 @@ function openCustomerStatement(customerId) {
         <td>${customer.name}</td>
         <td style="text-align:right">${fmt(t.amount)}</td>
         <td>${prettyTxType(t.type)}</td>
-        <td>${(t.desc || "").toString().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
+        <td>${desc}</td>
         <td style="text-align:right">${fmt(rb)}</td>
       </tr>
     `;
   }).join("");
 
   const wrapper = document.createElement("div");
-
   wrapper.innerHTML = `
     <div style="margin-bottom:10px">
       <b>${customer.name}</b><br/>
@@ -3787,6 +3786,10 @@ function openCustomerStatement(customerId) {
 
   openModalGeneric("Account Statement", wrapper, "Close", false);
 }
+
+// ✅ IMPORTANT: expose for onclick handlers
+window.openCustomerStatement = openCustomerStatement;
+window.printCustomerStatement = printCustomerStatement;
 
   // =========================
 // TRANSACTION PROCESSING
@@ -7636,6 +7639,7 @@ state.operational.includeEmpowerment = state.operational.includeEmpowerment || f
   
   bindCODButtons();
   bindDashboardButton();      // controls show/hide dashboard
+  bindStaffSelectForDashboard();
   syncDashboardVisibility();  // shows dashboard button only for managers
 
  
@@ -7683,6 +7687,25 @@ state.operational.includeEmpowerment = state.operational.includeEmpowerment || f
   forceFullUIRefresh();       // then refresh everything
 };
   }
+
+
+  function bindStaffSelectForDashboard() {
+  const sel = document.getElementById("staffSelect");
+  if (!sel) return;
+
+  sel.addEventListener("change", () => {
+    // your app likely already uses staffSelect directly,
+    // but we still force UI sync immediately:
+    syncDashboardVisibility();
+
+    // If dashboard is open and user is allowed, refresh it
+    if (state.ui?.dashboardMode && canViewDashboard()) {
+      renderDashboard?.();
+    }
+  });
+}
+window.bindStaffSelectForDashboard = bindStaffSelectForDashboard;
+
 
 function bindCODButtons() {
   const staff = currentStaff();
