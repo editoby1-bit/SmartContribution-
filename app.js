@@ -3834,12 +3834,27 @@ function openCustomerStatement(customerId) {
         border:1px solid #e5e7eb;
         border-radius:10px;
       ">
-        <table style="
-          width:100%;
-          border-collapse:collapse;
-          table-layout:fixed;
-          font-size:13px;
-        ">
+        <table class="stmt-modal" style="
+  width:100%;
+  border-collapse:collapse;
+  table-layout:fixed;
+  font-size:13px;
+">
+<style>
+  /* ✅ modal-only column control */
+  .stmt-modal td { vertical-align: top; }
+  .stmt-modal td.desc {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  .stmt-modal td.rb {
+    width:140px;
+    min-width:140px;
+    text-align:right;
+    white-space: nowrap;
+  }
+</style>
           <thead style="background:#f8fafc;position:sticky;top:0;z-index:1">
             <tr>
               <th style="width:50px">S/N</th>
@@ -3847,8 +3862,8 @@ function openCustomerStatement(customerId) {
               <th style="width:150px">Customer Name</th>
               <th style="width:120px;text-align:right">Amount</th>
               <th style="width:200px">Type</th>
-              <th>Description</th>
-              <th style="width:140px;text-align:right">Running Balance</th>
+            <th style="min-width:220px">Description</th>
+<th style="width:140px;min-width:140px;text-align:right;white-space:nowrap">Running Balance</th>
             </tr>
           </thead>
           <tbody>
