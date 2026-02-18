@@ -3470,7 +3470,6 @@ document.getElementById("submitTx").onclick = () => {
 };
 
 
-// ✅ Legacy compatibility — do NOT delete old calls
 // ✅ Legacy compatibility — DO NOT delete old calls
 function printStatement(x) {
   // Accept: customerId | accountNumber | customer object
@@ -3482,14 +3481,15 @@ function printStatement(x) {
 
   // If they passed accountNumber instead of id
   if (typeof customerId === "string" && !customerId.startsWith("c")) {
-    const byAcc = (state.customers || []).find(c => String(c.accountNumber) === String(customerId));
+    const byAcc = (state.customers || []).find(
+      c => String(c.accountNumber) === String(customerId)
+    );
     if (byAcc) customerId = byAcc.id;
   }
 
   return printCustomerStatement(customerId);
 }
 window.printStatement = printStatement;
-
 
 // Helper: normalize types for display
 function prettyTxType(t) {
@@ -3533,9 +3533,9 @@ function _statementTxns(customer) {
       desc: t.desc || ""
     }));
 
-  // merge + sort oldest -> newest
+  // merge + sort oldest -> newest (avoid invalid date bugs)
   return [...custTx, ...empTx]
-    .filter(t => t.date) // ✅ avoid "Invalid Date" sort bugs
+    .filter(t => t && t.date)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
@@ -3546,17 +3546,17 @@ function printCustomerStatement(customerId) {
 
   const txns = _statementTxns(customer);
 
-  // SAVINGS totals (credit/withdraw only)
-  let inflow = 0;
-  let outflow = 0;
+  // SAVINGS totals
+  let credits = 0;
+  let withdrawals = 0;
 
   for (const t of txns) {
-    if (t.type === "credit") inflow += Number(t.amount || 0);
-    if (t.type === "withdraw") outflow += Number(t.amount || 0);
+    if (t.type === "credit") credits += Number(t.amount || 0);
+    if (t.type === "withdraw") withdrawals += Number(t.amount || 0);
   }
 
   const closingBal = Number(customer.balance || 0);
-  const net = inflow - outflow;
+  const net = credits - withdrawals;
   const openingBal = closingBal - net;
 
   // EMPOWERMENT totals
@@ -3574,171 +3574,7 @@ function printCustomerStatement(customerId) {
   const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
   const empOutstanding = empDisbursed - empRepaidPrincipal;
 
-  // Rows with running balance (savings only)
-  let rb = openingBal;
-
-  const rows = txns.map((t, i) => {
-    if (t.type === "credit") rb += Number(t.amount || 0);
-    if (t.type === "withdraw") rb -= Number(t.amount || 0);
-
-    const when = t.date ? new Date(t.date) : null;
-    const dateStr = when && !isNaN(when) ? when.toLocaleString() : "—";
-
-    const desc = (t.desc || "").toString()
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-
-    return `
-<tr>
-  <td>${i + 1}</td>
-  <td>${dateStr}</td>
-  <td>${customer.name}</td>
-  <td class="amount">${fmt(t.amount)}</td>
-  <td class="type">${prettyTxType(t.type)}</td>
-  <td class="desc">${desc}</td>
-  <td class="rb">${fmt(rb)}</td>
-</tr>
-`;
-
-  }).join("");
-
-  const w = window.open("", "", "width=1100,height=800");
-  if (!w) return showToast("Popup blocked. Allow popups to print.");
-
-  w.document.write(`
-<html>
-<head>
-  <title>Account Statement - ${customer.name}</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 14px; color:#111; }
-    h2 { margin: 0 0 4px 0; font-size: 16px; }
-    .meta { margin: 0 0 8px 0; font-size: 12px; color:#333; line-height: 1.35; }
-    .note { font-size: 11px; color:#555; margin-top: 4px; }
-    .section-title { margin: 10px 0 6px 0; font-weight: 700; font-size: 12px; color:#222; }
-
-    /* ✅ tighter summary */
-    .totals {
-      display:grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap:8px;
-      margin: 6px 0 10px 0;
-      font-size: 12px;
-    }
-    .totals .box {
-      border:1px solid #ddd;
-      border-radius:8px;
-      padding:6px 8px;
-      min-width: 0;
-    }
-    .totals .box b { font-size: 11px; display:block; color:#333; }
-    .totals .box div:last-child { font-weight:700; margin-top: 2px; }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-      table-layout: fixed; /* ✅ prevents crashing */
-    }
-    th, td { border: 1px solid #ddd; padding: 6px 7px; vertical-align: top; }
-    th { background: #f5f5f5; text-align:left; font-size: 11.5px; }
-
-    /* ✅ column behavior */
-    td.type { white-space: nowrap; }
-    td.desc { word-break: break-word; overflow-wrap: anywhere; }
-    td.amount, td.rb { text-align:right; white-space: nowrap; }
-
-    .footer { margin-top: 10px; font-size: 11px; color:#666; }
-  </style>
-</head>
-<body>
-  <h2>Customer Account Statement</h2>
-
-  <div class="meta">
-    <b>${customer.name}</b><br/>
-    Account No: <b>${customer.accountNumber || "—"}</b><br/>
-    Phone: ${customer.phone || "—"} &nbsp; • &nbsp;
-    Date Printed: ${new Date().toLocaleString()}
-    <div class="note"><b>Amounts in Naira (₦ / N)</b></div>
-  </div>
-
-  <div class="section-title">Savings Summary</div>
-  <div class="totals">
-    <div class="box"><b>Opening Balance</b><div>${fmt(openingBal)}</div></div>
-    <div class="box"><b>Total Credits</b><div>${fmt(inflow)}</div></div>
-    <div class="box"><b>Total Withdrawals</b><div>${fmt(outflow)}</div></div>
-    <div class="box"><b>Net Movement</b><div>${fmt(net)}</div></div>
-    <div class="box"><b>Closing Balance</b><div>${fmt(closingBal)}</div></div>
-  </div>
-
-  <div class="section-title">Empowerment Summary</div>
-  <div class="totals">
-    <div class="box"><b>Total Disbursed</b><div>${fmt(empDisbursed)}</div></div>
-    <div class="box"><b>Repaid Principal</b><div>${fmt(empRepaidPrincipal)}</div></div>
-    <div class="box"><b>Repaid Interest</b><div>${fmt(empRepaidInterest)}</div></div>
-    <div class="box"><b>Total Repaid</b><div>${fmt(empRepaidTotal)}</div></div>
-    <div class="box"><b>Principal Outstanding</b><div>${fmt(empOutstanding)}</div></div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th style="width:42px">S/N</th>
-        <th style="width:150px">Date</th>
-        <th style="width:140px">Customer Name</th>
-        <th style="width:110px;text-align:right">Amount</th>
-        <th style="width:170px">Type</th>
-        <th>Description</th>
-        <th style="width:120px;text-align:right">Running Balance</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows || `<tr><td colspan="7" style="text-align:center;color:#666">No transactions yet</td></tr>`}
-    </tbody>
-  </table>
-
-  <div class="footer">This statement is system-generated.</div>
-  <script>window.print();</script>
-</body>
-</html>
-`);
-
-
-  w.document.close();
-}
-
-
-// ✅ IN-APP MODAL PREVIEW + PRINT BUTTON
-function openCustomerStatement(customerId) {
-  const customer = (state.customers || []).find(c => c.id === customerId);
-  if (!customer) return showToast("Customer not found");
-
-  const txns = _statementTxns(customer);
-
-  let inflow = 0;
-  let outflow = 0;
-  for (const t of txns) {
-    if (t.type === "credit") inflow += Number(t.amount || 0);
-    if (t.type === "withdraw") outflow += Number(t.amount || 0);
-  }
-
-  const closingBal = Number(customer.balance || 0);
-  const net = inflow - outflow;
-  const openingBal = closingBal - net;
-
-  let empDisbursed = 0;
-  let empRepaidPrincipal = 0;
-  let empRepaidInterest = 0;
-
-  for (const t of txns) {
-    const amt = Number(t.amount || 0);
-    if (t.type === "empowerment_disbursement") empDisbursed += amt;
-    if (t.type === "empowerment_repayment_principal") empRepaidPrincipal += amt;
-    if (t.type === "empowerment_repayment_interest") empRepaidInterest += amt;
-  }
-
-  const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
-  const empOutstanding = empDisbursed - empRepaidPrincipal;
-
+  // Running balance (savings only)
   let rb = openingBal;
 
   const rows = txns.map((t, i) => {
@@ -3757,32 +3593,210 @@ function openCustomerStatement(customerId) {
         <td>${i + 1}</td>
         <td>${dateStr}</td>
         <td>${customer.name}</td>
-        <td style="text-align:right">${fmt(t.amount)}</td>
-        <td>${prettyTxType(t.type)}</td>
-        <td>${desc}</td>
-        <td style="text-align:right">${fmt(rb)}</td>
+        <td class="amount">${fmt(t.amount)}</td>
+        <td class="type">${prettyTxType(t.type)}</td>
+        <td class="desc">${desc}</td>
+        <td class="rb">${fmt(rb)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const w = window.open("", "", "width=1200,height=900");
+  if (!w) return showToast("Popup blocked. Allow popups to print.");
+
+  w.document.write(`
+<!doctype html>
+<html>
+<head>
+  <title>Account Statement - ${customer.name}</title>
+  <style>
+    @page { size: A4 landscape; margin: 10mm; }
+    body { font-family: Arial, sans-serif; padding: 14px; color:#111; }
+    h2 { margin: 0 0 4px 0; font-size: 16px; }
+    .meta { margin: 0 0 8px 0; font-size: 12px; color:#333; line-height: 1.35; }
+    .note { font-size: 11px; color:#555; margin-top: 4px; }
+    .section-title { margin: 10px 0 6px 0; font-weight: 700; font-size: 12px; color:#222; }
+
+    .totals{
+      display:grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap:8px;
+      margin: 6px 0 10px 0;
+      font-size: 12px;
+    }
+    .totals .box{
+      border:1px solid #ddd;
+      border-radius:8px;
+      padding:6px 8px;
+      min-width: 0;
+    }
+    .totals .box b{ font-size:11px; display:block; color:#333; }
+    .totals .box div:last-child{ font-weight:700; margin-top:2px; }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-size: 11.5px;
+      table-layout: fixed;
+    }
+    th, td{ border:1px solid #ddd; padding:6px 7px; vertical-align: top; }
+    th{ background:#f5f5f5; text-align:left; font-size: 11px; }
+
+    td.type{
+      white-space: nowrap;
+      word-break: normal;
+    }
+    td.desc{
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    td.amount, td.rb{
+      text-align:right;
+      white-space: nowrap;
+    }
+
+    .footer { margin-top: 8px; font-size: 11px; color:#666; }
+  </style>
+</head>
+<body>
+  <h2>Customer Account Statement</h2>
+
+  <div class="meta">
+    <b>${customer.name}</b><br/>
+    Account No: <b>${customer.accountNumber || "—"}</b><br/>
+    Phone: ${customer.phone || "—"} &nbsp; • &nbsp;
+    Date Printed: ${new Date().toLocaleString()}
+    <div class="note"><b>Amounts in Naira (₦ / N)</b></div>
+  </div>
+
+  <div class="section-title">Savings Summary</div>
+  <div class="totals">
+    <div class="box"><b>Opening Balance</b><div>${fmt(openingBal)}</div></div>
+    <div class="box"><b>Total Credits</b><div>${fmt(credits)}</div></div>
+    <div class="box"><b>Total Withdrawals</b><div>${fmt(withdrawals)}</div></div>
+    <div class="box"><b>Net Movement</b><div>${fmt(net)}</div></div>
+    <div class="box"><b>Closing Balance</b><div>${fmt(closingBal)}</div></div>
+  </div>
+
+  <div class="section-title">Empowerment Summary</div>
+  <div class="totals">
+    <div class="box"><b>Total Disbursed</b><div>${fmt(empDisbursed)}</div></div>
+    <div class="box"><b>Repaid Principal</b><div>${fmt(empRepaidPrincipal)}</div></div>
+    <div class="box"><b>Repaid Interest</b><div>${fmt(empRepaidInterest)}</div></div>
+    <div class="box"><b>Total Repaid</b><div>${fmt(empRepaidTotal)}</div></div>
+    <div class="box"><b>Principal Outstanding</b><div>${fmt(empOutstanding)}</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40px">S/N</th>
+        <th style="width:150px">Date</th>
+        <th style="width:140px">Customer Name</th>
+        <th style="width:110px;text-align:right">Amount</th>
+        <th style="width:190px">Type</th>
+        <th>Description</th>
+        <th style="width:120px;text-align:right">Running Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows || `<tr><td colspan="7" style="text-align:center;color:#666">No transactions yet</td></tr>`}
+    </tbody>
+  </table>
+
+  <div class="footer">This statement is system-generated.</div>
+  <script>
+    window.onload = () => window.print();
+  </script>
+</body>
+</html>
+  `);
+
+  w.document.close();
+}
+
+// ✅ IN-APP MODAL PREVIEW + fixed footer buttons
+function openCustomerStatement(customerId) {
+  const customer = (state.customers || []).find(c => c.id === customerId);
+  if (!customer) return showToast("Customer not found");
+
+  const txns = _statementTxns(customer);
+
+  // Savings totals
+  let credits = 0;
+  let withdrawals = 0;
+  for (const t of txns) {
+    if (t.type === "credit") credits += Number(t.amount || 0);
+    if (t.type === "withdraw") withdrawals += Number(t.amount || 0);
+  }
+
+  const closingBal = Number(customer.balance || 0);
+  const net = credits - withdrawals;
+  const openingBal = closingBal - net;
+
+  // Empowerment totals
+  let empDisbursed = 0;
+  let empRepaidPrincipal = 0;
+  let empRepaidInterest = 0;
+  for (const t of txns) {
+    const amt = Number(t.amount || 0);
+    if (t.type === "empowerment_disbursement") empDisbursed += amt;
+    if (t.type === "empowerment_repayment_principal") empRepaidPrincipal += amt;
+    if (t.type === "empowerment_repayment_interest") empRepaidInterest += amt;
+  }
+  const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
+  const empOutstanding = empDisbursed - empRepaidPrincipal;
+
+  // Running balance
+  let rb = openingBal;
+
+  const rows = txns.map((t, i) => {
+    if (t.type === "credit") rb += Number(t.amount || 0);
+    if (t.type === "withdraw") rb -= Number(t.amount || 0);
+
+    const when = t.date ? new Date(t.date) : null;
+    const dateStr = when && !isNaN(when) ? when.toLocaleString() : "—";
+
+    const desc = (t.desc || "").toString()
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    return `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${dateStr}</td>
+        <td>${customer.name}</td>
+        <td style="text-align:right;white-space:nowrap">${fmt(t.amount)}</td>
+        <td style="white-space:nowrap">${prettyTxType(t.type)}</td>
+        <td style="word-break:break-word">${desc}</td>
+        <td style="text-align:right;white-space:nowrap">${fmt(rb)}</td>
       </tr>
     `;
   }).join("");
 
   const wrapper = document.createElement("div");
   wrapper.innerHTML = `
+    <div style="font-size:12px;color:#555;margin-bottom:6px">
+      <b>Amounts in Naira (₦ / N)</b>
+    </div>
+
     <div style="margin-bottom:10px">
       <b>${customer.name}</b><br/>
       Account No: ${customer.accountNumber || "—"}<br/>
       Phone: ${customer.phone || "—"}
     </div>
 
-    <div style="margin:10px 0; font-weight:700;">Savings Summary</div>
+    <div style="margin:10px 0;font-weight:700;">Savings Summary</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px 0">
       <div class="badge">Opening: ${fmt(openingBal)}</div>
-      <div class="badge">Inflow: ${fmt(inflow)}</div>
-      <div class="badge">Outflow: ${fmt(outflow)}</div>
+      <div class="badge">Credits: ${fmt(credits)}</div>
+      <div class="badge">Withdrawals: ${fmt(withdrawals)}</div>
       <div class="badge">Net: ${fmt(net)}</div>
       <div class="badge">Closing: ${fmt(closingBal)}</div>
     </div>
 
-    <div style="margin:10px 0; font-weight:700;">Empowerment Summary</div>
+    <div style="margin:10px 0;font-weight:700;">Empowerment Summary</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px 0">
       <div class="badge">Disbursed: ${fmt(empDisbursed)}</div>
       <div class="badge">Repaid Principal: ${fmt(empRepaidPrincipal)}</div>
@@ -3791,42 +3805,36 @@ function openCustomerStatement(customerId) {
       <div class="badge">Principal Outstanding: ${fmt(empOutstanding)}</div>
     </div>
 
-    <div style="max-height:55vh; overflow:auto; border:1px solid #e5e7eb; border-radius:10px">
-      <table style="width:100%; border-collapse:collapse">
-        <thead>
-          <tr>
-            <th>S/N</th>
-            <th>Date</th>
-            <th>Customer Name</th>
-            <th style="text-align:right">Amount</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th style="text-align:right">Running Balance</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows || `<tr><td colspan="7" style="text-align:center;color:#666">No transactions yet</td></tr>`}
-        </tbody>
-      </table>
-    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-height:62vh;">
+      <div style="flex:1;overflow:auto;border:1px solid #e5e7eb;border-radius:10px">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+          <thead>
+            <tr>
+              <th style="width:45px">S/N</th>
+              <th style="width:150px">Date</th>
+              <th style="width:130px">Customer Name</th>
+              <th style="width:110px;text-align:right">Amount</th>
+              <th style="width:180px">Type</th>
+              <th>Description</th>
+              <th style="width:120px;text-align:right">Running Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || `<tr><td colspan="7" style="text-align:center;color:#666">No transactions yet</td></tr>`}
+          </tbody>
+        </table>
+      </div>
 
-    <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end">
-      <button class="btn solid" onclick="printCustomerStatement('${customerId}')">Print</button>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">Close</button>
+        <button class="btn solid" onclick="printCustomerStatement('${customerId}')">Print</button>
+      </div>
     </div>
   `;
 
-  openModalGeneric("Account Statement", wrapper, "Close", false);
-  // ✅ ensure Close behaves like click-away (returns to Tools view)
-const back = document.getElementById("txModalBack");
-if (back) {
-  // if your openModalGeneric reuses txModalBack
-  // this ensures the close button always works
-  const closeBtn = back.querySelector("button, .btn");
-  // not reliable to locate, so we expose a direct global closer:
-}
+  openModalGeneric("Account Statement", wrapper, "", false);
 }
 
-// ✅ IMPORTANT: expose for onclick handlers
 window.openCustomerStatement = openCustomerStatement;
 window.printCustomerStatement = printCustomerStatement;
 
