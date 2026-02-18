@@ -3667,7 +3667,7 @@ function printCustomerStatement(customerId) {
     Account No: <b>${customer.accountNumber || "—"}</b><br/>
     Phone: ${customer.phone || "—"} &nbsp; • &nbsp;
     Date Printed: ${new Date().toLocaleString()}
-    <div class="note"><b>Amounts in Naira (₦ / N)</b></div>
+    <div class="note"><b>Amounts in Naira (₦)</b></div>
   </div>
 
   <div class="section-title">Savings Summary</div>
@@ -3716,14 +3716,14 @@ function printCustomerStatement(customerId) {
   w.document.close();
 }
 
-// ✅ IN-APP MODAL PREVIEW + fixed footer buttons
+// ✅ CLEAN MODAL PREVIEW (professional layout + fixed footer buttons)
 function openCustomerStatement(customerId) {
   const customer = (state.customers || []).find(c => c.id === customerId);
   if (!customer) return showToast("Customer not found");
 
   const txns = _statementTxns(customer);
 
-  // Savings totals
+  // Totals
   let credits = 0;
   let withdrawals = 0;
   for (const t of txns) {
@@ -3739,12 +3739,14 @@ function openCustomerStatement(customerId) {
   let empDisbursed = 0;
   let empRepaidPrincipal = 0;
   let empRepaidInterest = 0;
+
   for (const t of txns) {
     const amt = Number(t.amount || 0);
     if (t.type === "empowerment_disbursement") empDisbursed += amt;
     if (t.type === "empowerment_repayment_principal") empRepaidPrincipal += amt;
     if (t.type === "empowerment_repayment_interest") empRepaidInterest += amt;
   }
+
   const empRepaidTotal = empRepaidPrincipal + empRepaidInterest;
   const empOutstanding = empDisbursed - empRepaidPrincipal;
 
@@ -3767,28 +3769,37 @@ function openCustomerStatement(customerId) {
         <td>${i + 1}</td>
         <td>${dateStr}</td>
         <td>${customer.name}</td>
-        <td style="text-align:right;white-space:nowrap">${fmt(t.amount)}</td>
-        <td style="white-space:nowrap">${prettyTxType(t.type)}</td>
-        <td style="word-break:break-word">${desc}</td>
-        <td style="text-align:right;white-space:nowrap">${fmt(rb)}</td>
+        <td class="amt">${fmt(t.amount)}</td>
+        <td class="type">${prettyTxType(t.type)}</td>
+        <td class="desc">${desc}</td>
+        <td class="rb">${fmt(rb)}</td>
       </tr>
     `;
   }).join("");
 
   const wrapper = document.createElement("div");
+
   wrapper.innerHTML = `
-    <div style="font-size:12px;color:#555;margin-bottom:6px">
-      <b>Amounts in Naira (₦ / N)</b>
+    <!-- Currency Note -->
+    <div style="font-size:12px;color:#555;margin-bottom:8px">
+      <b>Amounts in Naira (₦)</b>
     </div>
 
-    <div style="margin-bottom:10px">
-      <b>${customer.name}</b><br/>
-      Account No: ${customer.accountNumber || "—"}<br/>
-      Phone: ${customer.phone || "—"}
+    <!-- Customer Header -->
+    <div style="margin-bottom:12px;line-height:1.4">
+      <div style="font-weight:700;font-size:15px">${customer.name}</div>
+      <div class="small">Account No: ${customer.accountNumber || "—"}</div>
+      <div class="small">Phone: ${customer.phone || "—"}</div>
     </div>
 
-    <div style="margin:10px 0;font-weight:700;">Savings Summary</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px 0">
+    <!-- Savings Summary -->
+    <div style="font-weight:700;margin:10px 0 6px 0;">Savings Summary</div>
+    <div style="
+      display:grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap:8px;
+      margin-bottom:14px;
+    ">
       <div class="badge">Opening: ${fmt(openingBal)}</div>
       <div class="badge">Credits: ${fmt(credits)}</div>
       <div class="badge">Withdrawals: ${fmt(withdrawals)}</div>
@@ -3796,8 +3807,14 @@ function openCustomerStatement(customerId) {
       <div class="badge">Closing: ${fmt(closingBal)}</div>
     </div>
 
-    <div style="margin:10px 0;font-weight:700;">Empowerment Summary</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px 0">
+    <!-- Empowerment Summary -->
+    <div style="font-weight:700;margin:6px 0 6px 0;">Empowerment Summary</div>
+    <div style="
+      display:grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap:8px;
+      margin-bottom:14px;
+    ">
       <div class="badge">Disbursed: ${fmt(empDisbursed)}</div>
       <div class="badge">Repaid Principal: ${fmt(empRepaidPrincipal)}</div>
       <div class="badge">Repaid Interest: ${fmt(empRepaidInterest)}</div>
@@ -3805,18 +3822,33 @@ function openCustomerStatement(customerId) {
       <div class="badge">Principal Outstanding: ${fmt(empOutstanding)}</div>
     </div>
 
-    <div style="display:flex;flex-direction:column;gap:10px;max-height:62vh;">
-      <div style="flex:1;overflow:auto;border:1px solid #e5e7eb;border-radius:10px">
-        <table style="width:100%;border-collapse:collapse;table-layout:fixed">
-          <thead>
+    <!-- TABLE + FIXED FOOTER LAYOUT -->
+    <div style="
+      display:flex;
+      flex-direction:column;
+      height:60vh;
+    ">
+      <div style="
+        flex:1;
+        overflow:auto;
+        border:1px solid #e5e7eb;
+        border-radius:10px;
+      ">
+        <table style="
+          width:100%;
+          border-collapse:collapse;
+          table-layout:fixed;
+          font-size:13px;
+        ">
+          <thead style="background:#f8fafc;position:sticky;top:0;z-index:1">
             <tr>
-              <th style="width:45px">S/N</th>
-              <th style="width:150px">Date</th>
-              <th style="width:130px">Customer Name</th>
-              <th style="width:110px;text-align:right">Amount</th>
-              <th style="width:180px">Type</th>
+              <th style="width:50px">S/N</th>
+              <th style="width:160px">Date</th>
+              <th style="width:150px">Customer Name</th>
+              <th style="width:120px;text-align:right">Amount</th>
+              <th style="width:200px">Type</th>
               <th>Description</th>
-              <th style="width:120px;text-align:right">Running Balance</th>
+              <th style="width:140px;text-align:right">Running Balance</th>
             </tr>
           </thead>
           <tbody>
@@ -3825,9 +3857,22 @@ function openCustomerStatement(customerId) {
         </table>
       </div>
 
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">Close</button>
-        <button class="btn solid" onclick="printCustomerStatement('${customerId}')">Print</button>
+      <!-- FIXED BUTTON BAR (NO SCROLLING) -->
+      <div style="
+        display:flex;
+        justify-content:flex-end;
+        gap:10px;
+        margin-top:12px;
+        padding-top:10px;
+        border-top:1px solid #e5e7eb;
+        background:#fff;
+      ">
+        <button class="btn" onclick="closeTxModal(); setActiveTab('tools');">
+          Close
+        </button>
+        <button class="btn solid" onclick="printCustomerStatement('${customerId}')">
+          Print
+        </button>
       </div>
     </div>
   `;
