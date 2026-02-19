@@ -705,16 +705,27 @@ function sumByAccounts(accountIds) {
 
 
   function syncDashboardVisibility() {
-  const btn = document.getElementById("btnDashboard");
+  const btnDash = document.getElementById("btnDashboard");
   const dash = document.getElementById("dashboardView");
   const app = document.getElementById("app");
-  if (!btn) return;
+
+  // ✅ ADD: My COD button visibility
+  const btnMyCOD = document.getElementById("btnMyCOD");
+
+  const staff = currentStaff?.();
+  const role = (staff?.role || "").toLowerCase();
+
+  // 🔒 decide who sees "My Close of Day"
+  // (edit this rule if you want marketers to see it too)
+  const canSeeMyCOD = !!staff && role !== "marketer";
+
+  if (btnMyCOD) btnMyCOD.style.display = canSeeMyCOD ? "inline-block" : "none";
+
+  if (!btnDash) return;
 
   const allowed = (typeof canViewDashboard === "function") ? canViewDashboard() : false;
+  btnDash.style.display = allowed ? "inline-block" : "none";
 
-  btn.style.display = allowed ? "inline-block" : "none";
-
-  // If user is NOT allowed, force dashboard closed immediately
   if (!allowed && dash && app) {
     dash.style.display = "none";
     app.style.display = "grid";
