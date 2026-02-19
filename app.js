@@ -3785,10 +3785,22 @@ function printCustomerStatement(customerId, fromISO = "", toISO = "") {
   const customer = (state.customers || []).find(c => c.id === customerId);
   if (!customer) return showToast("Customer not found");
 
-  let txns = _statementTxns(customer);
-if (fromISO || toISO) {
-  txns = txns.filter(t => _txInRange(t.date, fromISO, toISO));
+  // ✅ default: TODAY only (prevents huge print by default)
+const todayISO = new Date().toISOString().slice(0, 10);
+
+// If no range provided → today
+if (!fromISO && !toISO) {
+  fromISO = todayISO;
+  toISO = todayISO;
 }
+
+// If only one side provided → treat as single-day range
+if (fromISO && !toISO) toISO = fromISO;
+if (!fromISO && toISO) fromISO = toISO;
+
+let txns = _statementTxns(customer);
+txns = txns.filter(t => _txInRange(t.date, fromISO, toISO));
+
 
   // SAVINGS totals
   // Savings totals (BANK STYLE)
@@ -3973,14 +3985,18 @@ function openCustomerStatement(customerId, fromISO = "", toISO = "") {
   const customer = (state.customers || []).find(c => c.id === customerId);
   if (!customer) return showToast("Customer not found");
 
-  // default: last 30 days if no dates provided
-  if (!fromISO && !toISO) {
-    const to = new Date();
-    const from = new Date();
-    from.setDate(from.getDate() - 30);
-    fromISO = from.toISOString().slice(0, 10);
-    toISO = to.toISOString().slice(0, 10);
-  }
+  // ✅ default: TODAY only (prevents huge statement by default)
+const todayISO = new Date().toISOString().slice(0, 10);
+
+// If no range provided → today
+if (!fromISO && !toISO) {
+  fromISO = todayISO;
+  toISO = todayISO;
+}
+
+// If only one side provided → treat as single-day range
+if (fromISO && !toISO) toISO = fromISO;
+if (!fromISO && toISO) fromISO = toISO;
 
   const allTxns = _statementTxns(customer);
   const txns = allTxns.filter(t => _txInRange(t.date, fromISO, toISO));
