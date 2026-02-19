@@ -3164,18 +3164,21 @@ function renderToolsTab() {
   // =========================
   const toolButtons = `
     <button class="btn" onclick="openActionModal('credit')">Credit</button>
-    <button class="btn" onclick="openActionModal('withdraw')">Withdraw</button>
-    <button class="btn" onclick="openEmpowermentModal()">Empowerment</button>
+<button class="btn" onclick="openActionModal('withdraw')">Withdraw</button>
+<button class="btn" onclick="openEmpowermentModal()">Empowerment</button>
 
-    <button class="btn solid" onclick="openCustomerStatement('${c.id}')">
-      Statement
-    </button>
+<button class="btn ghost" onclick="openCustomerMaintenance('${c.id}')">
+  Customer Service & Maintenance
+</button>
 
-  
-    <button class="btn danger" onclick="confirmAccountClosure('${c.id}')">
+<button class="btn ghost" onclick="toggleFreeze('${c.id}')">
+  ${c.frozen ? "Unfreeze Account" : "Freeze Account"}
+</button>
+
+<button class="btn danger" onclick="confirmAccountClosure('${c.id}')">
   Account Closure
 </button>
-  `;
+`;
 
   mBody.innerHTML = `
     ${approvalHTML}
