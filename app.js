@@ -1857,6 +1857,9 @@ const qa = ($("#searchAcc")?.value || "").toLowerCase().trim();  // account numb
 
     actions.appendChild(view);
 actions.appendChild(tx);
+    r.appendChild(actions);
+
+    list.appendChild(r);
   });
 
   // Rebuild customer dropdown
