@@ -183,7 +183,7 @@ setTimeout(syncDashboardVisibility, 50);
 }
 
   
-async function toBase64Compressed(file, maxSize = 520, quality = 0.75) {
+async function toBase64Compressed(file, maxSize = 420, quality = 0.68) {
   // maxSize = max width/height; quality for JPEG
   const img = new Image();
   const url = URL.createObjectURL(file);
