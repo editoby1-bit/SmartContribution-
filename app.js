@@ -51,6 +51,25 @@ const fmtN = (n) => "₦" + fmt(n);
     }
   }
 
+  const RANGE_LABELS = {
+  today: "Daily",
+  week: "Weekly",
+  month: "Monthly",
+  year: "Yearly",
+  all: "All",
+
+  // if your UI uses these exact strings:
+  "TODAY": "Daily",
+  "THIS WEEK": "Weekly",
+  "THIS MONTH": "Monthly",
+  "THIS YEAR": "Yearly",
+  "ALL TIME": "All"
+};
+
+function labelRange(x) {
+  return RANGE_LABELS[x] || x;
+}
+
   function getTxBadgeClass(type) {
     if (type === "credit") return "tx-credit";
     if (type === "withdraw") return "tx-withdraw";
@@ -1616,20 +1635,24 @@ window.renderCustomerCreationApprovals = renderCustomerCreationApprovals;
   const list = $("#custList");
   list.innerHTML = "";
 
-  const q = ($("#search").value || "").toLowerCase().trim();
+  const q = ($("#search")?.value || "").toLowerCase().trim();      // name/phone search
+const qa = ($("#searchAcc")?.value || "").toLowerCase().trim();  // account number search
   let arr = state.customers.slice();
 
   if ($("#sort").value === "balDesc") arr.sort((a, b) => (b.balance || 0) - (a.balance || 0));
   else arr.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
   // ✅ Search: name + phone + account number
-  arr = arr.filter((c) => {
-    if (!q) return true;
-    const name = (c.name || "").toLowerCase();
-    const phone = String(c.phone || "");
-    const acct = String(c.accountNumber || "");
-    return name.includes(q) || phone.includes(q) || acct.includes(q);
-  });
+  arr = arr.filter(c => {
+  const name = (c.name || "").toLowerCase();
+  const phone = String(c.phone || "");
+  const acct = String(c.accountNumber || "").toLowerCase();
+
+  const hitNamePhone = !q || name.includes(q) || phone.includes(q);
+  const hitAccount = !qa || acct.includes(qa);
+
+  return hitNamePhone && hitAccount;
+});
 
   arr.forEach((c) => {
     const r = document.createElement("div");
@@ -2327,6 +2350,43 @@ document.getElementById("mCancel").onclick = () => {
 
 
 
+async function confirmAccountClosure(customerId) {
+  const c = (state.customers || []).find(x => x.id === customerId);
+  if (!c) return showToast("Customer not found");
+
+  const ok = await openModalGeneric(
+    "Account Closure",
+    `
+      <div class="small">
+        You are about to place <b>${c.name}</b> (Acct: <b>${c.accountNumber || "—"}</b>)
+        into <b>Account Closure</b> state.<br/><br/>
+        This will freeze the account (no postings) but keeps records for audit.
+      </div>
+    `,
+    "Proceed",
+    true
+  );
+
+  if (!ok) return;
+
+  // Protocol: closure behaves like freeze + label
+  c.frozen = true;
+  c.closedAt = new Date().toISOString();
+  c.closedBy = currentStaff()?.id || "system";
+
+  await pushAudit(
+    currentStaff()?.name || "System",
+    currentStaff()?.role || "system",
+    "account_closure",
+    { customerId: c.id, accountNumber: c.accountNumber, customerName: c.name }
+  );
+
+  save();
+  forceFullUIRefresh?.();
+  showToast("Account placed on closure (frozen)");
+}
+window.confirmAccountClosure = confirmAccountClosure;
+
 
 
 function openCustomerModal(id) {
@@ -2757,9 +2817,9 @@ function renderToolsTab() {
       ${c.frozen ? "Unfreeze" : "Freeze"}
     </button>
 
-    <button class="btn danger" onclick="confirmDeleteCustomer('${c.id}')">
-      Delete
-    </button>
+    <button class="btn danger" onclick="confirmAccountClosure('${c.id}')">
+  Account Closure
+</button>
   `;
 
   mBody.innerHTML = `
@@ -5394,21 +5454,21 @@ function openOperationalDrilldown() {
 </div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
-      <button class="btn small solid" style="background:#0f766e;color:white"
-        onclick="setOpDateFilter('today')">Today</button>
+  <button class="btn small solid" style="background:#0f766e;color:white"
+    onclick="setOpDateFilter('today')">${labelRange('today')}</button>
 
-      <button class="btn small solid" style="background:#0f766e;color:white"
-        onclick="setOpDateFilter('week')">This Week</button>
+  <button class="btn small solid" style="background:#0f766e;color:white"
+    onclick="setOpDateFilter('week')">${labelRange('week')}</button>
 
-      <button class="btn small solid" style="background:#0f766e;color:white"
-        onclick="setOpDateFilter('month')">This Month</button>
+  <button class="btn small solid" style="background:#0f766e;color:white"
+    onclick="setOpDateFilter('month')">${labelRange('month')}</button>
 
-      <button class="btn small solid" style="background:#0f766e;color:white"
-        onclick="setOpDateFilter('year')">This Year</button>
+  <button class="btn small solid" style="background:#0f766e;color:white"
+    onclick="setOpDateFilter('year')">${labelRange('year')}</button>
 
-      <button class="btn small solid" style="background:#0f766e;color:white"
-        onclick="setOpDateFilter('all')">All Time</button>
-    </div>
+  <button class="btn small solid" style="background:#0f766e;color:white"
+    onclick="setOpDateFilter('all')">${labelRange('all')}</button>
+</div>
   
     <div style="display:flex; gap:6px; margin-bottom:8px">
       <input type="date" id="opFromDate" class="input small">
@@ -5629,12 +5689,21 @@ const interestLeft = (state.empowerments || []).reduce((sum, e) => {
     </div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
-      <button class="btn small solid primary" onclick="setEmpDateFilter('today')">Today</button>
-      <button class="btn small solid primary" onclick="setEmpDateFilter('week')">This Week</button>
-      <button class="btn small solid primary" onclick="setEmpDateFilter('month')">This Month</button>
-      <button class="btn small solid primary" onclick="setEmpDateFilter('year')">This Year</button>
-      <button class="btn small solid primary" onclick="setEmpDateFilter('all')">All Time</button>
-    </div>
+  <button class="btn small solid primary"
+    onclick="setEmpDateFilter('today')">${labelRange('today')}</button>
+
+  <button class="btn small solid primary"
+    onclick="setEmpDateFilter('week')">${labelRange('week')}</button>
+
+  <button class="btn small solid primary"
+    onclick="setEmpDateFilter('month')">${labelRange('month')}</button>
+
+  <button class="btn small solid primary"
+    onclick="setEmpDateFilter('year')">${labelRange('year')}</button>
+
+  <button class="btn small solid primary"
+    onclick="setEmpDateFilter('all')">${labelRange('all')}</button>
+</div>
 
     <div style="display:flex; gap:6px; margin-bottom:8px">
   <input type="date" id="empFromDate" class="input small">
@@ -6109,12 +6178,22 @@ const totals = {
 </div>
 
     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
-      <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="setBizDateFilter('today')">Today</button>
-      <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="setBizDateFilter('week')">This Week</button>
-      <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="setBizDateFilter('month')">This Month</button>
-      <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="setBizDateFilter('year')">This Year</button>
-      <button class="btn small solid" style="background:#6a1b9a;color:white" onclick="setBizDateFilter('all')">All Time</button>
-    </div>
+  <button class="btn small solid" style="background:#6a1b9a;color:white"
+    onclick="setBizDateFilter('today')">${labelRange('today')}</button>
+
+  <button class="btn small solid" style="background:#6a1b9a;color:white"
+    onclick="setBizDateFilter('week')">${labelRange('week')}</button>
+
+  <button class="btn small solid" style="background:#6a1b9a;color:white"
+    onclick="setBizDateFilter('month')">${labelRange('month')}</button>
+
+  <button class="btn small solid" style="background:#6a1b9a;color:white"
+    onclick="setBizDateFilter('year')">${labelRange('year')}</button>
+
+  <button class="btn small solid" style="background:#6a1b9a;color:white"
+    onclick="setBizDateFilter('all')">${labelRange('all')}</button>
+</div>
+
 
     <div style="display:flex; gap:6px; margin-bottom:8px">
       <input type="date" id="bizFromDate" class="input small">
