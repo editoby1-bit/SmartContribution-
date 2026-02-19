@@ -7780,6 +7780,8 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     );
 
     save();
+    renderCustomers();
+    renderDashboardKPIs?.();
     forceFullUIRefresh?.();
 
     showToast("Customer sent for approval");
