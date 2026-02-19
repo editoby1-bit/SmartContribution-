@@ -17,6 +17,12 @@
   CEO: "ceo"
 };
 
+// ✅ single source of truth for storage key (save + load must match)
+const STORAGE_KEY = (typeof CONFIG !== "undefined" && CONFIG?.STORAGE)
+  ? CONFIG.STORAGE
+  : "sc_pro_b_v2";
+
+
 function currentStaff() {
   const staff = state.staff.find(s => s.id === state.activeStaffId);
   if (!staff) return null;
@@ -124,7 +130,7 @@ state.empowerments = state.empowerments || [];
 
   function load() {
   try {
-    const raw = localStorage.getItem(CONFIG?.STORAGE || "sc_pro_b_v2");
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
 
     const data = JSON.parse(raw);
@@ -180,14 +186,42 @@ function dashboardIsOpen() {
 };
 
   function save() {
-    if (!CONFIG.PERSIST) return;
-    try {
-      localStorage.setItem(CONFIG.STORAGE, JSON.stringify(state));
-    } catch (e) {
-      console.warn("save fail", e);
-    }
+  try {
+    // Ensure accounts container exists
+    state.accounts = state.accounts || {};
+    state.accounts.income = Array.isArray(state.accounts.income) ? state.accounts.income : [];
+    state.accounts.expense = Array.isArray(state.accounts.expense) ? state.accounts.expense : [];
+
+    const data = {
+      staff: Array.isArray(state.staff) ? state.staff : [],
+      customers: Array.isArray(state.customers) ? state.customers : [],
+      approvals: Array.isArray(state.approvals) ? state.approvals : [],
+      audit: Array.isArray(state.audit) ? state.audit : [],
+      cod: Array.isArray(state.cod) ? state.cod : [],
+      codDrafts: state.codDrafts || {},
+      empowerments: Array.isArray(state.empowerments) ? state.empowerments : [],
+      transactions: Array.isArray(state.transactions) ? state.transactions : [],
+
+      accounts: {
+        income: state.accounts.income,
+        expense: state.accounts.expense,
+      },
+
+      accountEntries: Array.isArray(state.accountEntries) ? state.accountEntries : [],
+
+      ui: state.ui || {},
+      // (optional) schema version helps later migrations
+      _v: 1,
+      _savedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn("Save failed", e);
   }
-  window.save = save;
+}
+window.save = save;
+
   
   function seed() {
     state.staff = [
