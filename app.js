@@ -134,7 +134,11 @@ state.empowerments = state.empowerments || [];
 
   function load() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+   const raw = localStorage.getItem(
+  (window && window.STORAGE_KEY) ||
+  (typeof CONFIG !== "undefined" && CONFIG && CONFIG.STORAGE) ||
+  "sc_pro_b_v2"
+);
     if (!raw) return;
 
     const data = JSON.parse(raw);
@@ -191,7 +195,13 @@ function dashboardIsOpen() {
 
   function save() {
   try {
-    // Ensure accounts container exists
+    // ✅ Always resolve key safely (never ReferenceError)
+    const key =
+      (window && window.STORAGE_KEY) ||
+      (typeof CONFIG !== "undefined" && CONFIG && CONFIG.STORAGE) ||
+      "sc_pro_b_v2";
+
+    // ✅ Ensure accounts container exists
     state.accounts = state.accounts || {};
     state.accounts.income = Array.isArray(state.accounts.income) ? state.accounts.income : [];
     state.accounts.expense = Array.isArray(state.accounts.expense) ? state.accounts.expense : [];
@@ -214,17 +224,17 @@ function dashboardIsOpen() {
       accountEntries: Array.isArray(state.accountEntries) ? state.accountEntries : [],
 
       ui: state.ui || {},
-      // (optional) schema version helps later migrations
       _v: 1,
       _savedAt: new Date().toISOString(),
     };
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
     console.warn("Save failed", e);
   }
 }
 window.save = save;
+
 
   
   function seed() {
