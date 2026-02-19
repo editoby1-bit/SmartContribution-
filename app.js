@@ -2041,19 +2041,22 @@ if (action === "approve" && approval.type === "customer_creation") {
       : 999;
 
     const newCustomer = {
-      id: uid("cust"),
-      accountNumber: String(max + 1), // 1000, 1001, 1002...
-      name: data.name || "Unnamed",
-      phone: data.phone || "",
-      nin: data.nin || "",
-      address: data.address || "",
-      photo: data.photo || "",
-      balance: Number(data.openingBalance || 0),
-      createdAt: new Date().toISOString(),
-      createdBy: approval.createdByName || "System"
-    };
+  id: uid("c"), // ✅ IMPORTANT: customer ids must start with "c"
+  accountNumber: String(max + 1), // 1000, 1001, 1002...
+  name: data.name || "Unnamed",
+  phone: data.phone || "",
+  nin: data.nin || "",
+  address: data.address || "",
+  photo: data.photo || "",
+  balance: Number(data.openingBalance || 0),
+  frozen: false,            // ✅ expected elsewhere
+  transactions: [],         // ✅ expected elsewhere
+  createdAt: new Date().toISOString(),
+  createdBy: approval.createdByName || "System"
+};
 
     // ✅ THIS fixes "Missing customer" everywhere
+    state.customers = state.customers || [];
     state.customers.push(newCustomer);
 
     // link approval to real customer
@@ -7780,8 +7783,6 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     );
 
     save();
-    renderCustomers();
-    renderDashboardKPIs?.();
     forceFullUIRefresh?.();
 
     showToast("Customer sent for approval");
