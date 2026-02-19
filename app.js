@@ -2224,6 +2224,38 @@ if (action === "approve" && approval.type === "customer_creation") {
 
   return; // 🚨 CRITICAL: stops legacy approval flow
 }
+// ✅ HANDLE CUSTOMER MAINTENANCE APPROVAL (APPLY PATCH)
+if (action === "approve" && approval.type === "customer_maintenance") {
+  const data = approval.payload || {};
+  const patch = data.patch || {};
+
+  const custId = data.customerId || approval.customerId;
+  const cust = (state.customers || []).find(x => x.id === custId);
+
+  if (!cust) {
+    showToast("Missing customer for this request");
+    return;
+  }
+
+  // Apply patch safely
+  Object.keys(patch).forEach((k) => {
+    cust[k] = patch[k];
+  });
+
+  // Optional: keep status/frozen consistent
+  if (cust.status === "closed") cust.frozen = true;
+  if (!cust.frozen && cust.status === "frozen") cust.status = "";
+
+  approval.resolvedCustomerId = cust.id;
+
+  save?.();
+  renderCustomers?.();
+  renderApprovals?.();
+  renderAudit?.();
+
+  showToast("Maintenance request approved and applied");
+  return;
+}
 }
 window.processApproval = function(id, action) {
   handleApprovalAction(id, action);
@@ -2699,28 +2731,40 @@ function openCustomerMaintenance(customerId) {
         // Extra safety: must have an action
         if (!requestedAction) return showToast("Select a maintenance action");
 
-        state.approvals = state.approvals || [];
-        state.approvals.unshift({
-          id: uid("ap"),
-          type: "customer_maintenance",
-          status: "pending",
-          createdAt: new Date().toISOString(),
-          createdBy: staff.id,
-          createdByName: staff.name,
+        const now = new Date().toISOString();
 
-          // ✅ IMPORTANT: approvals UI typically expects these at top-level
-          customerId: c.id,
-          customerName: c.name,
+state.approvals = state.approvals || [];
+state.approvals.unshift({
+  id: uid("ap"),
+  type: "customer_maintenance",
+  status: "pending",
 
-          payload: {
-            customerId: c.id,
-            accountNumber: c.accountNumber,
-            customerName: c.name,
-            action: requestedAction,
-            reason,
-            patch
-          }
-        });
+  // ✅ what your approvals UI is using
+  requestedAt: now,
+  requestedBy: staff.id,
+  requestedByName: staff.name,
+
+  // ✅ keep these too (some parts of your app use them)
+  createdAt: now,
+  createdBy: staff.id,
+  createdByName: staff.name,
+
+  // ✅ helps cards that display customer
+  customerId: c.id,
+  customerName: c.name,
+
+  // (optional but safe if UI expects amount)
+  amount: 0,
+
+  payload: {
+    customerId: c.id,
+    accountNumber: c.accountNumber,
+    customerName: c.name,
+    action: requestedAction,
+    reason,
+    patch
+  }
+});
 
         await pushAudit(
           staff.name,
