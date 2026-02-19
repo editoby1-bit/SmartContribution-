@@ -183,6 +183,43 @@ setTimeout(syncDashboardVisibility, 50);
 }
 
   
+async function toBase64Compressed(file, maxSize = 520, quality = 0.75) {
+  // maxSize = max width/height; quality for JPEG
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+
+  await new Promise((res, rej) => {
+    img.onload = () => res();
+    img.onerror = rej;
+    img.src = url;
+  });
+
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+
+  let nw = w, nh = h;
+  if (w > h && w > maxSize) {
+    nw = maxSize;
+    nh = Math.round((h * maxSize) / w);
+  } else if (h >= w && h > maxSize) {
+    nh = maxSize;
+    nw = Math.round((w * maxSize) / h);
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = nw;
+  canvas.height = nh;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0, nw, nh);
+
+  URL.revokeObjectURL(url);
+
+  // JPEG compress
+  return canvas.toDataURL("image/jpeg", quality);
+}
+window.toBase64Compressed = toBase64Compressed;
+
+
 
 function dashboardIsOpen() {
   return state.ui && state.ui.dashboardMode === true;
@@ -7673,7 +7710,7 @@ document.getElementById("btnNew").addEventListener("click", async () => {
       photoInput.onchange = async () => {
         const f = photoInput.files?.[0];
         if (!f) return showPreview("");
-        const b64 = await toBase64(f);
+        const b64 = await toBase64Compressed(f);
         window.capturedKycPhoto = b64; // unify pipeline
         showPreview(b64);
       };
@@ -7748,7 +7785,7 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     const uploadedFile = photoInput?.files?.[0];
 
     if (uploadedFile) {
-      photoBase64 = await toBase64(uploadedFile);
+      photoBase64 = await toBase64Compressed(uploadedFile);
       window.capturedKycPhoto = photoBase64;
       showPreview(photoBase64);
     } else if (window.capturedKycPhoto) {
