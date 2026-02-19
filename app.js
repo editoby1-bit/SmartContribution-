@@ -9,6 +9,15 @@
   CONFIG.REQUIRE_APPROVAL_FOR_ALL_TX = true;
   CONFIG.ALLOW_NEGATIVE_BALANCE = true;
   CONFIG.START_ACCOUNT_NO = 1000;
+  // ✅ single source of truth for storage key (save + load must match)
+const STORAGE_KEY = (typeof CONFIG !== "undefined" && CONFIG?.STORAGE)
+  ? CONFIG.STORAGE
+  : "sc_pro_b_v2";
+  // ✅ Storage key must be GLOBAL (works even if script is type="module")
+window.STORAGE_KEY =
+  (typeof CONFIG !== "undefined" && CONFIG && CONFIG.STORAGE)
+    ? CONFIG.STORAGE
+    : "sc_pro_b_v2";
 
   const ROLES = {
   MANAGER: "manager",
@@ -16,11 +25,6 @@
   MARKETER: "marketer",
   CEO: "ceo"
 };
-
-// ✅ single source of truth for storage key (save + load must match)
-const STORAGE_KEY = (typeof CONFIG !== "undefined" && CONFIG?.STORAGE)
-  ? CONFIG.STORAGE
-  : "sc_pro_b_v2";
 
 
 function currentStaff() {
