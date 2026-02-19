@@ -230,8 +230,9 @@ function dashboardIsOpen() {
 
     localStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
-    console.warn("Save failed", e);
-  }
+  console.warn("Save failed", e?.name, e?.message, e);
+  try { showToast("Save failed: storage may be full (photo too large)."); } catch {}
+}
 }
 window.save = save;
 
