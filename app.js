@@ -70,6 +70,20 @@ function labelRange(x) {
   return RANGE_LABELS[x] || x;
 }
 
+function bindCustomerSearchInputs() {
+  const searchBox = document.getElementById("search");
+  if (searchBox) searchBox.oninput = renderCustomers;
+
+  const accBox = document.getElementById("searchAcc");
+  if (accBox) accBox.oninput = renderCustomers;
+
+  const sortBox = document.getElementById("sort");
+  if (sortBox) sortBox.onchange = renderCustomers;
+}
+
+
+
+
   function getTxBadgeClass(type) {
     if (type === "credit") return "tx-credit";
     if (type === "withdraw") return "tx-withdraw";
@@ -8216,6 +8230,10 @@ window.processApproval = processApproval;
 
 window.addEventListener("focus", () => {
   syncDashboardVisibility();
+});
+
+window.addEventListener("DOMContentLoaded", () => {
+  bindCustomerSearchInputs();
 });
 
 })();
