@@ -1755,6 +1755,8 @@ const qa = ($("#searchAcc")?.value || "").toLowerCase().trim();  // account numb
 
   // ✅ Search: name + phone + account number
   arr = arr.filter(c => {
+  if (c.archived) return false; // ✅ hide from customer list
+
   const name = (c.name || "").toLowerCase();
   const phone = String(c.phone || "");
   const acct = String(c.accountNumber || "").toLowerCase();
@@ -1783,36 +1785,47 @@ const qa = ($("#searchAcc")?.value || "").toLowerCase().trim();  // account numb
     nameBtn.style.cursor = "pointer";
 
     nameBtn.innerHTML = `
-      ${c.name || "—"}
-      ${
-        (() => {
-          const activeLoan = (state.empowerments || []).find(
-            (e) => e.customerId === c.id && e.status !== "completed"
-          );
-          if (!activeLoan) return "";
+  ${c.name || "—"}
 
-          const principalLeft = (activeLoan.principalGiven || 0) - (activeLoan.principalRepaid || 0);
-          const interestLeft = (activeLoan.expectedInterest || 0) - (activeLoan.interestRepaid || 0);
-          const totalLeft = principalLeft + interestLeft;
-          if (totalLeft <= 0) return "";
+  ${
+    (c.status === "closed")
+      ? `<span class="badge" style="margin-left:6px;background:#fee2e2;color:#991b1b">CLOSED</span>`
+      : (c.frozen
+          ? `<span class="badge" style="margin-left:6px;background:#e0f2fe;color:#075985">FROZEN</span>`
+          : "")
+  }
 
-          return `<span class="badge" style="
-                    margin-left:6px;
-                    background:#fff3cd;
-                    color:#7a5c00
-                  ">
-                    EMPOWERMENT ${fmt(totalLeft)}
-                  </span>`;
-        })()
-      }
-      ${
-        (c.balance || 0) < 0
-          ? `<span class="badge danger" style="margin-left:6px">
-               NEGATIVE ${fmt(Math.abs(c.balance || 0))}
-             </span>`
-          : ""
-      }
-    `;
+  ${
+    (() => {
+      const activeLoan = (state.empowerments || []).find(
+        (e) => e.customerId === c.id && e.status !== "completed"
+      );
+      if (!activeLoan) return "";
+
+      const principalLeft = (activeLoan.principalGiven || 0) - (activeLoan.principalRepaid || 0);
+      const interestLeft = (activeLoan.expectedInterest || 0) - (activeLoan.interestRepaid || 0);
+      const totalLeft = principalLeft + interestLeft;
+      if (totalLeft <= 0) return "";
+
+      return `<span class="badge" style="
+                margin-left:6px;
+                background:#fff3cd;
+                color:#7a5c00
+              ">
+                EMPOWERMENT ${fmt(totalLeft)}
+              </span>`;
+    })()
+  }
+
+  ${
+    (c.balance || 0) < 0
+      ? `<span class="badge danger" style="margin-left:6px">
+           NEGATIVE ${fmt(Math.abs(c.balance || 0))}
+         </span>`
+      : ""
+  }
+`;
+
 
     nameBtn.onclick = () => openCustomerModal(c.id);
 
@@ -1842,8 +1855,14 @@ const qa = ($("#searchAcc")?.value || "").toLowerCase().trim();  // account numb
       showToast("Selected " + (c.name || "Customer"));
     };
 
-    actions.appendChild(view);
-    actions.appendChild(tx);
+    const maintain = document.createElement("button");
+maintain.className = "btn ghost";
+maintain.textContent = "Maintain";
+maintain.onclick = () => openCustomerMaintenance(c.id);
+
+actions.appendChild(view);
+actions.appendChild(maintain);
+actions.appendChild(tx);
     r.appendChild(actions);
 
     list.appendChild(r);
@@ -2082,11 +2101,45 @@ function handleApprovalAction(id, action) {
   if (!approval) return;
 
   approval.status = action === "approve" ? "approved" : "rejected";
+
+  // ✅ HANDLE CUSTOMER MAINTENANCE APPROVAL
+if (action === "approve" && approval.type === "customer_maintenance") {
+  const p = approval.payload || {};
+  const custId = p.customerId;
+
+  const c = (state.customers || []).find(x => x.id === custId);
+  if (!c) {
+    showToast("Customer not found for maintenance");
+    return;
+  }
+
+  const patch = p.patch || {};
+  Object.keys(patch).forEach(k => {
+    c[k] = patch[k];
+  });
+
+  // keep simple history
+  c.updatedAt = new Date().toISOString();
+  c.updatedBy = approval.createdByName || "System";
+
+  approval.resolvedCustomerId = c.id;
+
+  save();
+
+  renderCustomers?.();
+  renderApprovals?.();
+  renderDashboard?.();
+  renderAudit?.();
+
+  showToast("Maintenance applied successfully");
+  return; // 🚨 stops legacy flow
+}
+
  // 🎯 HANDLE CUSTOMER KYC APPROVAL (CREATE REAL CUSTOMER)
 if (action === "approve" && approval.type === "customer_creation") {
 
   const data = approval.payload || {};
-
+ 
   // 🪪 REVIEW CARD BEFORE ACCOUNT CREATION (CLIENT REQUIREMENT)
   const review = document.createElement("div");
   review.innerHTML = `
@@ -2103,7 +2156,10 @@ if (action === "approve" && approval.type === "customer_creation") {
                            align-items:center;justify-content:center;
                            font-size:11px;color:#9ca3af;">
                  No Photo
+                 
                </div>`
+
+               
         }
 
         <div style="flex:1">
@@ -2502,6 +2558,182 @@ async function confirmAccountClosure(customerId) {
 window.confirmAccountClosure = confirmAccountClosure;
 
 
+function openCustomerMaintenance(customerId) {
+  const c = (state.customers || []).find(x => x.id === customerId);
+  if (!c) return showToast("Customer not found");
+
+  const staff0 = currentStaff?.();
+  if (!staff0) return showToast("Select staff");
+
+  // ✅ Step 1: marketers cannot request maintenance
+  if (typeof isMarketer === "function" && isMarketer()) {
+    return showToast("Marketers cannot perform customer maintenance");
+  }
+
+  const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  const box = document.createElement("div");
+
+  box.innerHTML = `
+    <div class="small muted" style="margin-bottom:10px">
+      All maintenance requests require manager approval.
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label class="small">Full name</label>
+        <input id="mName" class="input" value="${esc(c.name)}">
+      </div>
+
+      <div>
+        <label class="small">Phone</label>
+        <input id="mPhone" class="input" value="${esc(c.phone)}">
+      </div>
+
+      <div>
+        <label class="small">NIN</label>
+        <input id="mNIN" class="input" value="${esc(c.nin)}">
+      </div>
+
+      <div>
+        <label class="small">Address</label>
+        <input id="mAddress" class="input" value="${esc(c.address)}">
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn danger" id="btnReqClosure">
+        ${c.status === "closed" ? "Request Reopen Account" : "Request Account Closure"}
+      </button>
+
+      <button class="btn" id="btnReqArchive">
+        ${c.archived ? "Request Restore to Customer List" : "Request Hide from Customer List"}
+      </button>
+    </div>
+
+    <div style="margin-top:12px">
+      <label class="small">Reason / Note <span class="req">*</span></label>
+      <textarea id="mReason" class="input" style="height:90px" placeholder="Explain why this maintenance is needed"></textarea>
+    </div>
+  `;
+
+  // ✅ Step 2: Track intent (no freeze/unfreeze anymore)
+  let requestedAction = "edit"; // edit | closure | reopen | archive | restore
+
+  const btnClosure = box.querySelector("#btnReqClosure");
+  const btnArchive = box.querySelector("#btnReqArchive");
+
+  if (btnClosure) {
+    btnClosure.onclick = () => {
+      requestedAction = (c.status === "closed") ? "reopen" : "closure";
+      showToast(`Selected: ${requestedAction.toUpperCase()} request`);
+    };
+  }
+
+  if (btnArchive) {
+    btnArchive.onclick = () => {
+      requestedAction = c.archived ? "restore" : "archive";
+      showToast(`Selected: ${requestedAction.toUpperCase()} request`);
+    };
+  }
+
+  openModalGeneric("Customer Service & Maintenance", box, "Send Request", true).then(async (ok) => {
+    if (!ok) return;
+
+    const staff = currentStaff?.();
+    if (!staff) return showToast("Select staff");
+
+    // ✅ block marketers again (in case role was switched mid-modal)
+    if (typeof isMarketer === "function" && isMarketer()) {
+      return showToast("Marketers cannot perform customer maintenance");
+    }
+
+    const name = (box.querySelector("#mName")?.value || "").trim();
+    const phone = (box.querySelector("#mPhone")?.value || "").trim();
+    const nin = (box.querySelector("#mNIN")?.value || "").trim();
+    const address = (box.querySelector("#mAddress")?.value || "").trim();
+    const reason = (box.querySelector("#mReason")?.value || "").trim();
+
+    if (!reason) return showToast("Reason is required");
+
+    // Build patch (only changed fields)
+    const patch = {};
+
+    // EDIT
+    if (requestedAction === "edit") {
+      if (name && name !== (c.name || "")) patch.name = name;
+      if (phone !== (c.phone || "")) patch.phone = phone;
+      if (nin !== (c.nin || "")) patch.nin = nin;
+      if (address !== (c.address || "")) patch.address = address;
+
+      if (Object.keys(patch).length === 0) {
+        return showToast("No changes detected");
+      }
+    }
+
+    // ACCOUNT CLOSURE (single lock concept)
+    if (requestedAction === "closure") {
+      patch.status = "closed";
+      patch.frozen = true; // keep compatibility with existing posting checks
+      patch.closedAt = new Date().toISOString();
+      patch.closedBy = staff.id;
+    }
+
+    // REOPEN
+    if (requestedAction === "reopen") {
+      patch.status = "";
+      patch.frozen = false;
+      patch.reopenedAt = new Date().toISOString();
+      patch.reopenedBy = staff.id;
+    }
+
+    // ARCHIVE (hide from customer list, keep records)
+    if (requestedAction === "archive") {
+      patch.archived = true;
+      patch.archivedAt = new Date().toISOString();
+      patch.archivedBy = staff.id;
+    }
+
+    // RESTORE (show again)
+    if (requestedAction === "restore") {
+      patch.archived = false;
+      patch.restoredAt = new Date().toISOString();
+      patch.restoredBy = staff.id;
+    }
+
+    state.approvals = state.approvals || [];
+    state.approvals.unshift({
+      id: uid("ap"),
+      type: "customer_maintenance",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      createdBy: staff.id,
+      createdByName: staff.name,
+      payload: {
+        customerId: c.id,
+        accountNumber: c.accountNumber,
+        customerName: c.name,
+        action: requestedAction,
+        reason,
+        patch
+      }
+    });
+
+    await pushAudit(
+      staff.name,
+      staff.role,
+      "customer_maintenance_requested",
+      { customerId: c.id, action: requestedAction, patch, reason }
+    );
+
+    save();
+    renderApprovals?.();
+    showToast("Maintenance request sent for approval");
+  });
+}
+window.openCustomerMaintenance = openCustomerMaintenance;
+
 
 function openCustomerModal(id) {
   document.getElementById("custList").style.display = "block";
@@ -2673,7 +2905,19 @@ function renderProfileTab() {
 
      <!-- CUSTOMER DETAILS -->
      <div>
-       <h4 style="margin:0">${c.name}</h4>
+       <h4 style="margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <span>${c.name}</span>
+
+  ${
+    c.archived
+      ? `<span class="badge" style="background:#f3f4f6;color:#374151">REMOVED</span>`
+      : (c.status === "closed"
+          ? `<span class="badge" style="background:#fee2e2;color:#991b1b">CLOSED</span>`
+          : (c.frozen
+              ? `<span class="badge" style="background:#e0f2fe;color:#075985">FROZEN</span>`
+              : ""))
+  }
+</h4>
        <div class="small">Account No: ${c.accountNumber || "—"}</div>
        <div class="small">Customer ID: ${c.id}</div>
        <div class="small">Phone: ${c.phone || "—"}</div>
@@ -2927,10 +3171,7 @@ function renderToolsTab() {
       Statement
     </button>
 
-    <button class="btn ghost" onclick="toggleFreeze('${c.id}')">
-      ${c.frozen ? "Unfreeze" : "Freeze"}
-    </button>
-
+  
     <button class="btn danger" onclick="confirmAccountClosure('${c.id}')">
   Account Closure
 </button>
