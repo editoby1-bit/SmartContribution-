@@ -2552,13 +2552,15 @@ async function confirmAccountClosure(customerId) {
 window.confirmAccountClosure = confirmAccountClosure;
 
 
-async function openCustomerMaintenance(customerId) {
+function openCustomerMaintenance(customerId) {
   const c = (state.customers || []).find(x => x.id === customerId);
   if (!c) return showToast("Customer not found");
 
-  const esc = (s) => String(s || "").replace(/"/g, "&quot;");
-
   const box = document.createElement("div");
+
+  // escape helper (prevents broken HTML when values contain quotes)
+  const esc = (v) => String(v || "").replace(/"/g, "&quot;");
+
   box.innerHTML = `
     <div class="small muted" style="margin-bottom:10px">
       All maintenance requests require manager approval.
@@ -2587,11 +2589,16 @@ async function openCustomerMaintenance(customerId) {
     </div>
 
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn" type="button" id="btnReqFreeze">
+      <button class="btn" id="btnReqFreeze">
         ${c.frozen ? "Request Unfreeze" : "Request Freeze"}
       </button>
-      <button class="btn danger" type="button" id="btnReqClosure">
+
+      <button class="btn danger" id="btnReqClosure">
         Request Account Closure
+      </button>
+
+      <button class="btn" id="btnReqHide">
+        ${c.archived ? "Request Restore to customer List" : "Request Hide from customer list"}
       </button>
     </div>
 
@@ -2601,102 +2608,156 @@ async function openCustomerMaintenance(customerId) {
     </div>
   `;
 
-  let requestedAction = "edit"; // edit | freeze | unfreeze | closure
+  // Track intent
+  let requestedAction = "edit"; // edit | freeze | unfreeze | closure | hide | restore
 
-  const freezeBtn = box.querySelector("#btnReqFreeze");
-  const closureBtn = box.querySelector("#btnReqClosure");
+  const btnFreeze = box.querySelector("#btnReqFreeze");
+  const btnClosure = box.querySelector("#btnReqClosure");
+  const btnHide = box.querySelector("#btnReqHide");
 
-  freezeBtn.onclick = () => {
-    requestedAction = c.frozen ? "unfreeze" : "freeze";
-    showToast(`Selected: ${requestedAction.toUpperCase()} request`);
-  };
+  if (btnFreeze) {
+    btnFreeze.onclick = () => {
+      requestedAction = c.frozen ? "unfreeze" : "freeze";
+      showToast(`Selected: ${requestedAction.toUpperCase()} request`);
+    };
+  }
 
-  closureBtn.onclick = () => {
-    requestedAction = "closure";
-    showToast("Selected: ACCOUNT CLOSURE request");
-  };
+  if (btnClosure) {
+    btnClosure.onclick = () => {
+      requestedAction = "closure";
+      showToast("Selected: ACCOUNT CLOSURE request");
+    };
+  }
 
-  const ok = await openModalGeneric("Customer Service & Maintenance", box, "Send Request", true);
-  if (!ok) return;
+  if (btnHide) {
+    btnHide.onclick = () => {
+      requestedAction = c.archived ? "restore" : "hide";
+      showToast(`Selected: ${requestedAction.toUpperCase()} request`);
+    };
+  }
 
-  try {
-    const staff = currentStaff?.();
-    if (!staff) return showToast("Select staff");
+  // simple anti-double-submit
+  let __sending = false;
 
-    const name = (box.querySelector("#mName")?.value || "").trim();
-    const phone = (box.querySelector("#mPhone")?.value || "").trim();
-    const nin = (box.querySelector("#mNIN")?.value || "").trim();
-    const address = (box.querySelector("#mAddress")?.value || "").trim();
-    const reason = (box.querySelector("#mReason")?.value || "").trim();
+  openModalGeneric("Customer Service & Maintenance", box, "Send Request", true)
+    .then(async (ok) => {
+      if (!ok) return;
+      if (__sending) return;
+      __sending = true;
 
-    if (!reason) return showToast("Reason is required");
+      try {
+        const staff = currentStaff?.();
+        if (!staff) return showToast("Select staff");
 
-    const patch = {};
+        const name = (box.querySelector("#mName")?.value || "").trim();
+        const phone = (box.querySelector("#mPhone")?.value || "").trim();
+        const nin = (box.querySelector("#mNIN")?.value || "").trim();
+        const address = (box.querySelector("#mAddress")?.value || "").trim();
+        const reason = (box.querySelector("#mReason")?.value || "").trim();
 
-    // EDIT
-    if (requestedAction === "edit") {
-      if (name && name !== (c.name || "")) patch.name = name;
-      if (phone !== (c.phone || "")) patch.phone = phone;
-      if (nin !== (c.nin || "")) patch.nin = nin;
-      if (address !== (c.address || "")) patch.address = address;
+        if (!reason) return showToast("Reason is required");
 
-      if (Object.keys(patch).length === 0) {
-        return showToast("No changes detected");
-      }
-    }
+        // Build patch (only changed fields)
+        const patch = {};
 
-    // FREEZE / UNFREEZE / CLOSURE
-    if (requestedAction === "freeze") {
-      patch.frozen = true;
-      patch.status = "frozen";
-    }
+        if (requestedAction === "edit") {
+          if (name && name !== (c.name || "")) patch.name = name;
+          if (phone !== (c.phone || "")) patch.phone = phone;
+          if (nin !== (c.nin || "")) patch.nin = nin;
+          if (address !== (c.address || "")) patch.address = address;
 
-    if (requestedAction === "unfreeze") {
-      patch.frozen = false;
-      if (c.status !== "closed") patch.status = "";
-    }
+          if (Object.keys(patch).length === 0) {
+            return showToast("No changes detected");
+          }
+        }
 
-    if (requestedAction === "closure") {
-      patch.frozen = true;
-      patch.status = "closed";
-      patch.closedAt = new Date().toISOString();
-      patch.closedBy = staff.id;
-    }
+        if (requestedAction === "freeze") {
+          patch.frozen = true;
+          patch.status = "frozen";
+        }
 
-    state.approvals = state.approvals || [];
-    state.approvals.unshift({
-      id: uid("ap"),
-      type: "customer_maintenance",
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      createdBy: staff.id,
-      createdByName: staff.name,
-      payload: {
-        customerId: c.id,
-        accountNumber: c.accountNumber,
-        customerName: c.name,
-        action: requestedAction,
-        reason,
-        patch
+        if (requestedAction === "unfreeze") {
+          patch.frozen = false;
+          if (c.status !== "closed") patch.status = "";
+        }
+
+        if (requestedAction === "closure") {
+          patch.frozen = true;
+          patch.status = "closed";
+          patch.closedAt = new Date().toISOString();
+          patch.closedBy = staff.id;
+        }
+
+        if (requestedAction === "hide") {
+          patch.archived = true;   // hide from list
+        }
+
+        if (requestedAction === "restore") {
+          patch.archived = false;  // restore to list
+        }
+
+        // Extra safety: must have an action
+        if (!requestedAction) return showToast("Select a maintenance action");
+
+        state.approvals = state.approvals || [];
+        state.approvals.unshift({
+          id: uid("ap"),
+          type: "customer_maintenance",
+          status: "pending",
+          createdAt: new Date().toISOString(),
+          createdBy: staff.id,
+          createdByName: staff.name,
+
+          // ✅ IMPORTANT: approvals UI typically expects these at top-level
+          customerId: c.id,
+          customerName: c.name,
+
+          payload: {
+            customerId: c.id,
+            accountNumber: c.accountNumber,
+            customerName: c.name,
+            action: requestedAction,
+            reason,
+            patch
+          }
+        });
+
+        await pushAudit(
+          staff.name,
+          staff.role,
+          "customer_maintenance_requested",
+          { customerId: c.id, action: requestedAction, patch, reason }
+        );
+
+        save?.();
+        renderApprovals?.();
+
+        // ✅ Reset fields so it doesn't look like multiple submit is possible
+        const r = box.querySelector("#mReason");
+        if (r) r.value = "";
+
+        const n = box.querySelector("#mName");
+        const p = box.querySelector("#mPhone");
+        const ni = box.querySelector("#mNIN");
+        const a = box.querySelector("#mAddress");
+        if (n) n.value = c.name || "";
+        if (p) p.value = c.phone || "";
+        if (ni) ni.value = c.nin || "";
+        if (a) a.value = c.address || "";
+
+        requestedAction = "edit";
+
+        showToast("Maintenance request sent for approval");
+
+        // ✅ Close modal for best UX (optional but recommended)
+        closeTxModal?.();
+      } finally {
+        __sending = false;
       }
     });
-
-    await pushAudit(
-      staff.name,
-      staff.role,
-      "customer_maintenance_requested",
-      { customerId: c.id, action: requestedAction, patch, reason }
-    );
-
-    save();
-    renderApprovals?.();
-    showToast("Maintenance request sent for approval");
-  } catch (e) {
-    console.error("Maintenance request failed:", e);
-    showToast("Maintenance request failed — check console");
-  }
 }
 window.openCustomerMaintenance = openCustomerMaintenance;
+
 
 
 function openCustomerModal(id) {
