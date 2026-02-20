@@ -2103,7 +2103,7 @@ function handleApprovalAction(id, action) {
   // ===============================
   if (approval.type === "customer_maintenance") {
     const data = approval.payload || {};
-    const custId = data.customerId || approval.customerId;
+    const custId = approval.customerId || data.customerId;
     const cust = (state.customers || []).find(x => x.id === custId);
 
     if (!cust) {
@@ -2624,10 +2624,16 @@ function openCustomerMaintenance(customerId) {
   const c = (state.customers || []).find(x => x.id === customerId);
   if (!c) return showToast("Customer not found");
 
+  const staff = currentStaff?.();
+  if (!staff) return showToast("Select staff");
+
+  // prevent double-submit
+  if (window.__sendingMaint) return;
+  window.__sendingMaint = false;
+
   const box = document.createElement("div");
 
-  // escape helper (prevents broken HTML when values contain quotes)
-  const esc = (v) => String(v || "").replace(/"/g, "&quot;");
+  const safe = (v) => String(v || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
   box.innerHTML = `
     <div class="small muted" style="margin-bottom:10px">
@@ -2637,51 +2643,53 @@ function openCustomerMaintenance(customerId) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div>
         <label class="small">Full name</label>
-        <input id="mName" class="input" value="${esc(c.name)}">
+        <input id="mName" class="input" value="${safe(c.name)}">
       </div>
 
       <div>
         <label class="small">Phone</label>
-        <input id="mPhone" class="input" value="${esc(c.phone)}">
+        <input id="mPhone" class="input" value="${safe(c.phone)}">
       </div>
 
       <div>
         <label class="small">NIN</label>
-        <input id="mNIN" class="input" value="${esc(c.nin)}">
+        <input id="mNIN" class="input" value="${safe(c.nin)}">
       </div>
 
       <div>
         <label class="small">Address</label>
-        <input id="mAddress" class="input" value="${esc(c.address)}">
+        <input id="mAddress" class="input" value="${safe(c.address)}">
       </div>
     </div>
 
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn" id="btnReqFreeze">
-        ${c.frozen ? "Request Unfreeze" : "Request Freeze"}
-      </button>
+      <button class="btn" id="btnReqFreeze">${c.frozen ? "Request Unfreeze" : "Request Freeze"}</button>
 
-      <button class="btn danger" id="btnReqClosure">
-        Request Account Closure
-      </button>
+      <button class="btn danger" id="btnReqClosure">Request Account Closure</button>
 
-      <button class="btn" id="btnReqHide">
-        ${c.archived ? "Request Restore to customer List" : "Request Hide from customer list"}
-      </button>
+      <button class="btn ghost" id="btnReqHide">Request Hide from Customer List</button>
+      <button class="btn ghost" id="btnReqRestore">Request Restore to Customer List</button>
     </div>
 
     <div style="margin-top:12px">
       <label class="small">Reason / Note <span class="req">*</span></label>
       <textarea id="mReason" class="input" style="height:90px" placeholder="Explain why this maintenance is needed"></textarea>
     </div>
+
+    <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn ghost" id="btnCancelMaint">Cancel</button>
+      <button class="btn" id="btnSendMaint">Send Request</button>
+    </div>
   `;
 
   // Track intent
   let requestedAction = "edit"; // edit | freeze | unfreeze | closure | hide | restore
 
+  // Buttons
   const btnFreeze = box.querySelector("#btnReqFreeze");
   const btnClosure = box.querySelector("#btnReqClosure");
   const btnHide = box.querySelector("#btnReqHide");
+  const btnRestore = box.querySelector("#btnReqRestore");
 
   if (btnFreeze) {
     btnFreeze.onclick = () => {
@@ -2699,142 +2707,145 @@ function openCustomerMaintenance(customerId) {
 
   if (btnHide) {
     btnHide.onclick = () => {
-      requestedAction = c.archived ? "restore" : "hide";
-      showToast(`Selected: ${requestedAction.toUpperCase()} request`);
+      requestedAction = "hide";
+      showToast("Selected: HIDE FROM CUSTOMER LIST request");
     };
   }
 
-  // simple anti-double-submit
-  let __sending = false;
-
-  openModalGeneric("Customer Service & Maintenance", box, "Send Request", true)
-    .then(async (ok) => {
-      if (!ok) return;
-      if (__sending) return;
-      __sending = true;
-
-      try {
-        const staff = currentStaff?.();
-        if (!staff) return showToast("Select staff");
-
-        const name = (box.querySelector("#mName")?.value || "").trim();
-        const phone = (box.querySelector("#mPhone")?.value || "").trim();
-        const nin = (box.querySelector("#mNIN")?.value || "").trim();
-        const address = (box.querySelector("#mAddress")?.value || "").trim();
-        const reason = (box.querySelector("#mReason")?.value || "").trim();
-
-        if (!reason) return showToast("Reason is required");
-
-        // Build patch (only changed fields)
-        const patch = {};
-
-        if (requestedAction === "edit") {
-          if (name && name !== (c.name || "")) patch.name = name;
-          if (phone !== (c.phone || "")) patch.phone = phone;
-          if (nin !== (c.nin || "")) patch.nin = nin;
-          if (address !== (c.address || "")) patch.address = address;
-
-          if (Object.keys(patch).length === 0) {
-            return showToast("No changes detected");
-          }
-        }
-
-        if (requestedAction === "freeze") {
-          patch.frozen = true;
-          patch.status = "frozen";
-        }
-
-        if (requestedAction === "unfreeze") {
-          patch.frozen = false;
-          if (c.status !== "closed") patch.status = "";
-        }
-
-        if (requestedAction === "closure") {
-          patch.frozen = true;
-          patch.status = "closed";
-          patch.closedAt = new Date().toISOString();
-          patch.closedBy = staff.id;
-        }
-
-        if (requestedAction === "hide") {
-          patch.archived = true;   // hide from list
-        }
-
-        if (requestedAction === "restore") {
-          patch.archived = false;  // restore to list
-        }
-
-        // Extra safety: must have an action
-        if (!requestedAction) return showToast("Select a maintenance action");
-
-        const now = new Date().toISOString();
-
-state.approvals = state.approvals || [];
-state.approvals.unshift({
-  id: uid("ap"),
-  type: "customer_maintenance",
-  status: "pending",
-
-  // ✅ what your approvals UI is using
-  requestedAt: now,
-  requestedBy: staff.id,
-  requestedByName: staff.name,
-
-  // ✅ keep these too (some parts of your app use them)
-  createdAt: now,
-  createdBy: staff.id,
-  createdByName: staff.name,
-
-  // ✅ helps cards that display customer
-  customerId: c.id,
-  customerName: c.name,
-
-  // (optional but safe if UI expects amount)
-  amount: 0,
-
-  payload: {
-    customerId: c.id,
-    accountNumber: c.accountNumber,
-    customerName: c.name,
-    action: requestedAction,
-    reason,
-    patch
+  if (btnRestore) {
+    btnRestore.onclick = () => {
+      requestedAction = "restore";
+      showToast("Selected: RESTORE TO CUSTOMER LIST request");
+    };
   }
-});
 
-        await pushAudit(
-          staff.name,
-          staff.role,
-          "customer_maintenance_requested",
-          { customerId: c.id, action: requestedAction, patch, reason }
-        );
+  // Open modal with a neutral footer button (so openModalGeneric doesn't trap us)
+  // We will handle send/cancel ourselves.
+  openModalGeneric("Customer Service & Maintenance", box, "Close");
 
-        save?.();
-        renderApprovals?.();
+  // Cancel closes the modal
+  box.querySelector("#btnCancelMaint").onclick = () => {
+    const back = document.getElementById("txModalBack");
+    if (back) back.style.display = "none";
+  };
 
-        // ✅ Reset fields so it doesn't look like multiple submit is possible
-        const r = box.querySelector("#mReason");
-        if (r) r.value = "";
+  // ✅ Send request (our own button)
+  box.querySelector("#btnSendMaint").onclick = async () => {
+    if (window.__sendingMaint) return;
+    window.__sendingMaint = true;
 
-        const n = box.querySelector("#mName");
-        const p = box.querySelector("#mPhone");
-        const ni = box.querySelector("#mNIN");
-        const a = box.querySelector("#mAddress");
-        if (n) n.value = c.name || "";
-        if (p) p.value = c.phone || "";
-        if (ni) ni.value = c.nin || "";
-        if (a) a.value = c.address || "";
+    try {
+      const name = (box.querySelector("#mName")?.value || "").trim();
+      const phone = (box.querySelector("#mPhone")?.value || "").trim();
+      const nin = (box.querySelector("#mNIN")?.value || "").trim();
+      const address = (box.querySelector("#mAddress")?.value || "").trim();
+      const reason = (box.querySelector("#mReason")?.value || "").trim();
 
-        requestedAction = "edit";
-
-        showToast("Maintenance request sent for approval");
-
-        // ✅ Close modal for best UX (optional but recommended)
-        closeTxModal?.();
-      } finally {
-        __sending = false;
+      if (!reason) {
+        showToast("Reason is required");
+        box.querySelector("#mReason")?.focus();
+        return;
       }
-    });
+
+      // Build patch (only changed fields)
+      const patch = {};
+
+      if (requestedAction === "edit") {
+        if (name && name !== (c.name || "")) patch.name = name;
+        if (phone !== (c.phone || "")) patch.phone = phone;
+        if (nin !== (c.nin || "")) patch.nin = nin;
+        if (address !== (c.address || "")) patch.address = address;
+
+        if (Object.keys(patch).length === 0) {
+          showToast("No changes detected");
+          return;
+        }
+      }
+
+      if (requestedAction === "freeze") {
+        patch.frozen = true;
+        patch.status = "frozen";
+      }
+
+      if (requestedAction === "unfreeze") {
+        patch.frozen = false;
+        // if it was closed, unfreeze should not reopen it
+        if (c.status !== "closed") patch.status = "";
+      }
+
+      if (requestedAction === "closure") {
+        patch.frozen = true;
+        patch.status = "closed";
+        patch.closedAt = new Date().toISOString();
+        patch.closedBy = staff.id;
+      }
+
+      if (requestedAction === "hide") {
+        patch.archived = true;
+        patch.archivedAt = new Date().toISOString();
+      }
+
+      if (requestedAction === "restore") {
+        patch.archived = false;
+        patch.restoredAt = new Date().toISOString();
+      }
+
+      const now = new Date().toISOString();
+
+      state.approvals = state.approvals || [];
+      state.approvals.unshift({
+        id: uid("ap"),
+        type: "customer_maintenance",
+        status: "pending",
+
+        // ✅ what renderApprovals uses
+        requestedAt: now,
+        requestedBy: staff.id,
+        requestedByName: staff.name,
+
+        // ✅ keep legacy fields too
+        createdAt: now,
+        createdBy: staff.id,
+        createdByName: staff.name,
+
+        // ✅ TOP LEVEL customer fields (so approvals don't show "Unknown")
+        customerId: c.id,
+        customerName: c.name,
+
+        amount: 0,
+
+        payload: {
+          customerId: c.id,
+          accountNumber: c.accountNumber,
+          customerName: c.name,
+          action: requestedAction,
+          reason,
+          patch
+        }
+      });
+
+      await pushAudit?.(
+        staff.name,
+        staff.role,
+        "customer_maintenance_requested",
+        { customerId: c.id, action: requestedAction, patch, reason }
+      );
+
+      save?.();
+      renderApprovals?.();
+      showToast("Maintenance request sent for approval");
+
+      // ✅ reset fields so it doesn't look like re-submit is possible
+      box.querySelector("#mReason").value = "";
+      requestedAction = "edit";
+
+      // ✅ close modal
+      const back = document.getElementById("txModalBack");
+      if (back) back.style.display = "none";
+    } finally {
+      window.__sendingMaint = false;
+    }
+  };
 }
 window.openCustomerMaintenance = openCustomerMaintenance;
 
@@ -3185,16 +3196,19 @@ if (activeLoan) {
 
   // profile tab
 function renderToolsTab() {
-  const c = state.customers.find(x => x.id === activeCustomerId);
+  const c = (state.customers || []).find(x => x.id === activeCustomerId);
   if (!c) return;
 
-  const staff = currentStaff();
+  const staff = currentStaff?.();
   const canAct = staff && (staff.role === "manager" || staff.role === "ceo");
 
-  // ALWAYS recompute pending approvals
+  // ✅ helper: get approval customerId safely
+  const getApCustId = (a) => a?.customerId || a?.payload?.customerId || "";
+
+  // ✅ ALWAYS recompute pending approvals (robust)
   const approvals = (state.approvals || [])
-    .filter(a => a.customerId === c.id && a.status === "pending")
-    .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
+    .filter(a => getApCustId(a) === c.id && a.status === "pending")
+    .sort((a, b) => new Date(b.requestedAt || b.createdAt || 0) - new Date(a.requestedAt || a.createdAt || 0));
 
   // Select approval safely
   const approval =
@@ -3208,6 +3222,31 @@ function renderToolsTab() {
   let approvalHTML = "";
 
   if (approval && canAct) {
+    const reqAt = approval.requestedAt || approval.createdAt;
+    const reqBy = approval.requestedByName || approval.requestedBy || approval.createdByName || approval.createdBy || "—";
+
+    // ✅ show maintenance summary so you SEE what will change
+    let summary = "";
+    if (approval.type === "customer_maintenance") {
+      const p = approval.payload || {};
+      const patch = p.patch || {};
+      const action = p.action || "edit";
+      const reason = p.reason || "";
+
+      const patchLines = Object.keys(patch).length
+        ? Object.keys(patch).map(k => `<li><b>${k}:</b> ${String(patch[k])}</li>`).join("")
+        : `<li class="muted">No patch fields</li>`;
+
+      summary = `
+        <div class="card warning" style="margin-top:10px">
+          <div class="small"><b>Maintenance Summary</b></div>
+          <div class="small muted">Action: ${String(action).toUpperCase()}</div>
+          ${reason ? `<div class="small muted" style="margin-top:4px">Note: ${reason}</div>` : ""}
+          <ul class="small" style="margin-top:8px">${patchLines}</ul>
+        </div>
+      `;
+    }
+
     approvalHTML = `
       <div class="card danger" style="margin-bottom:12px">
         <h4>Pending Approval</h4>
@@ -3218,7 +3257,7 @@ function renderToolsTab() {
             <select id="approvalSelect" class="input">
               ${approvals.map(a => `
                 <option value="${a.id}" ${a.id === approval.id ? "selected" : ""}>
-                  ${a.type.toUpperCase()} — ${fmt(a.amount)}
+                  ${a.type.toUpperCase()} — ${fmt(a.amount || 0)}
                 </option>
               `).join("")}
             </select>
@@ -3226,35 +3265,13 @@ function renderToolsTab() {
         ` : ""}
 
         <div class="small">
-          <b>${approval.type.toUpperCase()}</b> — ${fmt(approval.amount)}
+          <b>${approval.type.toUpperCase()}</b> — ${fmt(approval.amount || 0)}
         </div>
 
-        <div class="small muted">Requested by: ${approval.requestedByName || approval.requestedBy || "—"}</div>
-        <div class="small muted">${new Date(approval.requestedAt).toLocaleString()}</div>
+        <div class="small muted">Requested by: ${reqBy}</div>
+        <div class="small muted">${reqAt ? new Date(reqAt).toLocaleString() : "—"}</div>
 
-        ${approval.riskLevel ? `
-          <div class="small" style="margin-top:8px">
-            Risk Level:
-            <span class="badge ${
-              approval.riskLevel === "high"
-                ? "danger"
-                : approval.riskLevel === "medium"
-                ? "warning"
-                : "success"
-            }">
-              ${String(approval.riskLevel).toUpperCase()}
-            </span>
-          </div>
-        ` : ""}
-
-        ${Array.isArray(approval.anomalies) && approval.anomalies.length ? `
-          <div class="card warning" style="margin-top:8px">
-            <div class="small"><b>Anomaly Alerts</b></div>
-            <ul class="small">
-              ${approval.anomalies.map(a => `<li>${a}</li>`).join("")}
-            </ul>
-          </div>
-        ` : ""}
+        ${summary}
 
         <div style="margin-top:12px;display:flex;gap:8px">
           <button class="btn" id="approveBtn">Approve</button>
@@ -3265,25 +3282,29 @@ function renderToolsTab() {
   }
 
   // =========================
-  // TOOL BUTTONS (ADD STATEMENT)
+  // TOOL BUTTONS
   // =========================
   const toolButtons = `
     <button class="btn" onclick="openActionModal('credit')">Credit</button>
-<button class="btn" onclick="openActionModal('withdraw')">Withdraw</button>
-<button class="btn" onclick="openEmpowermentModal()">Empowerment</button>
+    <button class="btn" onclick="openActionModal('withdraw')">Withdraw</button>
+    <button class="btn" onclick="openEmpowermentModal()">Empowerment</button>
 
-<button class="btn" style="margin-top:8px" onclick="openCustomerMaintenance('${c.id}')">
-  Customer Service & Maintenance
-</button>
+    <button class="btn" style="margin-top:8px" onclick="openCustomerMaintenance('${c.id}')">
+      Customer Service & Maintenance
+    </button>
 
-<button class="btn ghost" onclick="toggleFreeze('${c.id}')">
-  ${c.frozen ? "Unfreeze Account" : "Freeze Account"}
-</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="printCustomerStatement('${c.id}')">
+      Print Statement
+    </button>
 
-<button class="btn danger" onclick="confirmAccountClosure('${c.id}')">
-  Account Closure
-</button>
-`;
+    <button class="btn ghost" onclick="toggleFreeze('${c.id}')">
+      ${c.frozen ? "Unfreeze Account" : "Freeze Account"}
+    </button>
+
+    <button class="btn danger" onclick="confirmAccountClosure('${c.id}')">
+      Account Closure
+    </button>
+  `;
 
   mBody.innerHTML = `
     ${approvalHTML}
@@ -3293,35 +3314,34 @@ function renderToolsTab() {
   `;
 
   // =========================
-  // EVENT BINDING (CRITICAL FIX)
+  // EVENT BINDING
   // =========================
   if (approval && canAct) {
     const approveBtn = document.getElementById("approveBtn");
     const rejectBtn = document.getElementById("rejectBtn");
 
     if (approveBtn) {
-      approveBtn.onclick = async (e) => {
+      approveBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
 
         approveBtn.disabled = true;
-        await processApproval(approval.id, "approve");
+        processApproval(approval.id, "approve");
 
-        // ✅ refresh tools tab immediately so pending card disappears
+        // refresh tools tab immediately so pending card disappears
         window.activeApprovalId = null;
         renderToolsTab();
       };
     }
 
     if (rejectBtn) {
-      rejectBtn.onclick = async (e) => {
+      rejectBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
 
         rejectBtn.disabled = true;
-        await processApproval(approval.id, "reject");
+        processApproval(approval.id, "reject");
 
-        // ✅ refresh tools tab immediately so pending card disappears
         window.activeApprovalId = null;
         renderToolsTab();
       };
