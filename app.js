@@ -2680,6 +2680,9 @@ function openCustomerMaintenance(customerId) {
     </div>
   `;
 
+  const reasonEl = box.querySelector("#mReason");
+if (reasonEl) reasonEl.addEventListener("input", () => reasonEl.classList.remove("invalid"));
+
   let requestedAction = "edit"; // edit | freeze | unfreeze | closure | hide | restore
 
   box.querySelector("#btnReqFreeze").onclick = () => {
@@ -2708,13 +2711,21 @@ function openCustomerMaintenance(customerId) {
     const phone = (box.querySelector("#mPhone")?.value || "").trim();
     const nin = (box.querySelector("#mNIN")?.value || "").trim();
     const address = (box.querySelector("#mAddress")?.value || "").trim();
-    const reason = (box.querySelector("#mReason")?.value || "").trim();
+    const reasonEl = box.querySelector("#mReason");
+const reason = (reasonEl?.value || "").trim();
 
-    // ✅ If reason missing: re-open immediately so button still works without refresh
-    if (!reason) {
+if (!reason) {
   showToast("Reason is required");
-  const r = box.querySelector("#mReason");
-  if (r) r.focus();
+
+  // ✅ re-enable the modal primary button (it gets disabled after first click)
+  const okBtn = document.getElementById("txModalOk");
+  if (okBtn) okBtn.disabled = false;
+
+  // ✅ guide user
+  if (reasonEl) {
+    reasonEl.classList.add("invalid");
+    reasonEl.focus();
+  }
   return;
 }
 
