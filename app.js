@@ -2701,124 +2701,129 @@ if (reasonEl) reasonEl.addEventListener("input", () => reasonEl.classList.remove
   };
 
   // ✅ IMPORTANT: set showCancel=false so you don't get Cancel + Close together
-  openModalGeneric("Customer Service & Maintenance", box, "Send Request", true).then(async (ok) => {
-    if (!ok) return;
+  const validate = () => {
+  const reason = (box.querySelector("#mReason")?.value || "").trim();
+  if (!reason) {
+    showToast("Reason is required");
+    box.querySelector("#mReason")?.focus();
+    return false;
+  }
 
-    const staff = currentStaff?.();
-    if (!staff) return showToast("Select staff");
-
+  // If "edit", ensure there is at least one real change
+  if (requestedAction === "edit") {
     const name = (box.querySelector("#mName")?.value || "").trim();
     const phone = (box.querySelector("#mPhone")?.value || "").trim();
     const nin = (box.querySelector("#mNIN")?.value || "").trim();
     const address = (box.querySelector("#mAddress")?.value || "").trim();
-    const reasonEl = box.querySelector("#mReason");
-const reason = (reasonEl?.value || "").trim();
 
-if (!reason) {
-  showToast("Reason is required");
+    const hasChange =
+      (name && name !== (c.name || "")) ||
+      (phone !== (c.phone || "")) ||
+      (nin !== (c.nin || "")) ||
+      (address !== (c.address || ""));
 
-  // ✅ re-enable the modal primary button (it gets disabled after first click)
-  const okBtn = document.getElementById("txModalOk");
-  if (okBtn) okBtn.disabled = false;
-
-  // ✅ guide user
-  if (reasonEl) {
-    reasonEl.classList.add("invalid");
-    reasonEl.focus();
+    if (!hasChange) {
+      showToast("No changes detected");
+      return false;
+    }
   }
-  return;
-}
 
-    const patch = {};
+  return true;
+};
 
-    if (requestedAction === "edit") {
-      if (name && name !== (c.name || "")) patch.name = name;
-      if (phone !== (c.phone || "")) patch.phone = phone;
-      if (nin !== (c.nin || "")) patch.nin = nin;
-      if (address !== (c.address || "")) patch.address = address;
+openModalGeneric(
+  "Customer Service & Maintenance",
+  box,
+  "Send Request",
+  false,         // ✅ only one close method (clickaway)
+  validate       // ✅ prevents promise from resolving on invalid
+).then(async (ok) => {
+  if (!ok) return;
 
-      if (Object.keys(patch).length === 0) {
-        showToast("No changes detected");
-       return;
-      }
-    }
+  // ✅ from here, reason is guaranteed present and (if edit) changes exist
+  const staff = currentStaff?.();
+  if (!staff) return showToast("Select staff");
 
-    if (requestedAction === "freeze") {
-      patch.frozen = true;
-      patch.status = "frozen";
-    }
+  const name = (box.querySelector("#mName")?.value || "").trim();
+  const phone = (box.querySelector("#mPhone")?.value || "").trim();
+  const nin = (box.querySelector("#mNIN")?.value || "").trim();
+  const address = (box.querySelector("#mAddress")?.value || "").trim();
+  const reason = (box.querySelector("#mReason")?.value || "").trim();
 
-    if (requestedAction === "unfreeze") {
-      patch.frozen = false;
-      if (c.status !== "closed") patch.status = "";
-    }
+  const patch = {};
 
-    if (requestedAction === "closure") {
-      patch.frozen = true;
-      patch.status = "closed";
-      patch.closedAt = new Date().toISOString();
-      patch.closedBy = staff.id;
-    }
+  if (requestedAction === "edit") {
+    if (name && name !== (c.name || "")) patch.name = name;
+    if (phone !== (c.phone || "")) patch.phone = phone;
+    if (nin !== (c.nin || "")) patch.nin = nin;
+    if (address !== (c.address || "")) patch.address = address;
+  }
 
-    if (requestedAction === "hide") {
-      patch.archived = true;
-      patch.archivedAt = new Date().toISOString();
-    }
+  if (requestedAction === "freeze") {
+    patch.frozen = true;
+    patch.status = "frozen";
+  }
 
-    if (requestedAction === "restore") {
-      patch.archived = false;
-      patch.restoredAt = new Date().toISOString();
-    }
+  if (requestedAction === "unfreeze") {
+    patch.frozen = false;
+    if (c.status !== "closed") patch.status = "";
+  }
 
-    const now = new Date().toISOString();
+  if (requestedAction === "closure") {
+    patch.frozen = true;
+    patch.status = "closed";
+    patch.closedAt = new Date().toISOString();
+    patch.closedBy = staff.id;
+  }
 
-    state.approvals = state.approvals || [];
-    state.approvals.unshift({
-      id: uid("ap"),
-      type: "customer_maintenance",
-      status: "pending",
+  if (requestedAction === "hide") {
+    patch.archived = true;
+    patch.archivedAt = new Date().toISOString();
+  }
 
-      requestedAt: now,
-      requestedBy: staff.id,
-      requestedByName: staff.name,
+  if (requestedAction === "restore") {
+    patch.archived = false;
+    patch.restoredAt = new Date().toISOString();
+  }
 
-      createdAt: now,
-      createdBy: staff.id,
-      createdByName: staff.name,
+  const now = new Date().toISOString();
 
+  state.approvals = state.approvals || [];
+  state.approvals.unshift({
+    id: uid("ap"),
+    type: "customer_maintenance",
+    status: "pending",
+    requestedAt: now,
+    requestedBy: staff.id,
+    requestedByName: staff.name,
+    createdAt: now,
+    createdBy: staff.id,
+    createdByName: staff.name,
+    customerId: c.id,
+    customerName: c.name,
+    accountNumber: c.accountNumber,
+    amount: 0,
+    payload: {
       customerId: c.id,
-      customerName: c.name,
       accountNumber: c.accountNumber,
-      amount: 0,
-
-      payload: {
-        customerId: c.id,
-        accountNumber: c.accountNumber,
-        customerName: c.name,
-        action: requestedAction,
-        reason,
-        patch
-      }
-    });
-
-    await pushAudit(
-      staff.name,
-      staff.role,
-      "customer_maintenance_requested",
-      { customerId: c.id, action: requestedAction, patch, reason }
-    );
-
-    save?.();
-    renderApprovals?.();
-
-    // ✅ clear fields to avoid "multiple submit" look (even though modal closes)
-    ["#mName", "#mPhone", "#mNIN", "#mAddress", "#mReason"].forEach(sel => {
-      const el = box.querySelector(sel);
-      if (el) el.value = "";
-    });
-
-    showToast("Maintenance request sent for approval");
+      customerName: c.name,
+      action: requestedAction,
+      reason,
+      patch
+    }
   });
+
+  await pushAudit(
+    staff.name,
+    staff.role,
+    "customer_maintenance_requested",
+    { customerId: c.id, action: requestedAction, patch, reason }
+  );
+
+  save?.();
+  renderApprovals?.();
+  showToast("Maintenance request sent for approval");
+});
 }
 window.openCustomerMaintenance = openCustomerMaintenance;
 
@@ -7871,8 +7876,9 @@ window.updateAccountTotals = updateAccountTotals;
   const bodyEl = document.getElementById("txBody");
   const actions = modal.querySelector(".modal-actions");
   const cancelBtn = document.getElementById("txCancel");
+
   // Show or hide cancel button depending on modal type
-cancelBtn.style.display = showCancel ? "inline-flex" : "none";
+  cancelBtn.style.display = showCancel ? "inline-flex" : "none";
 
   // reset modal completely
   titleEl.textContent = title;
@@ -7884,15 +7890,14 @@ cancelBtn.style.display = showCancel ? "inline-flex" : "none";
 
   let okBtn = null;
 
-if (okText) {
-  okBtn = document.createElement("button");
-  okBtn.className = "btn solid tx-ok";
-  okBtn.textContent = okText;
-  actions.appendChild(okBtn);
-}
+  if (okText) {
+    okBtn = document.createElement("button");
+    okBtn.className = "btn solid tx-ok";
+    okBtn.textContent = okText;
+    actions.appendChild(okBtn);
+  }
 
   back.style.display = "flex";
-
 
   return new Promise(resolve => {
     const cleanup = () => {
@@ -7903,25 +7908,31 @@ if (okText) {
     };
 
     if (okBtn) {
-  okBtn.onclick = e => {
-    e.stopPropagation();
+      okBtn.onclick = (e) => {
+        e.stopPropagation();
 
-    // 🔥 DO NOT auto close — let caller decide
-    resolve(true);
-  };
-}
+        // ✅ VALIDATION GATE: do NOT resolve if invalid
+        if (typeof validateFn === "function") {
+          const valid = validateFn();
+          if (!valid) return; // keep modal open
+        }
+
+        cleanup();
+        resolve(true);
+      };
+    }
 
     if (showCancel) {
-  cancelBtn.onclick = e => {
-    e.stopPropagation();
-    cleanup();
-    resolve(false);
-  };
-} else {
-  cancelBtn.onclick = null;
-}
+      cancelBtn.onclick = (e) => {
+        e.stopPropagation();
+        cleanup();
+        resolve(false);
+      };
+    } else {
+      cancelBtn.onclick = null;
+    }
 
-    back.onclick = e => {
+    back.onclick = (e) => {
       if (e.target === back) {
         cleanup();
         resolve(false);
@@ -7929,6 +7940,7 @@ if (okText) {
     };
   });
 }
+
 
 // ============================
 // GLOBAL TAB CLICK HANDLER
