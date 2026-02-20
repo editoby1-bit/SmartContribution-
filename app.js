@@ -4782,10 +4782,17 @@ if (app.type === "customer_creation") {
 // =========================
 if (app.type === "customer_maintenance") {
   const p = app.payload || {};
-  const custId = p.customerId || app.customerId;
-  const cust = (state.customers || []).find(c => c.id === custId);
 
-  if (!cust) return showToast("Customer missing");
+  // ✅ Reject should still work even if customer is missing
+  const custId = p.customerId || app.customerId;
+  let cust = (state.customers || []).find(c => c.id === custId);
+
+  // fallback by account number (prevents "missing customer" issues)
+  if (!cust && p.accountNumber) {
+    cust = (state.customers || []).find(c => String(c.accountNumber) === String(p.accountNumber));
+  }
+
+  const displayName = cust?.name || p.customerName || "Customer";
 
   // Confirm
   const ok = await openModalGeneric(
@@ -4793,7 +4800,8 @@ if (app.type === "customer_maintenance") {
     `
       <div class="small">
         <b>${app.type.toUpperCase()}</b><br/>
-        Customer: <b>${cust.name}</b>
+        Customer: <b>${displayName}</b><br/>
+        Note: ${p.reason ? `<span>${String(p.reason).replace(/</g,"&lt;").replace(/>/g,"&gt;")}</span>` : "—"}
       </div>
     `,
     action === "approve" ? "Approve" : "Reject",
@@ -4801,16 +4809,38 @@ if (app.type === "customer_maintenance") {
   );
   if (!ok) return;
 
-  // Apply decision
+  // ✅ Always resolve the approval status (so it stops being pending)
   app.status = action === "approve" ? "approved" : "rejected";
   app.processedBy = staff.name;
   app.processedAt = new Date().toISOString();
 
+  // Apply patch only on approve AND only if customer exists
   if (action === "approve") {
+    if (!cust) {
+      // can't apply but still mark approval resolved so UI doesn't hang forever
+      await pushAudit(
+        staff.name,
+        staff.role,
+        `approval_${app.status}`,
+        { approvalId: app.id, decision: action, type: app.type, note: "Customer missing - patch not applied" }
+      );
+      save();
+      renderApprovals?.();
+      renderCustomers?.();
+      renderAudit?.();
+      renderDashboard?.();
+
+      closeTxModal();
+      window.activeApprovalId = null;
+      if (typeof renderToolsTab === "function") renderToolsTab();
+
+      showToast("Approved, but customer record was missing (patch not applied)");
+      return;
+    }
+
     const patch = p.patch || {};
     const reqAction = p.action || "";
 
-    // apply patch
     Object.keys(patch).forEach(k => (cust[k] = patch[k]));
 
     // consistency rules
@@ -4841,29 +4871,32 @@ if (app.type === "customer_maintenance") {
 
     cust.updatedAt = new Date().toISOString();
     cust.updatedBy = staff.name;
+
+    app.resolvedCustomerId = cust.id;
   }
 
   await pushAudit(
     staff.name,
     staff.role,
     `approval_${app.status}`,
-    { approvalId: app.id, decision: action, type: app.type, customerId: cust.id }
+    { approvalId: app.id, decision: action, type: app.type, customerId: cust?.id || custId }
   );
 
   save();
 
-  // Refresh all relevant UIs
   renderApprovals?.();
   renderCustomers?.();
   renderAudit?.();
   renderDashboard?.();
 
-  // ✅ force Tools to refresh immediately
+  closeTxModal();
+
+  // ✅ immediate Tools refresh
   window.activeApprovalId = null;
   if (typeof renderToolsTab === "function") renderToolsTab();
 
   showToast(action === "approve" ? "Maintenance approved" : "Maintenance rejected");
-  return; // 🚨 stop normal flow
+  return;
 }
 
   const cust = state.customers.find(c => c.id === app.customerId);
@@ -5119,6 +5152,10 @@ window.activeApprovalId = null;
 if (typeof renderToolsTab === "function") renderToolsTab();
 
 closeTxModal();
+
+// ✅ Tools pending card must disappear immediately after any approval decision
+window.activeApprovalId = null;
+if (typeof renderToolsTab === "function") renderToolsTab();
 
 showToast(
   action === "approve"
