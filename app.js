@@ -3261,13 +3261,13 @@ function renderToolsTab() {
   <button class="btn" onclick="openActionModal('withdraw')">Withdraw</button>
   <button class="btn" onclick="openEmpowermentModal()">Empowerment</button>
 
-  <button class="btn" style="margin-top:8px" onclick="openCustomerMaintenance('${c.id}')">
-    Customer Service & Maintenance
-  </button>
-
   <button class="btn" onclick="printStatement('${c.id}')">
     Print Statement
   </button>
+
+  <button class="btn" style="margin-top:8px" onclick="openCustomerMaintenance('${c.id}')">
+   Customer Service & Maintenance
+ </button>
 
   <button class="btn danger" onclick="confirmAccountClosure('${c.id}')">
     Account Closure
