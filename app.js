@@ -3265,7 +3265,7 @@ function renderToolsTab() {
     Customer Service & Maintenance
   </button>
 
-  <button class="btn ghost" onclick="printStatement('${c.id}')">
+  <button class="btn" onclick="printStatement('${c.id}')">
     Print Statement
   </button>
 
