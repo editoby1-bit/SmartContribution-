@@ -2101,83 +2101,98 @@ function handleApprovalAction(id, action) {
   // ===============================
   // ✅ CUSTOMER MAINTENANCE APPROVAL
   // ===============================
-  if (approval.type === "customer_maintenance") {
-    const data = approval.payload || {};
-    const custId = approval.customerId || data.customerId;
-    const cust = (state.customers || []).find(x => x.id === custId);
+  // ===============================
+// ✅ CUSTOMER MAINTENANCE APPROVAL
+// ===============================
+if (approval.type === "customer_maintenance") {
+  const data = approval.payload || {};
 
-    if (!cust) {
-      showToast("Missing customer for this request");
-      return;
-    }
+  // ✅ robust customer lookup:
+  // 1) approval.customerId
+  // 2) payload.customerId
+  // 3) payload.accountNumber
+  const custId = approval.customerId || data.customerId || "";
+  const acctNo = String(data.accountNumber || approval.accountNumber || "").trim();
 
-    // APPROVE
-    if (action === "approve") {
-      const patch = data.patch || {};
-      const reqAction = data.action || ""; // edit | freeze | unfreeze | closure | hide | restore
+  let cust = null;
 
-      // 1) Apply patch safely
-      Object.keys(patch).forEach((k) => {
-        cust[k] = patch[k];
-      });
+  if (custId) {
+    cust = (state.customers || []).find(x => x.id === custId);
+  }
 
-      // 2) Enforce consistency rules
-      if (reqAction === "freeze") {
-        cust.frozen = true;
-        if (!cust.status) cust.status = "frozen";
-      }
+  if (!cust && acctNo) {
+    cust = (state.customers || []).find(x => String(x.accountNumber || "").trim() === acctNo);
+  }
 
-      if (reqAction === "unfreeze") {
-        // unfreeze should not reopen a closed account
-        if (cust.status !== "closed") {
-          cust.frozen = false;
-          if (cust.status === "frozen") cust.status = "";
-        }
-      }
-
-      // ✅ CRITICAL FIX: closure must stamp closedBy/closedAt NOW (no "||")
-      if (reqAction === "closure") {
-        cust.status = "closed";
-        cust.frozen = true;
-        cust.closedAt = new Date().toISOString();
-        cust.closedBy = currentStaff()?.id || "system";
-      }
-
-      // Hide / Restore (client-friendly language)
-      if (reqAction === "hide") {
-        cust.archived = true;
-        cust.archivedAt = new Date().toISOString();
-      }
-
-      if (reqAction === "restore") {
-        cust.archived = false;
-        cust.restoredAt = new Date().toISOString();
-      }
-
-      // lightweight maintenance history
-      cust.updatedAt = new Date().toISOString();
-      cust.updatedBy = approval.requestedByName || approval.createdByName || "System";
-
-      approval.resolvedCustomerId = cust.id;
-      approval.status = "approved";
-
-      save?.();
-      renderCustomers?.();
-      renderApprovals?.();
-      renderDashboard?.();
-      renderAudit?.();
-
-      showToast("Maintenance request approved and applied");
-      return;
-    }
-
-    // REJECT
-    approval.status = "rejected";
-    save?.();
-    renderApprovals?.();
-    showToast("Maintenance request rejected");
+  if (!cust) {
+    showToast("Missing customer for this request");
     return;
   }
+
+  // APPROVE
+  if (action === "approve") {
+    const patch = data.patch || {};
+    const reqAction = data.action || ""; // edit | freeze | unfreeze | closure | hide | restore
+
+    // 1) apply patch
+    Object.keys(patch).forEach((k) => {
+      cust[k] = patch[k];
+    });
+
+    // 2) enforce consistency (single source)
+    if (reqAction === "closure") {
+      cust.status = "closed";
+      cust.frozen = true;
+      cust.closedAt = new Date().toISOString();
+      cust.closedBy = (currentStaff?.()?.id || approval.requestedBy || approval.createdBy || "system");
+    }
+
+    if (reqAction === "freeze") {
+      cust.frozen = true;
+      if (!cust.status) cust.status = "frozen";
+    }
+
+    if (reqAction === "unfreeze") {
+      if (cust.status !== "closed") {
+        cust.frozen = false;
+        if (cust.status === "frozen") cust.status = "";
+      }
+    }
+
+    if (reqAction === "hide") {
+      cust.archived = true;
+      cust.archivedAt = new Date().toISOString();
+    }
+
+    if (reqAction === "restore") {
+      cust.archived = false;
+      cust.restoredAt = new Date().toISOString();
+    }
+
+    cust.updatedAt = new Date().toISOString();
+    cust.updatedBy = approval.requestedByName || approval.createdByName || "System";
+
+    approval.resolvedCustomerId = cust.id;
+    approval.customerId = cust.id; // ✅ backfill so tools/filters work
+    approval.status = "approved";
+
+    save?.();
+    renderCustomers?.();
+    renderApprovals?.();
+    renderDashboard?.();
+    renderAudit?.();
+
+    showToast("Maintenance request approved and applied");
+    return;
+  }
+
+  // REJECT
+  approval.status = "rejected";
+  save?.();
+  renderApprovals?.();
+  showToast("Maintenance request rejected");
+  return;
+}
 
   // ==========================================
   // 🎯 CUSTOMER KYC APPROVAL (CREATE CUSTOMER)
@@ -2624,16 +2639,7 @@ function openCustomerMaintenance(customerId) {
   const c = (state.customers || []).find(x => x.id === customerId);
   if (!c) return showToast("Customer not found");
 
-  const staff = currentStaff?.();
-  if (!staff) return showToast("Select staff");
-
-  // prevent double-submit
-  if (window.__sendingMaint) return;
-  window.__sendingMaint = false;
-
   const box = document.createElement("div");
-
-  const safe = (v) => String(v || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
   box.innerHTML = `
     <div class="small muted" style="margin-bottom:10px">
@@ -2643,209 +2649,165 @@ function openCustomerMaintenance(customerId) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div>
         <label class="small">Full name</label>
-        <input id="mName" class="input" value="${safe(c.name)}">
+        <input id="mName" class="input" value="${(c.name || "").replace(/"/g, "&quot;")}">
       </div>
 
       <div>
         <label class="small">Phone</label>
-        <input id="mPhone" class="input" value="${safe(c.phone)}">
+        <input id="mPhone" class="input" value="${(c.phone || "").replace(/"/g, "&quot;")}">
       </div>
 
       <div>
         <label class="small">NIN</label>
-        <input id="mNIN" class="input" value="${safe(c.nin)}">
+        <input id="mNIN" class="input" value="${(c.nin || "").replace(/"/g, "&quot;")}">
       </div>
 
       <div>
         <label class="small">Address</label>
-        <input id="mAddress" class="input" value="${safe(c.address)}">
+        <input id="mAddress" class="input" value="${(c.address || "").replace(/"/g, "&quot;")}">
       </div>
     </div>
 
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn" id="btnReqFreeze">${c.frozen ? "Request Unfreeze" : "Request Freeze"}</button>
-
       <button class="btn danger" id="btnReqClosure">Request Account Closure</button>
-
-      <button class="btn ghost" id="btnReqHide">Request Hide from Customer List</button>
-      <button class="btn ghost" id="btnReqRestore">Request Restore to Customer List</button>
+      <button class="btn ghost" id="btnReqHide">${c.archived ? "Request Restore to Customer List" : "Request Hide from Customer List"}</button>
     </div>
 
     <div style="margin-top:12px">
       <label class="small">Reason / Note <span class="req">*</span></label>
       <textarea id="mReason" class="input" style="height:90px" placeholder="Explain why this maintenance is needed"></textarea>
     </div>
-
-    <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
-      <button class="btn ghost" id="btnCancelMaint">Cancel</button>
-      <button class="btn" id="btnSendMaint">Send Request</button>
-    </div>
   `;
 
-  // Track intent
   let requestedAction = "edit"; // edit | freeze | unfreeze | closure | hide | restore
 
-  // Buttons
-  const btnFreeze = box.querySelector("#btnReqFreeze");
-  const btnClosure = box.querySelector("#btnReqClosure");
-  const btnHide = box.querySelector("#btnReqHide");
-  const btnRestore = box.querySelector("#btnReqRestore");
-
-  if (btnFreeze) {
-    btnFreeze.onclick = () => {
-      requestedAction = c.frozen ? "unfreeze" : "freeze";
-      showToast(`Selected: ${requestedAction.toUpperCase()} request`);
-    };
-  }
-
-  if (btnClosure) {
-    btnClosure.onclick = () => {
-      requestedAction = "closure";
-      showToast("Selected: ACCOUNT CLOSURE request");
-    };
-  }
-
-  if (btnHide) {
-    btnHide.onclick = () => {
-      requestedAction = "hide";
-      showToast("Selected: HIDE FROM CUSTOMER LIST request");
-    };
-  }
-
-  if (btnRestore) {
-    btnRestore.onclick = () => {
-      requestedAction = "restore";
-      showToast("Selected: RESTORE TO CUSTOMER LIST request");
-    };
-  }
-
-  // Open modal with a neutral footer button (so openModalGeneric doesn't trap us)
-  // We will handle send/cancel ourselves.
-  openModalGeneric("Customer Service & Maintenance", box, "Close");
-
-  // Cancel closes the modal
-  box.querySelector("#btnCancelMaint").onclick = () => {
-    const back = document.getElementById("txModalBack");
-    if (back) back.style.display = "none";
+  box.querySelector("#btnReqFreeze").onclick = () => {
+    requestedAction = c.frozen ? "unfreeze" : "freeze";
+    showToast(`Selected: ${requestedAction.toUpperCase()} request`);
   };
 
-  // ✅ Send request (our own button)
-  box.querySelector("#btnSendMaint").onclick = async () => {
-    if (window.__sendingMaint) return;
-    window.__sendingMaint = true;
+  box.querySelector("#btnReqClosure").onclick = () => {
+    requestedAction = "closure";
+    showToast("Selected: ACCOUNT CLOSURE request");
+  };
 
-    try {
-      const name = (box.querySelector("#mName")?.value || "").trim();
-      const phone = (box.querySelector("#mPhone")?.value || "").trim();
-      const nin = (box.querySelector("#mNIN")?.value || "").trim();
-      const address = (box.querySelector("#mAddress")?.value || "").trim();
-      const reason = (box.querySelector("#mReason")?.value || "").trim();
+  box.querySelector("#btnReqHide").onclick = () => {
+    requestedAction = c.archived ? "restore" : "hide";
+    showToast(`Selected: ${requestedAction.toUpperCase()} request`);
+  };
 
-      if (!reason) {
-        showToast("Reason is required");
-        box.querySelector("#mReason")?.focus();
+  // ✅ IMPORTANT: set showCancel=false so you don't get Cancel + Close together
+  openModalGeneric("Customer Service & Maintenance", box, "Send Request", false).then(async (ok) => {
+    if (!ok) return;
+
+    const staff = currentStaff?.();
+    if (!staff) return showToast("Select staff");
+
+    const name = (box.querySelector("#mName")?.value || "").trim();
+    const phone = (box.querySelector("#mPhone")?.value || "").trim();
+    const nin = (box.querySelector("#mNIN")?.value || "").trim();
+    const address = (box.querySelector("#mAddress")?.value || "").trim();
+    const reason = (box.querySelector("#mReason")?.value || "").trim();
+
+    // ✅ If reason missing: re-open immediately so button still works without refresh
+    if (!reason) {
+      showToast("Reason is required");
+      openCustomerMaintenance(customerId);
+      return;
+    }
+
+    const patch = {};
+
+    if (requestedAction === "edit") {
+      if (name && name !== (c.name || "")) patch.name = name;
+      if (phone !== (c.phone || "")) patch.phone = phone;
+      if (nin !== (c.nin || "")) patch.nin = nin;
+      if (address !== (c.address || "")) patch.address = address;
+
+      if (Object.keys(patch).length === 0) {
+        showToast("No changes detected");
+        openCustomerMaintenance(customerId);
         return;
       }
-
-      // Build patch (only changed fields)
-      const patch = {};
-
-      if (requestedAction === "edit") {
-        if (name && name !== (c.name || "")) patch.name = name;
-        if (phone !== (c.phone || "")) patch.phone = phone;
-        if (nin !== (c.nin || "")) patch.nin = nin;
-        if (address !== (c.address || "")) patch.address = address;
-
-        if (Object.keys(patch).length === 0) {
-          showToast("No changes detected");
-          return;
-        }
-      }
-
-      if (requestedAction === "freeze") {
-        patch.frozen = true;
-        patch.status = "frozen";
-      }
-
-      if (requestedAction === "unfreeze") {
-        patch.frozen = false;
-        // if it was closed, unfreeze should not reopen it
-        if (c.status !== "closed") patch.status = "";
-      }
-
-      if (requestedAction === "closure") {
-        patch.frozen = true;
-        patch.status = "closed";
-        patch.closedAt = new Date().toISOString();
-        patch.closedBy = staff.id;
-      }
-
-      if (requestedAction === "hide") {
-        patch.archived = true;
-        patch.archivedAt = new Date().toISOString();
-      }
-
-      if (requestedAction === "restore") {
-        patch.archived = false;
-        patch.restoredAt = new Date().toISOString();
-      }
-
-      const now = new Date().toISOString();
-
-      state.approvals = state.approvals || [];
-      state.approvals.unshift({
-        id: uid("ap"),
-        type: "customer_maintenance",
-        status: "pending",
-
-        // ✅ what renderApprovals uses
-        requestedAt: now,
-        requestedBy: staff.id,
-        requestedByName: staff.name,
-
-        // ✅ keep legacy fields too
-        createdAt: now,
-        createdBy: staff.id,
-        createdByName: staff.name,
-
-        // ✅ TOP LEVEL customer fields (so approvals don't show "Unknown")
-        customerId: c.id,
-        customerName: c.name,
-
-        amount: 0,
-
-        payload: {
-          customerId: c.id,
-          accountNumber: c.accountNumber,
-          customerName: c.name,
-          action: requestedAction,
-          reason,
-          patch
-        }
-      });
-
-      await pushAudit?.(
-        staff.name,
-        staff.role,
-        "customer_maintenance_requested",
-        { customerId: c.id, action: requestedAction, patch, reason }
-      );
-
-      save?.();
-      renderApprovals?.();
-      showToast("Maintenance request sent for approval");
-
-      // ✅ reset fields so it doesn't look like re-submit is possible
-      box.querySelector("#mReason").value = "";
-      requestedAction = "edit";
-
-      // ✅ close modal
-      const back = document.getElementById("txModalBack");
-      if (back) back.style.display = "none";
-    } finally {
-      window.__sendingMaint = false;
     }
-  };
+
+    if (requestedAction === "freeze") {
+      patch.frozen = true;
+      patch.status = "frozen";
+    }
+
+    if (requestedAction === "unfreeze") {
+      patch.frozen = false;
+      if (c.status !== "closed") patch.status = "";
+    }
+
+    if (requestedAction === "closure") {
+      patch.frozen = true;
+      patch.status = "closed";
+      patch.closedAt = new Date().toISOString();
+      patch.closedBy = staff.id;
+    }
+
+    if (requestedAction === "hide") {
+      patch.archived = true;
+      patch.archivedAt = new Date().toISOString();
+    }
+
+    if (requestedAction === "restore") {
+      patch.archived = false;
+      patch.restoredAt = new Date().toISOString();
+    }
+
+    const now = new Date().toISOString();
+
+    state.approvals = state.approvals || [];
+    state.approvals.unshift({
+      id: uid("ap"),
+      type: "customer_maintenance",
+      status: "pending",
+
+      requestedAt: now,
+      requestedBy: staff.id,
+      requestedByName: staff.name,
+
+      createdAt: now,
+      createdBy: staff.id,
+      createdByName: staff.name,
+
+      customerId: c.id,
+      customerName: c.name,
+      accountNumber: c.accountNumber,
+      amount: 0,
+
+      payload: {
+        customerId: c.id,
+        accountNumber: c.accountNumber,
+        customerName: c.name,
+        action: requestedAction,
+        reason,
+        patch
+      }
+    });
+
+    await pushAudit(
+      staff.name,
+      staff.role,
+      "customer_maintenance_requested",
+      { customerId: c.id, action: requestedAction, patch, reason }
+    );
+
+    save?.();
+    renderApprovals?.();
+
+    // ✅ clear fields to avoid "multiple submit" look (even though modal closes)
+    ["#mName", "#mPhone", "#mNIN", "#mAddress", "#mReason"].forEach(sel => {
+      const el = box.querySelector(sel);
+      if (el) el.value = "";
+    });
+
+    showToast("Maintenance request sent for approval");
+  });
 }
 window.openCustomerMaintenance = openCustomerMaintenance;
 
@@ -3202,47 +3164,42 @@ function renderToolsTab() {
   const staff = currentStaff?.();
   const canAct = staff && (staff.role === "manager" || staff.role === "ceo");
 
-  // ✅ helper: get approval customerId safely
   const getApCustId = (a) => a?.customerId || a?.payload?.customerId || "";
 
-  // ✅ ALWAYS recompute pending approvals (robust)
   const approvals = (state.approvals || [])
     .filter(a => getApCustId(a) === c.id && a.status === "pending")
     .sort((a, b) => new Date(b.requestedAt || b.createdAt || 0) - new Date(a.requestedAt || a.createdAt || 0));
 
-  // Select approval safely
   const approval =
     approvals.find(a => a.id === window.activeApprovalId) ||
     approvals[0] ||
     null;
 
-  // =========================
-  // APPROVAL ACTIONS UI
-  // =========================
   let approvalHTML = "";
 
   if (approval && canAct) {
     const reqAt = approval.requestedAt || approval.createdAt;
     const reqBy = approval.requestedByName || approval.requestedBy || approval.createdByName || approval.createdBy || "—";
 
-    // ✅ show maintenance summary so you SEE what will change
+    // maintenance summary (so you see patch)
     let summary = "";
     if (approval.type === "customer_maintenance") {
       const p = approval.payload || {};
       const patch = p.patch || {};
-      const action = p.action || "edit";
+      const act = p.action || "edit";
       const reason = p.reason || "";
-
-      const patchLines = Object.keys(patch).length
-        ? Object.keys(patch).map(k => `<li><b>${k}:</b> ${String(patch[k])}</li>`).join("")
-        : `<li class="muted">No patch fields</li>`;
 
       summary = `
         <div class="card warning" style="margin-top:10px">
           <div class="small"><b>Maintenance Summary</b></div>
-          <div class="small muted">Action: ${String(action).toUpperCase()}</div>
+          <div class="small muted">Action: ${String(act).toUpperCase()}</div>
           ${reason ? `<div class="small muted" style="margin-top:4px">Note: ${reason}</div>` : ""}
-          <ul class="small" style="margin-top:8px">${patchLines}</ul>
+          <ul class="small" style="margin-top:8px">
+            ${Object.keys(patch).length
+              ? Object.keys(patch).map(k => `<li><b>${k}:</b> ${String(patch[k])}</li>`).join("")
+              : `<li class="muted">No patch fields</li>`
+            }
+          </ul>
         </div>
       `;
     }
@@ -3264,10 +3221,7 @@ function renderToolsTab() {
           </div>
         ` : ""}
 
-        <div class="small">
-          <b>${approval.type.toUpperCase()}</b> — ${fmt(approval.amount || 0)}
-        </div>
-
+        <div class="small"><b>${approval.type.toUpperCase()}</b></div>
         <div class="small muted">Requested by: ${reqBy}</div>
         <div class="small muted">${reqAt ? new Date(reqAt).toLocaleString() : "—"}</div>
 
@@ -3281,9 +3235,24 @@ function renderToolsTab() {
     `;
   }
 
-  // =========================
-  // TOOL BUTTONS
-  // =========================
+  // ✅ Print statement safe-call (works even if function name differs)
+  const printFnCall = `
+    (function(){
+      const fn =
+        window.printCustomerStatement ||
+        window.openCustomerStatement ||
+        window.openAccountStatement ||
+        window.openStatementModal ||
+        window.openAccountStatementModal;
+
+      if (typeof fn !== "function") {
+        showToast("Print statement function not found");
+        return;
+      }
+      fn('${c.id}');
+    })()
+  `;
+
   const toolButtons = `
     <button class="btn" onclick="openActionModal('credit')">Credit</button>
     <button class="btn" onclick="openActionModal('withdraw')">Withdraw</button>
@@ -3293,12 +3262,8 @@ function renderToolsTab() {
       Customer Service & Maintenance
     </button>
 
-    <button class="btn ghost" style="margin-top:8px" onclick="printCustomerStatement('${c.id}')">
+    <button class="btn ghost" style="margin-top:8px" onclick="${printFnCall}">
       Print Statement
-    </button>
-
-    <button class="btn ghost" onclick="toggleFreeze('${c.id}')">
-      ${c.frozen ? "Unfreeze Account" : "Freeze Account"}
     </button>
 
     <button class="btn danger" onclick="confirmAccountClosure('${c.id}')">
@@ -3313,9 +3278,6 @@ function renderToolsTab() {
     </div>
   `;
 
-  // =========================
-  // EVENT BINDING
-  // =========================
   if (approval && canAct) {
     const approveBtn = document.getElementById("approveBtn");
     const rejectBtn = document.getElementById("rejectBtn");
@@ -3324,11 +3286,9 @@ function renderToolsTab() {
       approveBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-
         approveBtn.disabled = true;
-        processApproval(approval.id, "approve");
 
-        // refresh tools tab immediately so pending card disappears
+        processApproval(approval.id, "approve");
         window.activeApprovalId = null;
         renderToolsTab();
       };
@@ -3338,10 +3298,9 @@ function renderToolsTab() {
       rejectBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-
         rejectBtn.disabled = true;
-        processApproval(approval.id, "reject");
 
+        processApproval(approval.id, "reject");
         window.activeApprovalId = null;
         renderToolsTab();
       };
