@@ -4778,7 +4778,7 @@ if (app.type === "customer_creation") {
   return; // 🚨 stop normal approval flow
 }
 // =========================
-// CUSTOMER MAINTENANCE APPROVAL (APPLY PATCH)
+// CUSTOMER MAINTENANCE APPROVAL
 // =========================
 if (app.type === "customer_maintenance") {
   const p = app.payload || {};
@@ -4787,15 +4787,13 @@ if (app.type === "customer_maintenance") {
 
   if (!cust) return showToast("Customer missing");
 
-  // ===== CONFIRM =====
+  // Confirm
   const ok = await openModalGeneric(
     action === "approve" ? "Confirm Approval" : "Confirm Rejection",
     `
       <div class="small">
         <b>${app.type.toUpperCase()}</b><br/>
-        Customer: <b>${cust.name}</b><br/>
-        Action: <b>${String(p.action || "").toUpperCase()}</b><br/>
-        Note: <b>${p.reason || "—"}</b>
+        Customer: <b>${cust.name}</b>
       </div>
     `,
     action === "approve" ? "Approve" : "Reject",
@@ -4803,20 +4801,19 @@ if (app.type === "customer_maintenance") {
   );
   if (!ok) return;
 
-  // ===== APPLY DECISION =====
+  // Apply decision
   app.status = action === "approve" ? "approved" : "rejected";
   app.processedBy = staff.name;
   app.processedAt = new Date().toISOString();
 
-  // ✅ APPLY PATCH ONLY ON APPROVE
   if (action === "approve") {
     const patch = p.patch || {};
-    Object.keys(patch).forEach(k => {
-      cust[k] = patch[k];
-    });
+    const reqAction = p.action || "";
+
+    // apply patch
+    Object.keys(patch).forEach(k => (cust[k] = patch[k]));
 
     // consistency rules
-    const reqAction = p.action || "";
     if (reqAction === "freeze") {
       cust.frozen = true;
       if (!cust.status) cust.status = "frozen";
@@ -4850,29 +4847,22 @@ if (app.type === "customer_maintenance") {
     staff.name,
     staff.role,
     `approval_${app.status}`,
-    {
-      approvalId: app.id,
-      decision: action,
-      type: app.type,
-      customerId: cust.id,
-      customerName: cust.name,
-      maintenanceAction: p.action || "",
-      patch: p.patch || {},
-      note: p.reason || ""
-    }
+    { approvalId: app.id, decision: action, type: app.type, customerId: cust.id }
   );
 
   save();
 
-  renderApprovals();
-  renderCustomers();
+  // Refresh all relevant UIs
+  renderApprovals?.();
+  renderCustomers?.();
   renderAudit?.();
   renderDashboard?.();
-  renderDashboardApprovals?.();
-  updateChartData?.();
 
-  closeTxModal();
-  showToast(action === "approve" ? "Maintenance applied" : "Maintenance rejected");
+  // ✅ force Tools to refresh immediately
+  window.activeApprovalId = null;
+  if (typeof renderToolsTab === "function") renderToolsTab();
+
+  showToast(action === "approve" ? "Maintenance approved" : "Maintenance rejected");
   return; // 🚨 stop normal flow
 }
 
