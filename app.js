@@ -3167,7 +3167,10 @@ function renderToolsTab() {
   const getApCustId = (a) => a?.customerId || a?.payload?.customerId || "";
 
   const approvals = (state.approvals || [])
-    .filter(a => getApCustId(a) === c.id && a.status === "pending")
+    .filter(a =>
+  (a.customerId === c.id || a.payload?.customerId === c.id) &&
+  a.status === "pending"
+)
     .sort((a, b) => new Date(b.requestedAt || b.createdAt || 0) - new Date(a.requestedAt || a.createdAt || 0));
 
   const approval =
@@ -3254,22 +3257,22 @@ function renderToolsTab() {
   `;
 
   const toolButtons = `
-    <button class="btn" onclick="openActionModal('credit')">Credit</button>
-    <button class="btn" onclick="openActionModal('withdraw')">Withdraw</button>
-    <button class="btn" onclick="openEmpowermentModal()">Empowerment</button>
+  <button class="btn" onclick="openActionModal('credit')">Credit</button>
+  <button class="btn" onclick="openActionModal('withdraw')">Withdraw</button>
+  <button class="btn" onclick="openEmpowermentModal()">Empowerment</button>
 
-    <button class="btn" style="margin-top:8px" onclick="openCustomerMaintenance('${c.id}')">
-      Customer Service & Maintenance
-    </button>
+  <button class="btn" style="margin-top:8px" onclick="openCustomerMaintenance('${c.id}')">
+    Customer Service & Maintenance
+  </button>
 
-    <button class="btn ghost" style="margin-top:8px" onclick="${printFnCall}">
-      Print Statement
-    </button>
+  <button class="btn ghost" onclick="printStatement('${c.id}')">
+    Print Statement
+  </button>
 
-    <button class="btn danger" onclick="confirmAccountClosure('${c.id}')">
-      Account Closure
-    </button>
-  `;
+  <button class="btn danger" onclick="confirmAccountClosure('${c.id}')">
+    Account Closure
+  </button>
+`;
 
   mBody.innerHTML = `
     ${approvalHTML}
@@ -4774,7 +4777,104 @@ if (app.type === "customer_creation") {
   showToast(action === "approve" ? "Customer account opened successfully" : "Customer request rejected");
   return; // 🚨 stop normal approval flow
 }
+// =========================
+// CUSTOMER MAINTENANCE APPROVAL (APPLY PATCH)
+// =========================
+if (app.type === "customer_maintenance") {
+  const p = app.payload || {};
+  const custId = p.customerId || app.customerId;
+  const cust = (state.customers || []).find(c => c.id === custId);
 
+  if (!cust) return showToast("Customer missing");
+
+  // ===== CONFIRM =====
+  const ok = await openModalGeneric(
+    action === "approve" ? "Confirm Approval" : "Confirm Rejection",
+    `
+      <div class="small">
+        <b>${app.type.toUpperCase()}</b><br/>
+        Customer: <b>${cust.name}</b><br/>
+        Action: <b>${String(p.action || "").toUpperCase()}</b><br/>
+        Note: <b>${p.reason || "—"}</b>
+      </div>
+    `,
+    action === "approve" ? "Approve" : "Reject",
+    true
+  );
+  if (!ok) return;
+
+  // ===== APPLY DECISION =====
+  app.status = action === "approve" ? "approved" : "rejected";
+  app.processedBy = staff.name;
+  app.processedAt = new Date().toISOString();
+
+  // ✅ APPLY PATCH ONLY ON APPROVE
+  if (action === "approve") {
+    const patch = p.patch || {};
+    Object.keys(patch).forEach(k => {
+      cust[k] = patch[k];
+    });
+
+    // consistency rules
+    const reqAction = p.action || "";
+    if (reqAction === "freeze") {
+      cust.frozen = true;
+      if (!cust.status) cust.status = "frozen";
+    }
+    if (reqAction === "unfreeze") {
+      if (cust.status !== "closed") {
+        cust.frozen = false;
+        if (cust.status === "frozen") cust.status = "";
+      }
+    }
+    if (reqAction === "closure") {
+      cust.status = "closed";
+      cust.frozen = true;
+      cust.closedAt = new Date().toISOString();
+      cust.closedBy = staff.id || "system";
+    }
+    if (reqAction === "hide") {
+      cust.archived = true;
+      cust.archivedAt = new Date().toISOString();
+    }
+    if (reqAction === "restore") {
+      cust.archived = false;
+      cust.restoredAt = new Date().toISOString();
+    }
+
+    cust.updatedAt = new Date().toISOString();
+    cust.updatedBy = staff.name;
+  }
+
+  await pushAudit(
+    staff.name,
+    staff.role,
+    `approval_${app.status}`,
+    {
+      approvalId: app.id,
+      decision: action,
+      type: app.type,
+      customerId: cust.id,
+      customerName: cust.name,
+      maintenanceAction: p.action || "",
+      patch: p.patch || {},
+      note: p.reason || ""
+    }
+  );
+
+  save();
+
+  renderApprovals();
+  renderCustomers();
+  renderAudit?.();
+  renderDashboard?.();
+  renderDashboardApprovals?.();
+  updateChartData?.();
+
+  closeTxModal();
+  showToast(action === "approve" ? "Maintenance applied" : "Maintenance rejected");
+  return; // 🚨 stop normal flow
+}
 
   const cust = state.customers.find(c => c.id === app.customerId);
   if (!cust) return showToast("Customer missing");
