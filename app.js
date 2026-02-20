@@ -2094,168 +2094,204 @@ function handleApprovalAction(id, action) {
   const approval = state.approvals.find(a => a.id === id);
   if (!approval) return;
 
-  approval.status = action === "approve" ? "approved" : "rejected";
+  // ✅ DO NOT set approval.status here.
+  // Status must be set only when the action is actually finalized,
+  // especially because customer_creation uses a confirmation modal.
 
-  // ✅ HANDLE CUSTOMER MAINTENANCE APPROVAL
-if (action === "approve" && approval.type === "customer_maintenance") {
-  const p = approval.payload || {};
-  const custId = p.customerId;
+  // ===============================
+  // ✅ CUSTOMER MAINTENANCE APPROVAL
+  // ===============================
+  if (approval.type === "customer_maintenance") {
+    const data = approval.payload || {};
+    const custId = data.customerId || approval.customerId;
+    const cust = (state.customers || []).find(x => x.id === custId);
 
-  const c = (state.customers || []).find(x => x.id === custId);
-  if (!c) {
-    showToast("Customer not found for maintenance");
+    if (!cust) {
+      showToast("Missing customer for this request");
+      return;
+    }
+
+    // APPROVE
+    if (action === "approve") {
+      const patch = data.patch || {};
+      const reqAction = data.action || ""; // edit | freeze | unfreeze | closure | hide | restore
+
+      // 1) Apply patch safely
+      Object.keys(patch).forEach((k) => {
+        cust[k] = patch[k];
+      });
+
+      // 2) Enforce consistency rules
+      if (reqAction === "freeze") {
+        cust.frozen = true;
+        if (!cust.status) cust.status = "frozen";
+      }
+
+      if (reqAction === "unfreeze") {
+        // unfreeze should not reopen a closed account
+        if (cust.status !== "closed") {
+          cust.frozen = false;
+          if (cust.status === "frozen") cust.status = "";
+        }
+      }
+
+      // ✅ CRITICAL FIX: closure must stamp closedBy/closedAt NOW (no "||")
+      if (reqAction === "closure") {
+        cust.status = "closed";
+        cust.frozen = true;
+        cust.closedAt = new Date().toISOString();
+        cust.closedBy = currentStaff()?.id || "system";
+      }
+
+      // Hide / Restore (client-friendly language)
+      if (reqAction === "hide") {
+        cust.archived = true;
+        cust.archivedAt = new Date().toISOString();
+      }
+
+      if (reqAction === "restore") {
+        cust.archived = false;
+        cust.restoredAt = new Date().toISOString();
+      }
+
+      // lightweight maintenance history
+      cust.updatedAt = new Date().toISOString();
+      cust.updatedBy = approval.requestedByName || approval.createdByName || "System";
+
+      approval.resolvedCustomerId = cust.id;
+      approval.status = "approved";
+
+      save?.();
+      renderCustomers?.();
+      renderApprovals?.();
+      renderDashboard?.();
+      renderAudit?.();
+
+      showToast("Maintenance request approved and applied");
+      return;
+    }
+
+    // REJECT
+    approval.status = "rejected";
+    save?.();
+    renderApprovals?.();
+    showToast("Maintenance request rejected");
     return;
   }
 
-  const patch = p.patch || {};
-  Object.keys(patch).forEach(k => {
-    c[k] = patch[k];
-  });
+  // ==========================================
+  // 🎯 CUSTOMER KYC APPROVAL (CREATE CUSTOMER)
+  // ==========================================
+  if (approval.type === "customer_creation") {
+    // Reject is immediate
+    if (action !== "approve") {
+      approval.status = "rejected";
+      save?.();
+      renderApprovals?.();
+      renderCustomerKycApprovals?.();
+      showToast("Customer creation rejected");
+      return;
+    }
 
-  // keep simple history
-  c.updatedAt = new Date().toISOString();
-  c.updatedBy = approval.createdByName || "System";
+    const data = approval.payload || {};
 
-  approval.resolvedCustomerId = c.id;
+    // 🪪 REVIEW CARD BEFORE ACCOUNT CREATION (CLIENT REQUIREMENT)
+    const review = document.createElement("div");
+    review.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          ${
+            data.photo
+              ? `<img src="${data.photo}"
+                   style="width:70px;height:70px;border-radius:12px;
+                          object-fit:cover;border:1px solid #e5e7eb;">`
+              : `<div style="width:70px;height:70px;border-radius:12px;
+                             background:#f3f4f6;display:flex;
+                             align-items:center;justify-content:center;
+                             font-size:11px;color:#9ca3af;">
+                   No Photo
+                 </div>`
+          }
 
-  save();
+          <div style="flex:1">
+            <div><b>Name:</b> ${data.name || "—"}</div>
+            <div><b>Phone:</b> ${data.phone || "—"}</div>
+            <div><b>NIN:</b> ${data.nin || "—"}</div>
+            <div><b>Address:</b> ${data.address || "—"}</div>
+            <div><b>Opening Balance:</b> ${fmt(Number(data.openingBalance || 0))}</div>
+          </div>
+        </div>
 
-  renderCustomers?.();
-  renderApprovals?.();
-  renderDashboard?.();
-  renderAudit?.();
-
-  showToast("Maintenance applied successfully");
-  return; // 🚨 stops legacy flow
-}
-
- // 🎯 HANDLE CUSTOMER KYC APPROVAL (CREATE REAL CUSTOMER)
-if (action === "approve" && approval.type === "customer_creation") {
-
-  const data = approval.payload || {};
- 
-  // 🪪 REVIEW CARD BEFORE ACCOUNT CREATION (CLIENT REQUIREMENT)
-  const review = document.createElement("div");
-  review.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:12px">
-      
-      <div style="display:flex;gap:12px;align-items:flex-start">
-        ${
-          data.photo
-            ? `<img src="${data.photo}" 
-                 style="width:70px;height:70px;border-radius:12px;
-                        object-fit:cover;border:1px solid #e5e7eb;">`
-            : `<div style="width:70px;height:70px;border-radius:12px;
-                           background:#f3f4f6;display:flex;
-                           align-items:center;justify-content:center;
-                           font-size:11px;color:#9ca3af;">
-                 No Photo
-                 
-               </div>`
-
-               
-        }
-
-        <div style="flex:1">
-          <div><b>Name:</b> ${data.name || "—"}</div>
-          <div><b>Phone:</b> ${data.phone || "—"}</div>
-          <div><b>NIN:</b> ${data.nin || "—"}</div>
-          <div><b>Address:</b> ${data.address || "—"}</div>
-          <div><b>Opening Balance:</b> ${fmt(Number(data.openingBalance || 0))}</div>
+        <div class="small muted">
+          Please review customer details before opening account.
         </div>
       </div>
+    `;
 
-      <div class="small muted">
-        Please review customer details before opening account.
-      </div>
-    </div>
-  `;
+    openModalGeneric(
+      "Review & Approve New Customer",
+      review,
+      "Approve & Open Account",
+      true
+    ).then((confirmed) => {
+      if (!confirmed) {
+        // ✅ If manager cancels, do NOT mark approved
+        return;
+      }
 
-  openModalGeneric(
-    "Review & Approve New Customer",
-    review,
-    "Approve & Open Account",
-    true
-  ).then(confirmed => {
-    if (!confirmed) return;
+      // 🔢 ACCOUNT NUMBER STARTS FROM 1000 (NO PREFIX)
+      const existingNumbers = (state.customers || [])
+        .map(c => Number(c.accountNumber) || 999);
 
-    // 🔢 ACCOUNT NUMBER STARTS FROM 1000 (NO PREFIX)
-    const existingNumbers = state.customers
-      .map(c => Number(c.accountNumber) || 999);
+      const max = existingNumbers.length
+        ? Math.max(...existingNumbers)
+        : 999;
 
-    const max = existingNumbers.length
-      ? Math.max(...existingNumbers)
-      : 999;
+      const newCustomer = {
+        id: uid("c"), // ✅ IMPORTANT: customer ids must start with "c"
+        accountNumber: String(max + 1), // 1000, 1001, 1002...
+        name: data.name || "Unnamed",
+        phone: data.phone || "",
+        nin: data.nin || "",
+        address: data.address || "",
+        photo: data.photo || "",
+        balance: Number(data.openingBalance || 0),
+        frozen: false,
+        status: "",
+        archived: false,
+        transactions: [],
+        createdAt: new Date().toISOString(),
+        createdBy: approval.requestedByName || approval.createdByName || "System",
+      };
 
-    const newCustomer = {
-  id: uid("c"), // ✅ IMPORTANT: customer ids must start with "c"
-  accountNumber: String(max + 1), // 1000, 1001, 1002...
-  name: data.name || "Unnamed",
-  phone: data.phone || "",
-  nin: data.nin || "",
-  address: data.address || "",
-  photo: data.photo || "",
-  balance: Number(data.openingBalance || 0),
-  frozen: false,            // ✅ expected elsewhere
-  transactions: [],         // ✅ expected elsewhere
-  createdAt: new Date().toISOString(),
-  createdBy: approval.createdByName || "System"
-};
+      state.customers = state.customers || [];
+      state.customers.push(newCustomer);
 
-    // ✅ THIS fixes "Missing customer" everywhere
-    state.customers = state.customers || [];
-    state.customers.push(newCustomer);
+      approval.resolvedCustomerId = newCustomer.id;
+      approval.status = "approved";
 
-    // link approval to real customer
-    approval.resolvedCustomerId = newCustomer.id;
+      save?.();
 
-    save();
+      // 🔥 FULL UI SYNC
+      renderCustomers?.();
+      renderApprovals?.();
+      renderCustomerKycApprovals?.();
+      renderDashboardApprovals?.();
+      renderDashboard?.();
+      renderAudit?.();
 
-    // 🔥 FULL UI SYNC (fixes dashboard delay + buttons delay)
-    renderCustomers();
-    renderApprovals();
-    renderCustomerKycApprovals();
-    renderDashboardApprovals();
-    renderDashboard();
-    renderAudit();
+      showToast("Customer account opened successfully");
+    });
 
-    showToast("Customer account opened successfully");
-  });
-
-  return; // 🚨 CRITICAL: stops legacy approval flow
-}
-// ✅ HANDLE CUSTOMER MAINTENANCE APPROVAL (APPLY PATCH)
-if (action === "approve" && approval.type === "customer_maintenance") {
-  const data = approval.payload || {};
-  const patch = data.patch || {};
-
-  const custId = data.customerId || approval.customerId;
-  const cust = (state.customers || []).find(x => x.id === custId);
-
-  if (!cust) {
-    showToast("Missing customer for this request");
-    return;
+    return; // ✅ stop legacy flow
   }
 
-  // Apply patch safely
-  Object.keys(patch).forEach((k) => {
-    cust[k] = patch[k];
-  });
-
-  // Optional: keep status/frozen consistent
-  if (cust.status === "closed") cust.frozen = true;
-  if (!cust.frozen && cust.status === "frozen") cust.status = "";
-
-  approval.resolvedCustomerId = cust.id;
-
+  // ==========================
+  // DEFAULT (OTHER APPROVALS)
+  // ==========================
+  approval.status = (action === "approve") ? "approved" : "rejected";
   save?.();
-  renderCustomers?.();
   renderApprovals?.();
-  renderAudit?.();
-
-  showToast("Maintenance request approved and applied");
-  return;
-}
 }
 window.processApproval = function(id, action) {
   handleApprovalAction(id, action);
