@@ -2698,7 +2698,7 @@ function openCustomerMaintenance(customerId) {
   };
 
   // ✅ IMPORTANT: set showCancel=false so you don't get Cancel + Close together
-  openModalGeneric("Customer Service & Maintenance", box, "Send Request", false).then(async (ok) => {
+  openModalGeneric("Customer Service & Maintenance", box, "Send Request", true).then(async (ok) => {
     if (!ok) return;
 
     const staff = currentStaff?.();
@@ -2712,10 +2712,11 @@ function openCustomerMaintenance(customerId) {
 
     // ✅ If reason missing: re-open immediately so button still works without refresh
     if (!reason) {
-      showToast("Reason is required");
-      openCustomerMaintenance(customerId);
-      return;
-    }
+  showToast("Reason is required");
+  const r = box.querySelector("#mReason");
+  if (r) r.focus();
+  return;
+}
 
     const patch = {};
 
@@ -2727,8 +2728,7 @@ function openCustomerMaintenance(customerId) {
 
       if (Object.keys(patch).length === 0) {
         showToast("No changes detected");
-        openCustomerMaintenance(customerId);
-        return;
+       return;
       }
     }
 
@@ -5117,20 +5117,24 @@ await pushAudit(
 save();
 
 // 🔥 MASTER UI SYNC (fixes delayed buttons + panels)
-renderApprovals();                // main screen approvals
-renderCustomerKycApprovals();    // KYC panel
-renderDashboardApprovals();      // dashboard approvals
+renderApprovals();
+renderCustomerKycApprovals();
+renderDashboardApprovals();
 renderCustomers();
 renderAudit();
-renderDashboard();               // CRITICAL: fixes toggle delay
+renderDashboard();
+
+// ✅ refresh customer modal Tools immediately
+window.activeApprovalId = null;
+if (typeof renderToolsTab === "function") renderToolsTab();
 
 closeTxModal();
 
-  showToast(
-    action === "approve"
-      ? "Transaction approved"
-      : "Transaction rejected"
-  );
+showToast(
+  action === "approve"
+    ? "Transaction approved"
+    : "Transaction rejected"
+);
 }
 
   let chartWeek = null;
