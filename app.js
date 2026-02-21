@@ -3127,16 +3127,16 @@ function renderProfileTab() {
             const totalLeft = (pLeft > 0 ? pLeft : 0) + (iLeft > 0 ? iLeft : 0);
             const d = new Date(l.createdAt || l.date || Date.now());
 
-            return `
-              <div class="small" style="margin-top:6px">
-                ${isNaN(d) ? "Unknown Date" : d.toLocaleString()} —
-                Given: <b>${fmt(l.principalGiven)}</b>,
-                Interest: <b>${fmt(l.expectedInterest)}</b>,
-                Principal Left: <b>${fmt(pLeft > 0 ? pLeft : 0)}</b>,
-                Interest Left: <b>${fmt(iLeft > 0 ? iLeft : 0)}</b>,
-                Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
-              </div>
-            `;
+           return `
+ <div class="small" style="margin-top:6px">
+   ${isNaN(d) ? "Unknown Date" : d.toLocaleString()} —
+   Given: <b>${fmt(l.principalGiven)}</b>,
+   Interest: <b>${l.interestRate != null ? l.interestRate + "%" : fmt(l.expectedInterest)}</b>,
+   Principal Left: <b>${fmt(pLeft)}</b>,
+   Interest Left: <b>${fmt(iLeft)}</b>,
+   Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
+ </div>
+`;
           }).join("")}
       </div>
     `;
