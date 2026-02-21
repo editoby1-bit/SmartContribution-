@@ -3500,11 +3500,17 @@ function refreshAfterTransaction() {
   }
 
   function refreshCustomerProfile() {
-  // Use the real tab switcher so the modal body is rebuilt correctly
+  // ✅ Always re-render through the real tab router
+  // so content loads immediately (no “highlight only” state)
   if (typeof setActiveTab === "function") {
-    setActiveTab("profile");
+    window.forceModalTab = "profile";
+    setTimeout(() => setActiveTab("profile"), 0);
     return;
   }
+
+  // fallback (if setActiveTab doesn't exist)
+  if (typeof renderProfileTab === "function") renderProfileTab();
+}
 
   // Fallback (if setActiveTab doesn't exist)
   renderProfileTab?.();
@@ -5284,12 +5290,19 @@ renderDashboardApprovals();
 renderCustomers();
 renderAudit();
 renderDashboard();
-
-// ✅ force customer modal tabs to re-render instantly (Profile + Tools)
+// ✅ force customer modal tabs to re-render instantly (no empty profile bug)
 if (window.activeCustomerId === cust.id) {
+  // clear any stale approval focus
   window.activeApprovalId = null;
-  if (typeof renderToolsTab === "function") renderToolsTab();
-  if (typeof refreshCustomerProfile === "function") refreshCustomerProfile();
+
+  // 🔥 ALWAYS re-route through tab system (not manual render)
+  if (typeof setActiveTab === "function") {
+    window.forceModalTab = "profile";
+    setTimeout(() => setActiveTab("profile"), 0);
+  } else if (typeof refreshCustomerProfile === "function") {
+    // fallback safety
+    refreshCustomerProfile();
+  }
 }
 
 closeTxModal();
