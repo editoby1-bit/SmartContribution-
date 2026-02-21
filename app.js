@@ -3489,7 +3489,14 @@ function refreshAfterTransaction() {
   }
 
   function refreshCustomerProfile() {
-  renderProfileTab();
+  // Use the real tab switcher so the modal body is rebuilt correctly
+  if (typeof setActiveTab === "function") {
+    setActiveTab("profile");
+    return;
+  }
+
+  // Fallback (if setActiveTab doesn't exist)
+  renderProfileTab?.();
 
   const tabs = document.querySelectorAll(".tab-btn");
   tabs.forEach(t => t.classList.remove("active"));
@@ -3695,9 +3702,9 @@ window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
       return;
     }
 
-    const amtRaw = box.querySelector("#empAmt").value;
-    const purposeRaw = box.querySelector("#empPurpose").value;
-    const rateRaw = box.querySelector("#empInterestRate").value;
+    const amtRaw = box.querySelector("#empAmt")?.value;
+    const purposeRaw = box.querySelector("#empPurpose")?.value;
+    const rateRaw = box.querySelector("#empInterestRate")?.value;
 
     const amount = Number(amtRaw || 0);
     const purpose = (purposeRaw || "").trim();
@@ -3706,9 +3713,9 @@ window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
     const interestRate = Number(rateRaw || 0);
 
     // preserve for next loop
-    lastAmount = amtRaw;
-    lastPurpose = purposeRaw;
-    lastInterestRate = rateRaw;
+    lastAmount = amtRaw || "";
+    lastPurpose = purposeRaw || "";
+    lastInterestRate = rateRaw || "";
 
     if (amount <= 0) {
       showToast("Enter a valid amount");
@@ -3731,14 +3738,20 @@ window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
       continue;
     }
 
+    // ✅ CRITICAL: keep engine stable by sending naira interest too
+    const interest = Math.round((amount * interestRate) / 100);
+
     await processTransaction({
       type: "empowerment",
       customerId: c.id,
       amount,
       desc: purpose,
 
-      // ✅ NEW: send rate, not amount
-      interestRate
+      // for display/reference
+      interestRate,
+
+      // for existing approval + loan engine
+      interest
     });
 
     break;
