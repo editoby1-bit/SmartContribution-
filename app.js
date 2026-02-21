@@ -3126,13 +3126,23 @@ function renderProfileTab() {
             const iLeft = Number(l.expectedInterest || 0) - Number(l.interestRepaid || 0);
             const totalLeft = (pLeft > 0 ? pLeft : 0) + (iLeft > 0 ? iLeft : 0);
             const d = new Date(l.createdAt || l.date || Date.now());
-            
+            const rate =
+  (l.interestRate !== undefined && l.interestRate !== null && l.interestRate !== "")
+    ? Number(l.interestRate)
+    : (Number(l.principalGiven || 0) > 0
+        ? (Number(l.expectedInterest || 0) / Number(l.principalGiven || 0)) * 100
+        : null);
+
+const rateText =
+  (rate === null || isNaN(rate))
+    ? fmt(l.expectedInterest)
+    : (Math.round(rate * 100) / 100) + "%"; // keeps 7.5% etc
 
            return `
  <div class="small" style="margin-top:6px">
    ${isNaN(d) ? "Unknown Date" : d.toLocaleString()} —
    Given: <b>${fmt(l.principalGiven)}</b>,
-   Interest: <b>${l.interestRate != null ? l.interestRate + "%" : fmt(l.expectedInterest)}</b>,
+   Interest: <b>${rateText}</b>,
    Principal Left: <b>${fmt(pLeft)}</b>,
    Interest Left: <b>${fmt(iLeft)}</b>,
    Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
@@ -3155,33 +3165,6 @@ function renderProfileTab() {
     };
   }
 }
-
-function refreshCustomerProfile(options = {}) {
-  const { keepTab = true } = options;
-
-  // modal must be open and a customer selected
-  if (!window.activeCustomerId) return;
-
-  // Re-render current active tab content safely
-  // If your app uses setActiveTab to render tabs, use it.
-  const currentTab = document.querySelector(".tab-btn.active")?.dataset?.tab || "profile";
-
-  if (typeof setActiveTab === "function") {
-    setActiveTab(keepTab ? currentTab : "profile");
-  } else {
-    // fallback: at least refresh profile body
-    if (typeof renderProfileTab === "function") renderProfileTab();
-
-    // keep tab highlight consistent
-    const tabs = document.querySelectorAll(".tab-btn");
-    tabs.forEach(t => t.classList.remove("active"));
-
-    const pick = document.querySelector(`.tab-btn[data-tab='${keepTab ? currentTab : "profile"}']`);
-    if (pick) pick.classList.add("active");
-  }
-}
-
-window.refreshCustomerProfile = refreshCustomerProfile;
 
   function setActiveTab(tab) {
   // 1️⃣ force tab highlight
@@ -3214,32 +3197,7 @@ window.refreshCustomerProfile = refreshCustomerProfile;
   }
 }
 
-function refreshCustomerProfile(options = {}) {
-  const { keepTab = true } = options;
 
-  // modal must be open and a customer selected
-  if (!window.activeCustomerId) return;
-
-  // Re-render current active tab content safely
-  // If your app uses setActiveTab to render tabs, use it.
-  const currentTab = document.querySelector(".tab-btn.active")?.dataset?.tab || "profile";
-
-  if (typeof setActiveTab === "function") {
-    setActiveTab(keepTab ? currentTab : "profile");
-  } else {
-    // fallback: at least refresh profile body
-    if (typeof renderProfileTab === "function") renderProfileTab();
-
-    // keep tab highlight consistent
-    const tabs = document.querySelectorAll(".tab-btn");
-    tabs.forEach(t => t.classList.remove("active"));
-
-    const pick = document.querySelector(`.tab-btn[data-tab='${keepTab ? currentTab : "profile"}']`);
-    if (pick) pick.classList.add("active");
-  }
-}
-
-window.refreshCustomerProfile = refreshCustomerProfile;
 
   // profile tab
 function renderToolsTab() {
@@ -3541,7 +3499,24 @@ function refreshAfterTransaction() {
   }
   }
 
-  
+  function refreshCustomerProfile() {
+  // Use the real tab switcher so the modal body is rebuilt correctly
+  if (typeof setActiveTab === "function") {
+    setActiveTab("profile");
+    return;
+  }
+
+  // Fallback (if setActiveTab doesn't exist)
+  renderProfileTab?.();
+
+  const tabs = document.querySelectorAll(".tab-btn");
+  tabs.forEach(t => t.classList.remove("active"));
+
+  const profileTab = document.querySelector(".tab-btn[data-tab='profile']");
+  if (profileTab) profileTab.classList.add("active");
+}
+
+
   // transaction modal
   function openTransactionModal(txId, custId) {
     const c = state.customers.find((x) => x.id === custId);
@@ -3637,7 +3612,6 @@ function refreshAfterTransaction() {
       txBody.appendChild(dangerZone);
     }
   }
-  window.openTransactionModal = openTransactionModal;
   
   function closeTxModal() {
   const back = document.getElementById("txModalBack");
@@ -5045,45 +5019,65 @@ if (action === "approve" && app.type === "empowerment") {
 
   const principal = Number(app.amount || 0);
 
-  // ✅ Support both NEW (% based) and OLD (amount based) approvals
-  // New: app.interestRate (percent)
-  // Old: app.interest (amount)
-  const rate = Number(app.interestRate ?? app.rate ?? 0);
-  const legacyAmount = Number(app.interest ?? 0);
-
   if (isNaN(principal) || principal <= 0) {
     showToast("Invalid empowerment amount");
     return;
   }
 
-  let interestAmount = 0;
+  // ✅ Support both NEW (% based) and OLD (amount based) approvals
+  // New: app.interestRate (percent) OR app.payload.interestRate
+  // Old: app.interest (amount)
+  const rateRaw =
+    app.interestRate ??
+    app.rate ??
+    app.payload?.interestRate ??
+    app.payload?.rate ??
+    0;
 
+  const rate = Number(rateRaw);
+  const legacyAmount = Number(app.interest ?? app.payload?.interest ?? 0);
+
+  let interestAmount = 0;
+  let storedRate = undefined;
+
+  // Prefer percent if valid (>0)
   if (!isNaN(rate) && rate > 0) {
-    interestAmount = Math.round((principal * rate) / 100); // you can remove Math.round if you want decimals
+    interestAmount = (principal * rate) / 100;  // keep decimals internally
+    // If you want whole Naira only, uncomment next line:
+    // interestAmount = Math.round(interestAmount);
+    storedRate = rate;
   } else {
     // fallback for old approvals created before this change
     interestAmount = legacyAmount;
+    storedRate = undefined;
   }
 
-  if (interestAmount < 0 || isNaN(interestAmount)) {
+  if (isNaN(interestAmount) || interestAmount < 0) {
     showToast("Invalid empowerment interest");
     return;
   }
 
+  // ✅ normalize to number (avoid strings sneaking in)
+  interestAmount = Number(interestAmount);
+
   state.empowerments = state.empowerments || [];
 
+  // ✅ CREATE ONLY ONE LOAN RECORD FOR THIS APPROVAL
   state.empowerments.push({
     id: uid("emp"),
     customerId: cust.id,
     principalGiven: principal,
     principalRepaid: 0,
-    expectedInterest: interestAmount,   // ✅ still stored as AMOUNT (engine stays same)
-    interestRepaid: 0,
-    status: "active",
-    createdAt: app.processedAt,
 
-    // ✅ keep rate for reference (optional)
-    interestRate: (!isNaN(rate) && rate > 0) ? rate : undefined
+    // ✅ engine remains AMOUNT-based
+    expectedInterest: interestAmount,
+    interestRepaid: 0,
+
+    // ✅ store % if available (helps UI show %)
+    interestRate: storedRate,
+
+    status: "active",
+    createdAt: app.processedAt
   });
 
   // Keep history ONLY for display timeline
@@ -5093,8 +5087,8 @@ if (action === "approve" && app.type === "empowerment") {
   cust.empowerment.history.push({
     approvalId: app.id,
     principal,
-    interest: interestAmount, // amount
-    interestRate: (!isNaN(rate) && rate > 0) ? rate : undefined,
+    interest: interestAmount,   // amount
+    interestRate: storedRate,   // % (optional)
     date: app.processedAt,
     approvedBy: staff.name
   });
@@ -5111,7 +5105,9 @@ if (action === "approve" && app.type === "empowerment") {
   });
 
   save();
-  renderCustomers();
+
+  // ✅ Keep your existing refresh hooks
+  renderCustomers?.();
   if (typeof refreshCustomerProfile === "function") refreshCustomerProfile();
 }
 
@@ -5289,9 +5285,12 @@ renderCustomers();
 renderAudit();
 renderDashboard();
 
-// ✅ refresh customer modal Tools immediately
-window.activeApprovalId = null;
-if (typeof renderToolsTab === "function") renderToolsTab();
+// ✅ force customer modal tabs to re-render instantly (Profile + Tools)
+if (window.activeCustomerId === cust.id) {
+  window.activeApprovalId = null;
+  if (typeof renderToolsTab === "function") renderToolsTab();
+  if (typeof refreshCustomerProfile === "function") refreshCustomerProfile();
+}
 
 closeTxModal();
 
@@ -5348,6 +5347,7 @@ showToast(
       console.error("chart err", e);
     }
   }
+
   function updateChartData() {
      if (!chartWeek) return;
     const data = [0, 0, 0, 0, 0, 0, 0];
