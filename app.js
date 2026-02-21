@@ -3499,22 +3499,25 @@ function refreshAfterTransaction() {
   }
   }
 
-  function refreshCustomerProfile() {
-  // Use the real tab switcher so the modal body is rebuilt correctly
-  if (typeof setActiveTab === "function") {
-    setActiveTab("profile");
-    return;
-  }
+  function refreshCustomerProfile(forceTab = "profile") {
+  // Only run if customer modal is open
+  const modalBack = document.getElementById("custModalBack");
+  if (!modalBack || modalBack.style.display !== "flex") return;
 
-  // Fallback (if setActiveTab doesn't exist)
-  renderProfileTab?.();
+  // Force the tab to truly render (not just highlight)
+  window.forceModalTab = forceTab;
 
-  const tabs = document.querySelectorAll(".tab-btn");
-  tabs.forEach(t => t.classList.remove("active"));
-
-  const profileTab = document.querySelector(".tab-btn[data-tab='profile']");
-  if (profileTab) profileTab.classList.add("active");
+  // Ensure DOM is ready before switching tab
+  setTimeout(() => {
+    if (typeof setActiveTab === "function") {
+      setActiveTab(forceTab);   // ✅ this renders + highlights correctly
+    } else {
+      // fallback: at least render profile content
+      if (typeof renderProfileTab === "function") renderProfileTab();
+    }
+  }, 0);
 }
+window.refreshCustomerProfile = refreshCustomerProfile;
 
 
   // transaction modal
@@ -3612,6 +3615,7 @@ function refreshAfterTransaction() {
       txBody.appendChild(dangerZone);
     }
   }
+  window.openTransactionModal = openTransactionModal;
   
   function closeTxModal() {
   const back = document.getElementById("txModalBack");
@@ -5285,11 +5289,10 @@ renderCustomers();
 renderAudit();
 renderDashboard();
 
-// ✅ force customer modal tabs to re-render instantly (Profile + Tools)
+// ✅ force customer modal to render Profile correctly after approval
 if (window.activeCustomerId === cust.id) {
   window.activeApprovalId = null;
-  if (typeof renderToolsTab === "function") renderToolsTab();
-  if (typeof refreshCustomerProfile === "function") refreshCustomerProfile();
+  refreshCustomerProfile("profile");     // ✅ calls setActiveTab internally now
 }
 
 closeTxModal();
