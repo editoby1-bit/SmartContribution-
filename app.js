@@ -3156,6 +3156,33 @@ function renderProfileTab() {
   }
 }
 
+function refreshCustomerProfile(options = {}) {
+  const { keepTab = true } = options;
+
+  // modal must be open and a customer selected
+  if (!window.activeCustomerId) return;
+
+  // Re-render current active tab content safely
+  // If your app uses setActiveTab to render tabs, use it.
+  const currentTab = document.querySelector(".tab-btn.active")?.dataset?.tab || "profile";
+
+  if (typeof setActiveTab === "function") {
+    setActiveTab(keepTab ? currentTab : "profile");
+  } else {
+    // fallback: at least refresh profile body
+    if (typeof renderProfileTab === "function") renderProfileTab();
+
+    // keep tab highlight consistent
+    const tabs = document.querySelectorAll(".tab-btn");
+    tabs.forEach(t => t.classList.remove("active"));
+
+    const pick = document.querySelector(`.tab-btn[data-tab='${keepTab ? currentTab : "profile"}']`);
+    if (pick) pick.classList.add("active");
+  }
+}
+
+window.refreshCustomerProfile = refreshCustomerProfile;
+
   function setActiveTab(tab) {
   // 1️⃣ force tab highlight
   $$(".tab-btn").forEach(b =>
@@ -3585,6 +3612,7 @@ function refreshAfterTransaction() {
       txBody.appendChild(dangerZone);
     }
   }
+  window.openTransactionModal = openTransactionModal;
   
   function closeTxModal() {
   const back = document.getElementById("txModalBack");
