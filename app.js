@@ -3630,7 +3630,7 @@ window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
 
   let lastAmount = "";
   let lastPurpose = "";
-  let lastInterest = "";
+  let lastInterestRate = ""; // percent
 
   while (true) {
     const box = document.createElement("div");
@@ -3639,11 +3639,15 @@ window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
 
       <div style="margin-top:8px">
         <input id="empAmt" class="input" placeholder="Amount" value="${lastAmount}"/>
-        <input id="empInterest" class="input" placeholder="Interest (₦)" value="${lastInterest}"/>
+        <input id="empInterestRate" class="input" placeholder="Interest (%)" value="${lastInterestRate}"/>
       </div>
 
       <div style="margin-top:8px">
         <input id="empPurpose" class="input" placeholder="Purpose (required)" value="${lastPurpose}"/>
+      </div>
+
+      <div class="small muted" style="margin-top:8px">
+        Example: 10 means 10% of the amount.
       </div>
     `;
 
@@ -3655,16 +3659,18 @@ window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
 
     const amtRaw = box.querySelector("#empAmt").value;
     const purposeRaw = box.querySelector("#empPurpose").value;
-    const interestRaw = box.querySelector("#empInterest").value;
+    const rateRaw = box.querySelector("#empInterestRate").value;
 
     const amount = Number(amtRaw || 0);
     const purpose = (purposeRaw || "").trim();
-    const interest = Number(interestRaw || 0);
+
+    // allow decimals like 7.5
+    const interestRate = Number(rateRaw || 0);
 
     // preserve for next loop
     lastAmount = amtRaw;
     lastPurpose = purposeRaw;
-    lastInterest = interestRaw;
+    lastInterestRate = rateRaw;
 
     if (amount <= 0) {
       showToast("Enter a valid amount");
@@ -3676,8 +3682,14 @@ window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
       continue;
     }
 
-    if (interest < 0) {
-      showToast("Interest cannot be negative");
+    if (isNaN(interestRate) || interestRate < 0) {
+      showToast("Enter a valid interest percentage");
+      continue;
+    }
+
+    // optional guard (edit if you want to allow >100%)
+    if (interestRate > 100) {
+      showToast("Interest % cannot exceed 100");
       continue;
     }
 
@@ -3686,10 +3698,11 @@ window.refreshEmpowermentDrilldownHeader = refreshEmpowermentDrilldownHeader;
       customerId: c.id,
       amount,
       desc: purpose,
-      interest
+
+      // ✅ NEW: send rate, not amount
+      interestRate
     });
 
-    // ✅ success: exit loop and ensure closed
     break;
   }
 
@@ -4937,32 +4950,53 @@ app.status = action === "approve" ? "approved" : "rejected";
   app.processedBy = staff.name;
   app.processedAt = new Date().toISOString();
 // =========================
-// APPLY EMPOWERMENT APPROVAL (NEGATIVE BALANCE)
+// APPLY EMPOWERMENT APPROVAL (INTEREST AS %)
 // =========================
 if (action === "approve" && app.type === "empowerment") {
 
   const principal = Number(app.amount || 0);
-  const interestAmount = Number(app.interest || 0);
 
-  if (isNaN(principal) || isNaN(interestAmount)) {
-    showToast("Invalid empowerment figures");
+  // ✅ Support both NEW (% based) and OLD (amount based) approvals
+  // New: app.interestRate (percent)
+  // Old: app.interest (amount)
+  const rate = Number(app.interestRate ?? app.rate ?? 0);
+  const legacyAmount = Number(app.interest ?? 0);
+
+  if (isNaN(principal) || principal <= 0) {
+    showToast("Invalid empowerment amount");
+    return;
+  }
+
+  let interestAmount = 0;
+
+  if (!isNaN(rate) && rate > 0) {
+    interestAmount = Math.round((principal * rate) / 100); // you can remove Math.round if you want decimals
+  } else {
+    // fallback for old approvals created before this change
+    interestAmount = legacyAmount;
+  }
+
+  if (interestAmount < 0 || isNaN(interestAmount)) {
+    showToast("Invalid empowerment interest");
     return;
   }
 
   state.empowerments = state.empowerments || [];
 
-  // ✅ CREATE ONLY ONE LOAN
   state.empowerments.push({
     id: uid("emp"),
     customerId: cust.id,
     principalGiven: principal,
     principalRepaid: 0,
-    expectedInterest: interestAmount,
+    expectedInterest: interestAmount,   // ✅ still stored as AMOUNT (engine stays same)
     interestRepaid: 0,
     status: "active",
-    createdAt: app.processedAt
+    createdAt: app.processedAt,
+
+    // ✅ keep rate for reference (optional)
+    interestRate: (!isNaN(rate) && rate > 0) ? rate : undefined
   });
-  
+
   // Keep history ONLY for display timeline
   cust.empowerment = cust.empowerment || {};
   cust.empowerment.history = cust.empowerment.history || [];
@@ -4970,25 +5004,28 @@ if (action === "approve" && app.type === "empowerment") {
   cust.empowerment.history.push({
     approvalId: app.id,
     principal,
-    interest: interestAmount,
+    interest: interestAmount, // amount
+    interestRate: (!isNaN(rate) && rate > 0) ? rate : undefined,
     date: app.processedAt,
     approvedBy: staff.name
   });
+
   // Record empowerment disbursement as transaction for reporting
-state.transactions = state.transactions || [];
-state.transactions.push({
-  id: uid("tx"),
-  type: "empowerment_disbursement",
-  amount: principal,
-  date: app.processedAt,
-  desc: "Empowerment Granted",
-  customerId: cust.id
-});
+  state.transactions = state.transactions || [];
+  state.transactions.push({
+    id: uid("tx"),
+    type: "empowerment_disbursement",
+    amount: principal,
+    date: app.processedAt,
+    desc: "Empowerment Granted",
+    customerId: cust.id
+  });
 
   save();
   renderCustomers();
   if (typeof refreshCustomerProfile === "function") refreshCustomerProfile();
 }
+
 // =========================
 // WITHDRAW APPROVAL (ALLOW NEGATIVE)
 // =========================
