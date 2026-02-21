@@ -2972,92 +2972,100 @@ function renderProfileTab() {
   // =========================
   const loans = (state.empowerments || []).filter(e => e.customerId === c.id);
 
+  // ✅ compute totals across ALL active loans (single source of truth for profile)
+  const empTotals = (() => {
+    const active = loans.filter(l => l.status !== "completed");
+
+    const principalLeft = active.reduce((sum, l) => {
+      const left = Number(l.principalGiven || 0) - Number(l.principalRepaid || 0);
+      return sum + (left > 0 ? left : 0);
+    }, 0);
+
+    const interestLeft = active.reduce((sum, l) => {
+      const left = Number(l.expectedInterest || 0) - Number(l.interestRepaid || 0);
+      return sum + (left > 0 ? left : 0);
+    }, 0);
+
+    return {
+      principalLeft,
+      interestLeft,
+      outstanding: principalLeft + interestLeft
+    };
+  })();
+
   // 🔑 get pending approvals
-  const pendingApprovals = state.approvals
+  const pendingApprovals = (state.approvals || [])
     .filter(a => a.customerId === c.id && a.status === "pending")
     .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
 
   const latestApproval = pendingApprovals[0];
 
   let html = `
- <div class="card" style="margin-bottom:12px">
-   <div style="display:flex;gap:14px;align-items:center">
+<div class="card" style="margin-bottom:12px">
+  <div style="display:flex;gap:14px;align-items:center">
 
-     <!-- CUSTOMER PHOTO -->
-     ${
-       c.photo
-         ? `<img src="${c.photo}" 
-                 style="width:80px;height:80px;border-radius:12px;
-                        object-fit:cover;border:2px solid #e5e7eb;">`
-         : `<div style="width:80px;height:80px;border-radius:12px;
-                        background:#f3f4f6;display:flex;
-                        align-items:center;justify-content:center;
-                        color:#9ca3af;font-size:12px">
-              No Photo
-            </div>`
-     }
+    <!-- CUSTOMER PHOTO -->
+    ${
+      c.photo
+        ? `<img src="${c.photo}"
+                style="width:80px;height:80px;border-radius:12px;
+                       object-fit:cover;border:2px solid #e5e7eb;">`
+        : `<div style="width:80px;height:80px;border-radius:12px;
+                       background:#f3f4f6;display:flex;
+                       align-items:center;justify-content:center;
+                       color:#9ca3af;font-size:12px">
+             No Photo
+           </div>`
+    }
 
-     <!-- CUSTOMER DETAILS -->
-     <div>
-       <h4 style="margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-  <span>${c.name}</span>
+    <!-- CUSTOMER DETAILS -->
+    <div>
+      <h4 style="margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span>${c.name}</span>
 
-  ${
-    c.archived
-      ? `<span class="badge" style="background:#f3f4f6;color:#374151">REMOVED</span>`
-      : (c.status === "closed"
-          ? `<span class="badge" style="background:#fee2e2;color:#991b1b">CLOSED</span>`
-          : (c.frozen
-              ? `<span class="badge" style="background:#e0f2fe;color:#075985">FROZEN</span>`
-              : ""))
-  }
-</h4>
-       <div class="small">Account No: ${c.accountNumber || "—"}</div>
-       <div class="small">Customer ID: ${c.id}</div>
-       <div class="small">Phone: ${c.phone || "—"}</div>
-       <div class="small">NIN: ${c.nin || "—"}</div>
-       <div class="small">Address: ${c.address || "—"}</div>
-     </div>
+        ${
+          c.archived
+            ? `<span class="badge" style="background:#f3f4f6;color:#374151">REMOVED</span>`
+            : (c.status === "closed"
+                ? `<span class="badge" style="background:#fee2e2;color:#991b1b">CLOSED</span>`
+                : (c.frozen
+                    ? `<span class="badge" style="background:#e0f2fe;color:#075985">FROZEN</span>`
+                    : ""))
+        }
+      </h4>
 
-   </div>
- </div>
+      <div class="small">Account No: ${c.accountNumber || "—"}</div>
+      <div class="small">Customer ID: ${c.id}</div>
+      <div class="small">Phone: ${c.phone || "—"}</div>
+      <div class="small">NIN: ${c.nin || "—"}</div>
+      <div class="small">Address: ${c.address || "—"}</div>
+    </div>
+
+  </div>
+</div>
 `;
 
-html += `
- <div class="card" style="margin-bottom:12px">
-   <div class="kv">
-     <div class="kv-label">Account Balance</div>
-     <div class="kv-value">${fmt(savingsBalance)}</div>
-   </div>
- `;
-
-  // =========================
-  // EMPOWERMENT BALANCE (NEGATIVE)
-  // =========================
- const activeLoan = loans.find(l => l.status !== "completed");
-
-if (activeLoan) {
-  const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
-
-  const totalInterestLeft = (() => {
-    return loans.reduce((sum, e) => {
-      if (e.status === "completed") return sum;
-      const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
-      return sum + (remaining > 0 ? remaining : 0);
-    }, 0);
-  })();
-
-  const totalOutstanding = principalLeft + totalInterestLeft;
-
   html += `
-    <div class="kv" style="margin-top:6px">
-      <div class="kv-label">Empowerment Balance</div>
-      <div class="kv-value" style="color:#b42318">
-        -${fmt(totalOutstanding)}
+<div class="card" style="margin-bottom:12px">
+  <div class="kv">
+    <div class="kv-label">Account Balance</div>
+    <div class="kv-value">${fmt(savingsBalance)}</div>
+  </div>
+`;
+
+  // =========================
+  // EMPOWERMENT BALANCE (NEGATIVE) — INCLUDE INTEREST
+  // =========================
+  if (empTotals.outstanding > 0) {
+    html += `
+      <div class="kv" style="margin-top:6px">
+        <div class="kv-label">Empowerment Balance</div>
+        <div class="kv-value" style="color:#b42318">
+          -${fmt(empTotals.outstanding)}
+        </div>
       </div>
-    </div>
-  `;
-}
+    `;
+  }
 
   html += `</div>`;
 
@@ -3065,6 +3073,13 @@ if (activeLoan) {
   // PENDING APPROVAL CARD
   // =========================
   if (latestApproval) {
+    const aAmt = Number(
+      latestApproval.amount ??
+      latestApproval.payload?.amount ??
+      latestApproval.payload?.principal ??
+      0
+    );
+
     html += `
       <div class="card warning" style="
         margin:12px 0;
@@ -3074,11 +3089,11 @@ if (activeLoan) {
         <div class="small"><b>Pending Approval</b></div>
 
         <div class="small" style="margin-top:6px">
-          ${latestApproval.type.toUpperCase()} — ${fmt(latestApproval.amount)}
+          ${latestApproval.type.toUpperCase()} — ${fmt(aAmt)}
         </div>
 
         <div class="small muted">
-          Requested by: ${latestApproval.requestedBy}
+          Requested by: ${latestApproval.requestedByName || latestApproval.requestedBy || "—"}
         </div>
 
         <div class="small muted">
@@ -3098,30 +3113,31 @@ if (activeLoan) {
   }
 
   // =========================
-  // EMPOWERMENT HISTORY
+  // EMPOWERMENT HISTORY — SHOW INTEREST LEFT
   // =========================
   if (loans.length > 0) {
     html += `
       <div class="card" style="margin-top:12px">
         <h4>Empowerment History</h4>
         ${loans
-  .sort((a,b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0))
-  .map(l => {
-    const pLeft = l.principalGiven - l.principalRepaid;
-    const iLeft = l.expectedInterest - l.interestRepaid;
-    const totalLeft = pLeft + iLeft;
-    const d = new Date(l.createdAt || l.date || Date.now());
+          .sort((a,b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0))
+          .map(l => {
+            const pLeft = Number(l.principalGiven || 0) - Number(l.principalRepaid || 0);
+            const iLeft = Number(l.expectedInterest || 0) - Number(l.interestRepaid || 0);
+            const totalLeft = (pLeft > 0 ? pLeft : 0) + (iLeft > 0 ? iLeft : 0);
+            const d = new Date(l.createdAt || l.date || Date.now());
 
-   return `
-  <div class="small" style="margin-top:6px">
-    ${isNaN(d) ? "Unknown Date" : d.toLocaleString()} —
-    Given: <b>${fmt(l.principalGiven)}</b>,
-    Interest: <b>${fmt(l.expectedInterest)}</b>,
-    Principal Left: <b>${fmt(pLeft)}</b>,
-    Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
-  </div>
-`;
-  }).join("")}
+            return `
+              <div class="small" style="margin-top:6px">
+                ${isNaN(d) ? "Unknown Date" : d.toLocaleString()} —
+                Given: <b>${fmt(l.principalGiven)}</b>,
+                Interest: <b>${fmt(l.expectedInterest)}</b>,
+                Principal Left: <b>${fmt(pLeft > 0 ? pLeft : 0)}</b>,
+                Interest Left: <b>${fmt(iLeft > 0 ? iLeft : 0)}</b>,
+                Outstanding: <b style="color:${totalLeft>0?'#b42318':'#027a48'}">${fmt(totalLeft)}</b>
+              </div>
+            `;
+          }).join("")}
       </div>
     `;
   }
@@ -3199,6 +3215,26 @@ function renderToolsTab() {
   if (approval && canAct) {
     const reqAt = approval.requestedAt || approval.createdAt;
     const reqBy = approval.requestedByName || approval.requestedBy || approval.createdByName || approval.createdBy || "—";
+    // 🔥 RESOLVE AMOUNT PROPERLY (Tools tab was missing this)
+  const baseAmount = Number(
+    approval.amount ??
+    approval.payload?.amount ??
+    approval.payload?.principal ??
+    0
+  );
+
+  // 🔥 Support empowerment interest display
+  const interestAmount = Number(
+    approval.interest ??
+    approval.payload?.interest ??
+    0
+  );
+
+  // 🔥 Final amount to show in Tools (matches Profile behavior)
+  const displayAmount =
+    approval.type === "empowerment"
+      ? (baseAmount + interestAmount)
+      : baseAmount;
 
     // maintenance summary (so you see patch)
     let summary = "";
@@ -3240,7 +3276,9 @@ function renderToolsTab() {
           </div>
         ` : ""}
 
-        <div class="small"><b>${approval.type.toUpperCase()}</b></div>
+        <div class="small" style="margin-top:6px">
+  ${approval.type.toUpperCase()} — ${fmt(displayAmount)}
+</div>
         <div class="small muted">Requested by: ${reqBy}</div>
         <div class="small muted">${reqAt ? new Date(reqAt).toLocaleString() : "—"}</div>
 
@@ -3751,7 +3789,8 @@ function openCreditAllocationModal(cust, amount) {
       const principalLeft = activeLoan.principalGiven - activeLoan.principalRepaid;
       const interestLeft = (state.empowerments || []).reduce((sum, e) => {
   if (e.status === "completed") return sum;
-  const remaining = (e.expectedInterest || 0) - (e.interestRepaid || 0);
+  if (e.customerId !== cust.id) return sum; // ✅ critical filter
+  const remaining = Number(e.expectedInterest || 0) - Number(e.interestRepaid || 0);
   return sum + (remaining > 0 ? remaining : 0);
 }, 0);
       maxEmp = principalLeft + interestLeft;
