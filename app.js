@@ -5110,9 +5110,16 @@ if (action === "approve" && app.type === "empowerment") {
 
   save();
 
-  // ✅ Keep your existing refresh hooks
-  renderCustomers?.();
-  if (typeof refreshCustomerProfile === "function") refreshCustomerProfile();
+// ✅ Keep your existing refresh hooks
+renderCustomers?.();
+if (typeof refreshCustomerProfile === "function") refreshCustomerProfile();
+
+// ✅ AFTER EMPOWERMENT APPROVAL: switch modal back to PROFILE immediately
+if (typeof activeCustomerId !== "undefined" && activeCustomerId === cust.id) {
+  window.activeApprovalId = null;        // clears Tools “pending approval” focus
+  window.forceModalTab = "profile";      // makes future modal openings default to profile
+  if (typeof setActiveTab === "function") setActiveTab("profile"); // immediate switch + render
+}
 }
 
 // =========================
