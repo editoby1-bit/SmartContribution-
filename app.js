@@ -3334,6 +3334,10 @@ function renderToolsTab() {
    Customer Service & Maintenance
  </button>
 
+ <button class="btn danger" onclick="requestRemoveCustomerFromList('${c.id}')">
+ Delete
+</button>
+
   <button class="btn danger" onclick="confirmAccountClosure('${c.id}')">
     Account Closure
   </button>
@@ -3519,6 +3523,96 @@ function refreshAfterTransaction() {
 }
 window.refreshCustomerProfile = refreshCustomerProfile;
 
+async function requestRemoveCustomerFromList(customerId) {
+  const c = (state.customers || []).find(x => x.id === customerId);
+  if (!c) return showToast("Customer not found");
+
+  if (c.archived) {
+    showToast("Customer already removed from list");
+    return;
+  }
+
+  const staff = currentStaff?.();
+  if (!staff) return showToast("Select staff");
+
+  // Confirm
+  const ok = await openModalGeneric(
+    "Delete Customer (Remove from List)",
+    `
+      <div class="small">
+        You are about to <b>remove</b> <b>${c.name}</b> (Acct: <b>${c.accountNumber || "—"}</b>)
+        from the customer list.<br/><br/>
+        <b>Note:</b> Records will remain for audit and statements.
+      </div>
+    `,
+    "Send Request",
+    true
+  );
+  if (!ok) return;
+
+  // Ask for reason (required)
+  const box = document.createElement("div");
+  box.innerHTML = `
+    <div class="small">
+      Reason / Note <span class="req">*</span>
+    </div>
+    <textarea id="delReason" class="input" style="height:90px" placeholder="Why are you removing this customer from list?"></textarea>
+  `;
+
+  const ok2 = await openModalGeneric("Reason Required", box, "Submit", true);
+  if (!ok2) return;
+
+  const reason = (box.querySelector("#delReason")?.value || "").trim();
+  if (!reason) return showToast("Reason is required");
+
+  const now = new Date().toISOString();
+
+  const patch = {
+    archived: true,
+    archivedAt: now
+  };
+
+  state.approvals = state.approvals || [];
+  state.approvals.unshift({
+    id: uid("ap"),
+    type: "customer_maintenance",
+    status: "pending",
+
+    requestedAt: now,
+    requestedBy: staff.id,
+    requestedByName: staff.name,
+
+    createdAt: now,
+    createdBy: staff.id,
+    createdByName: staff.name,
+
+    customerId: c.id,
+    customerName: c.name,
+    accountNumber: c.accountNumber,
+    amount: 0,
+
+    payload: {
+      customerId: c.id,
+      accountNumber: c.accountNumber,
+      customerName: c.name,
+      action: "hide",     // ✅ your handleApprovalAction already supports hide/restore
+      reason,
+      patch
+    }
+  });
+
+  await pushAudit(
+    staff.name,
+    staff.role,
+    "customer_remove_from_list_requested",
+    { customerId: c.id, action: "hide", reason }
+  );
+
+  save?.();
+  renderApprovals?.();
+  showToast("Delete request sent for approval");
+}
+window.requestRemoveCustomerFromList = requestRemoveCustomerFromList;
 
   // transaction modal
   function openTransactionModal(txId, custId) {
