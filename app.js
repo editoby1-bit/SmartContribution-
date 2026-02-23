@@ -8142,12 +8142,13 @@ window.updateAccountTotals = updateAccountTotals;
 
     if (okBtn) {
   okBtn.onclick = (e) => {
+    e.preventDefault();
     e.stopPropagation();
 
-    // ✅ BLOCK submit if validateFn says no
+    // ✅ Run validation (if provided). If it fails, do NOT resolve/close.
     if (typeof validateFn === "function") {
-      const pass = validateFn();
-      if (pass === false) return; // keep modal open
+      const passed = validateFn();
+      if (!passed) return; // keep modal open
     }
 
     // 🔥 DO NOT auto close — let caller decide
