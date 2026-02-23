@@ -1485,7 +1485,7 @@ function renderApprovals() {
   const isApprover = staff && canApprove(); // manager or CEO
 
   const pending = state.approvals
-  .filter(a => a.status === "pending" && a.type !== "customer_creation")
+  .filter(a => a.status === "pending")
     .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
 
   if (pending.length === 0) {
@@ -1496,7 +1496,10 @@ function renderApprovals() {
   let html = "";
 
   pending.forEach(a => {
-    const cust = state.customers.find(c => c.id === a.customerId);
+    const cust =
+  (a.type === "customer_creation")
+    ? { name: a.payload?.name || "New Customer" }
+    : state.customers.find(c => c.id === a.customerId);
 
     html += `
       <div class="approval-item card" style="margin-bottom:10px">
@@ -8138,19 +8141,19 @@ window.updateAccountTotals = updateAccountTotals;
     };
 
     if (okBtn) {
-      okBtn.onclick = (e) => {
-        e.stopPropagation();
+  okBtn.onclick = (e) => {
+    e.stopPropagation();
 
-        // ✅ VALIDATION GATE: do NOT resolve if invalid
-        if (typeof validateFn === "function") {
-          const valid = validateFn();
-          if (!valid) return; // keep modal open
-        }
-
-        cleanup();
-        resolve(true);
-      };
+    // ✅ BLOCK submit if validateFn says no
+    if (typeof validateFn === "function") {
+      const pass = validateFn();
+      if (pass === false) return; // keep modal open
     }
+
+    // 🔥 DO NOT auto close — let caller decide
+    resolve(true);
+  };
+}
 
     if (showCancel) {
       cancelBtn.onclick = (e) => {
@@ -8494,31 +8497,7 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     const address = (addressInput?.value || "").trim();
     const bal = Number((balInput?.value || "0").trim() || 0);
 
-    if (!name) {
-      nameInput.classList.add("invalid");
-      nameInput.focus();
-      showToast("Full name is required");
-      return;
-    }
-    if (!phone) {
-      phoneInput.classList.add("invalid");
-      phoneInput.focus();
-      showToast("Phone number is required");
-      return;
-    }
-    if (!nin) {
-      ninInput.classList.add("invalid");
-      ninInput.focus();
-      showToast("NIN is required");
-      return;
-    }
-    if (!address) {
-      addressInput.classList.add("invalid");
-      addressInput.focus();
-      showToast("Address is required");
-      return;
-    }
-
+   
     // Photo source: uploaded OR camera OR stored preview base64
     let photoBase64 = "";
     const uploadedFile = photoInput?.files?.[0];
@@ -8529,10 +8508,7 @@ document.getElementById("btnNew").addEventListener("click", async () => {
       showPreview(photoBase64);
     } else if (window.capturedKycPhoto) {
       photoBase64 = window.capturedKycPhoto;
-    } else {
-      showToast("Customer photo is required");
-      return;
-    }
+    } 
 
     // Review modal
     const review = document.createElement("div");
