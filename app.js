@@ -8477,7 +8477,64 @@ document.getElementById("btnNew").addEventListener("click", async () => {
     }
 
     // Open main form modal
-    const ok = await openModalGeneric("Open Customer Account", formWrapper, "Create", true);
+    const ok = await openModalGeneric(
+  "Open Customer Account",
+  formWrapper,
+  "Create",
+  true,
+  () => {
+    const nameEl = formWrapper.querySelector("#nName");
+    const phoneEl = formWrapper.querySelector("#nPhone");
+    const ninEl = formWrapper.querySelector("#nNIN");
+    const addrEl = formWrapper.querySelector("#nAddress");
+
+    const name = (nameEl?.value || "").trim();
+    const phone = (phoneEl?.value || "").trim();
+    const nin = (ninEl?.value || "").trim();
+    const address = (addrEl?.value || "").trim();
+
+    // clear old invalid
+    [nameEl, phoneEl, ninEl, addrEl].forEach(el => el?.classList.remove("invalid"));
+
+    if (!name) {
+      nameEl?.classList.add("invalid");
+      nameEl?.focus();
+      showToast("Full name is required");
+      return false;
+    }
+    if (!phone) {
+      phoneEl?.classList.add("invalid");
+      phoneEl?.focus();
+      showToast("Phone number is required");
+      return false;
+    }
+    if (!nin) {
+      ninEl?.classList.add("invalid");
+      ninEl?.focus();
+      showToast("NIN is required");
+      return false;
+    }
+    if (!address) {
+      addrEl?.classList.add("invalid");
+      addrEl?.focus();
+      showToast("Address is required");
+      return false;
+    }
+
+    // photo: accept file OR captured
+    const photoEl = formWrapper.querySelector("#nPhoto");
+    const hasFile = !!photoEl?.files?.[0];
+    const hasCaptured = !!window.capturedKycPhoto;
+
+    if (!hasFile && !hasCaptured) {
+      showToast("Customer photo is required");
+      return false;
+    }
+
+    return true;
+  }
+);
+
     if (!ok) return;
 
     // Collect values
@@ -8610,45 +8667,22 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
       f.innerHTML =
         '<div class="small">Mobile contribution</div><div style="margin-top:8px"><input id="mobAmt" class="input" placeholder="Amount"/></div>';
       const ok = await openModalGeneric(
-  "Open Customer Account",
+  "Mobile contribution",
   f,
-  "Create",
+  "Submit",
   true,
   () => {
-    const name = f.querySelector("#nName").value.trim();
-    const phone = f.querySelector("#nPhone").value.trim();
-    const nin = f.querySelector("#nNIN").value.trim();
-    const address = f.querySelector("#nAddress").value.trim();
-    const photoFile = f.querySelector("#nPhoto").files[0];
-
-    if (!name) {
-      showToast("Full name is required");
+    const v = Number(f.querySelector("#mobAmt")?.value || 0);
+    if (v <= 0) {
+      showToast("Enter amount");
       return false;
     }
-    if (!phone) {
-      showToast("Phone number is required");
-      return false;
-    }
-    if (!nin) {
-      showToast("NIN is required");
-      return false;
-    }
-    if (!address) {
-      showToast("Address is required");
-      return false;
-    }
-    if (!photoFile) {
-      showToast("Customer photo is required");
-      return false;
-    }
-
-    return true; // ✅ modal closes ONLY when valid
+    return true;
   }
 );
 
       if (ok) {
         const v = Number(f.querySelector("#mobAmt").value || 0);
-        if (v <= 0) return showToast("Enter amount");
         const c = state.customers[0];
         c.balance += v;
         c.transactions.push({
