@@ -812,84 +812,36 @@ function createAccount(type, name) {
 }
 
 function createAccountEntry(accountId, type, amount, note, date) {
-  const staff = currentStaff();
-
-  // ✅ Allow staff to post (adjust roles if your app uses different names)
-  const allowedRoles = ["manager", "ceo", "admin", "teller", "approving_officer", "administrative_officer"];
-  if (!staff || !allowedRoles.includes(staff.role)) {
+  const staff = currentStaff?.();
+  if (!staff || !["manager", "ceo"].includes(staff.role)) {
     showToast("Not authorized");
     return false;
   }
 
-  if (!accountId) {
-    showToast("Account not found");
-    return false;
-  }
-
   const n = Number(amount || 0);
-  if (!isFinite(n) || n === 0) {
-    showToast("Enter a valid amount");
+  if (isNaN(n) || n === 0) {
+    showToast("Invalid amount");
     return false;
   }
 
   state.accountEntries = state.accountEntries || [];
-
-  const entry = {
-    id: uid("ent"),
+  state.accountEntries.unshift({
+    id: uid("op"),
     accountId,
-    entryType: type, // "income" | "expense"
-    amount: Math.abs(n),       // already signed in your saveAccountEntry()
+    type, // 'income' | 'expense'
+    amount: Math.abs(n), // ✅ store positive always
     note: (note || "").trim(),
     date: date || new Date().toISOString(),
-    actorId: staff.id,
-    actorName: staff.name,
-    actorRole: staff.role
-  };
+    createdBy: staff.name,
+    createdById: staff.id,
+    createdAt: new Date().toISOString()
+  });
 
-  state.accountEntries.unshift(entry);
-
-  // Optional audit (only if your pushAudit exists)
-  try {
-    if (typeof pushAudit === "function") {
-      pushAudit(
-        staff.name,
-        staff.role,
-        "account_entry",
-        JSON.stringify({ accountId, type, amount: Math.abs(n), note: entry.note })
-      );
-    }
-  } catch (e) {}
-
-  save?.();
   return true;
 }
 window.createAccountEntry = createAccountEntry;
+
   
-
-  amount = Number(amount);
-  if (!amount || amount <= 0) {
-    showToast("Invalid amount");
-    return;
-  }
-
-  const entry = {
-    id: uid("txn"),
-    accountId,
-    type, // "income" | "expense"
-    amount,
-    note: note?.trim() || "",
-    date,
-    createdBy: staff.name,
-    createdAt: new Date().toISOString()
-  };
-
- state.accountEntries.push(entry);
-save();
-renderAccounts(); // 🔥 THIS LINE ADDED
-showToast(`${type.toUpperCase()} entry recorded`);
-}
-
-
 function closeModal() {
   const modal = document.getElementById("accountEntryModal");
   if (modal) modal.style.display = "none";
@@ -934,51 +886,54 @@ function openAccountEntryModal(accountId, type)  {
 window.openAccountEntryModal = openAccountEntryModal;
 
 function saveAccountEntry(accountId, type) {
- const amount = Number(document.getElementById("entryAmount").value || 0);
- if (amount <= 0) return showToast("Enter a valid amount");
- const note = document.getElementById("entryNote").value || "";
- const date = new Date().toISOString();
+  const amount = Number(document.getElementById("entryAmount").value || 0);
+  if (amount <= 0) return showToast("Enter a valid amount");
 
- const signedAmount = type === "expense" ? -Math.abs(amount) : Math.abs(amount);
-createAccountEntry(accountId, type, signedAmount, note, date);
+  const note = document.getElementById("entryNote").value || "";
+  const date = new Date().toISOString();
 
- const acc = [...state.accounts.income, ...state.accounts.expense]
-   .find(a => a.id === accountId);
+  // ✅ store positive always
+  const ok = createAccountEntry(accountId, type, Math.abs(amount), note, date);
+  if (!ok) return;
 
- if (acc && acc.name && acc.name.toLowerCase().includes("empowerment")) {
+  const acc = [...state.accounts.income, ...state.accounts.expense]
+    .find(a => a.id === accountId);
 
-   if (type === "expense") {
-     state.empowerments.push({
-       id: crypto.randomUUID(),
-       amount: Math.abs(amount),
-       type: "given",
-       date
-     });
-   }
+  if (acc && acc.name && acc.name.toLowerCase().includes("empowerment")) {
+    state.empowerments = state.empowerments || [];
 
-   if (type === "income") {
-     state.empowerments.push({
-       id: crypto.randomUUID(),
-       amount: Math.abs(amount),
-       type: "returned",
-       date
-     });
-   }
- }
+    if (type === "expense") {
+      state.empowerments.push({
+        id: crypto.randomUUID(),
+        amount: Math.abs(amount),
+        type: "given",
+        date
+      });
+    }
 
- save();
- const back = document.getElementById("txModalBack");
-if (back) back.style.display = "none";
+    if (type === "income") {
+      state.empowerments.push({
+        id: crypto.randomUUID(),
+        amount: Math.abs(amount),
+        type: "returned",
+        date
+      });
+    }
+  }
 
- if (document.getElementById("opTxnList")) {
-   openOperationalDrilldown();
- } else {
-   renderOperationalTransactions();
-renderOperationalAccountLists();
-refreshOperationalHeader();
-const back = document.getElementById("txModalBack");
-if (back) back.style.display = "none";
- }
+  save();
+
+  const back = document.getElementById("txModalBack");
+  if (back) back.style.display = "none";
+
+  // refresh operational modal views
+  if (document.getElementById("opTxnList")) {
+    openOperationalDrilldown();
+  } else {
+    renderOperationalTransactions();
+    renderOperationalAccountLists();
+    refreshOperationalHeader?.();
+  }
 }
 window.saveAccountEntry = saveAccountEntry;
 
@@ -6496,40 +6451,39 @@ function renderOperationalAccountLists() {
   if (!incomeBox || !expenseBox) return;
 
   const renderAccountRow = (a, type) => {
-    const total = sumEntries(
-      getEntriesByAccount(a.id).filter(e => opTxnMatchesFilter(e.date))
-    );
+  const total = sumEntries(
+    getEntriesByAccount(a.id).filter(e => opTxnMatchesFilter(e.date))
+  );
 
-    return `
-  <div style="
-    padding:8px;
-    border-bottom:1px solid #eee;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:10px;">
+  return `
+    <div style="
+      padding:8px;
+      border-bottom:1px solid #eee;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      cursor:pointer;"
+      onclick="openAccountEntryModal('${a.id}','${type}')">
 
-    <!-- Clicking the name opens drilldown -->
-    <div style="flex:1; cursor:pointer;"
-         onclick="openAccountEntriesSubDrill('${a.id}','${type}')">
-      <b>${a.accountNumber}</b> — ${a.name}
-    </div>
-
-    <div style="display:flex;align-items:center;gap:8px;">
-      <div style="color:${type==='income'?'green':'#b42318'}">
-        ${fmt(total)}
+      <div>
+        <b>${a.accountNumber}</b> — ${a.name}
       </div>
 
-      <!-- Post button uses YOUR existing modal -->
-      <button class="btn small solid"
-        style="background:#0f766e;color:white"
-        onclick="event.stopPropagation(); openAccountEntryModal('${a.id}','${type}')">
-        Post
-      </button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="color:${type==='income'?'green':'#b42318'}">
+          ${fmt(total)}
+        </div>
+
+        <button
+          class="btn small"
+          onclick="event.stopPropagation(); openAccountEntryModal('${a.id}','${type}')">
+          Post
+        </button>
+      </div>
     </div>
-  </div>
-`;
-  };
+  `;
+};
 
   incomeBox.innerHTML =
     state.accounts.income
