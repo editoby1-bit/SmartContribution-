@@ -857,32 +857,43 @@ window.closeModal = closeModal;
 
 
 
-function openAccountEntryModal(accountId, type)  {
-  const acc = state.accounts[type].find(a => a.id === accountId);
+function openAccountEntryModal(accountId, type) {
+  const acc = state.accounts?.[type]?.find(a => a.id === accountId);
   if (!acc) return;
 
   const box = document.createElement("div");
 
   box.innerHTML = `
-  <div class="small"><b>${acc.accountNumber} — ${acc.name}</b></div>
+    <div class="small"><b>${acc.accountNumber} — ${acc.name}</b></div>
 
-  <div style="margin-top:10px">
-    <input id="entryAmount" class="input" type="number" placeholder="Amount">
-  </div>
+    <div style="margin-top:10px">
+      <input id="entryAmount" class="input" type="number" placeholder="Amount">
+    </div>
 
-  <div style="margin-top:6px">
-    <input id="entryNote" class="input" placeholder="Note (optional)">
-  </div>
+    <div style="margin-top:6px">
+      <input id="entryNote" class="input" placeholder="Note (optional)">
+    </div>
 
-  <div style="margin-top:10px">
-    <button class="btn solid" onclick="saveAccountEntry('${accountId}', '${type}')">
-  Save Entry
-</button>
-`;
+    <div style="margin-top:10px">
+      <button
+        class="btn solid"
+        style="background:#0f766e;color:white;opacity:1"
+        onclick="saveAccountEntry('${accountId}', '${type}')">
+        Post
+      </button>
+    </div>
 
-  openModalGeneric("Add Account Entry", box, null);
-  }
+    <div class="small muted" style="margin-top:8px">
+      Tip: Cancel / click outside returns to Operational Transactions.
+    </div>
+  `;
 
+  // ✅ showCancel=true so Cancel button appears
+  openModalGeneric("Add Account Entry", box, null, true).then(() => {
+    // ✅ When user cancels or clicks away, re-open operational drilldown
+    if (typeof openOperationalDrilldown === "function") openOperationalDrilldown();
+  });
+}
 window.openAccountEntryModal = openAccountEntryModal;
 
 function saveAccountEntry(accountId, type) {
@@ -921,15 +932,65 @@ function saveAccountEntry(accountId, type) {
     }
   }
 
-  save();
+  function openAccountEntryModal(accountId, type) {
+  const acc = state.accounts?.[type]?.find(a => a.id === accountId);
+  if (!acc) return;
 
-  const back = document.getElementById("txModalBack");
-  if (back) back.style.display = "none";
+  const box = document.createElement("div");
 
-  // refresh operational modal views
-  if (document.getElementById("opTxnList")) {
-    openOperationalDrilldown();
-  } else {
+  box.innerHTML = `
+    <div class="small"><b>${acc.accountNumber} — ${acc.name}</b></div>
+
+    <div style="margin-top:10px">
+      <input id="entryAmount" class="input" type="number" placeholder="Amount">
+    </div>
+
+    <div style="margin-top:6px">
+      <input id="entryNote" class="input" placeholder="Note (optional)">
+    </div>
+
+    <div style="margin-top:10px">
+      <button
+        class="btn solid"
+        style="background:#0f766e;color:white;opacity:1"
+        onclick="saveAccountEntry('${accountId}', '${type}')">
+        Post
+      </button>
+    </div>
+
+    <div class="small muted" style="margin-top:8px">
+      Tip: Cancel / click outside returns to Operational Transactions.
+    </div>
+  `;
+
+  // ✅ showCancel=true so Cancel button appears
+  openModalGeneric("Add Account Entry", box, null, true).then(() => {
+    // ✅ When user cancels or clicks away, re-open operational drilldown
+    if (typeof openOperationalDrilldown === "function") openOperationalDrilldown();
+  });
+}
+window.openAccountEntryModal = openAccountEntryModal;
+
+
+
+
+
+
+
+
+
+
+
+
+
+save();
+
+const back = document.getElementById("txModalBack");
+if (back) back.style.display = "none";
+
+// ✅ ALWAYS return to operational drilldown (no conditional)
+if (typeof openOperationalDrilldown === "function") openOperationalDrilldown();
+ else {
     renderOperationalTransactions();
     renderOperationalAccountLists();
     refreshOperationalHeader?.();
