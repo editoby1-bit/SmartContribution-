@@ -813,11 +813,57 @@ function createAccount(type, name) {
 
 function createAccountEntry(accountId, type, amount, note, date) {
   const staff = currentStaff();
-  if (!staff || !["manager", "ceo"].includes(staff.role)) {
+
+  // ✅ Allow staff to post (adjust roles if your app uses different names)
+  const allowedRoles = ["manager", "ceo", "admin", "teller", "approving_officer", "administrative_officer"];
+  if (!staff || !allowedRoles.includes(staff.role)) {
     showToast("Not authorized");
-    return;
+    return false;
   }
 
+  if (!accountId) {
+    showToast("Account not found");
+    return false;
+  }
+
+  const n = Number(amount || 0);
+  if (!isFinite(n) || n === 0) {
+    showToast("Enter a valid amount");
+    return false;
+  }
+
+  state.accountEntries = state.accountEntries || [];
+
+  const entry = {
+    id: uid("ent"),
+    accountId,
+    entryType: type, // "income" | "expense"
+    amount: Math.abs(n),       // already signed in your saveAccountEntry()
+    note: (note || "").trim(),
+    date: date || new Date().toISOString(),
+    actorId: staff.id,
+    actorName: staff.name,
+    actorRole: staff.role
+  };
+
+  state.accountEntries.unshift(entry);
+
+  // Optional audit (only if your pushAudit exists)
+  try {
+    if (typeof pushAudit === "function") {
+      pushAudit(
+        staff.name,
+        staff.role,
+        "account_entry",
+        JSON.stringify({ accountId, type, amount: Math.abs(n), note: entry.note })
+      );
+    }
+  } catch (e) {}
+
+  save?.();
+  return true;
+}
+window.createAccountEntry = createAccountEntry;
   
 
   amount = Number(amount);
@@ -889,10 +935,12 @@ window.openAccountEntryModal = openAccountEntryModal;
 
 function saveAccountEntry(accountId, type) {
  const amount = Number(document.getElementById("entryAmount").value || 0);
+ if (amount <= 0) return showToast("Enter a valid amount");
  const note = document.getElementById("entryNote").value || "";
  const date = new Date().toISOString();
 
- createAccountEntry(accountId, type, amount, note, date);
+ const signedAmount = type === "expense" ? -Math.abs(amount) : Math.abs(amount);
+createAccountEntry(accountId, type, signedAmount, note, date);
 
  const acc = [...state.accounts.income, ...state.accounts.expense]
    .find(a => a.id === accountId);
@@ -919,7 +967,8 @@ function saveAccountEntry(accountId, type) {
  }
 
  save();
- closeModal();
+ const back = document.getElementById("txModalBack");
+if (back) back.style.display = "none";
 
  if (document.getElementById("opTxnList")) {
    openOperationalDrilldown();
@@ -927,7 +976,8 @@ function saveAccountEntry(accountId, type) {
    renderOperationalTransactions();
 renderOperationalAccountLists();
 refreshOperationalHeader();
-closeModal();
+const back = document.getElementById("txModalBack");
+if (back) back.style.display = "none";
  }
 }
 window.saveAccountEntry = saveAccountEntry;
@@ -6451,23 +6501,34 @@ function renderOperationalAccountLists() {
     );
 
     return `
-      <div style="
-        padding:8px;
-        border-bottom:1px solid #eee;
-        display:flex;
-        justify-content:space-between;
-        cursor:pointer;"
-        onclick="openAccountEntriesSubDrill('${a.id}','${type}')">
+  <div style="
+    padding:8px;
+    border-bottom:1px solid #eee;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;">
 
-        <div>
-          <b>${a.accountNumber}</b> — ${a.name}
-        </div>
+    <!-- Clicking the name opens drilldown -->
+    <div style="flex:1; cursor:pointer;"
+         onclick="openAccountEntriesSubDrill('${a.id}','${type}')">
+      <b>${a.accountNumber}</b> — ${a.name}
+    </div>
 
-        <div style="color:${type==='income'?'green':'#b42318'}">
-          ${fmt(total)}
-        </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div style="color:${type==='income'?'green':'#b42318'}">
+        ${fmt(total)}
       </div>
-    `;
+
+      <!-- Post button uses YOUR existing modal -->
+      <button class="btn small solid"
+        style="background:#0f766e;color:white"
+        onclick="event.stopPropagation(); openAccountEntryModal('${a.id}','${type}')">
+        Post
+      </button>
+    </div>
+  </div>
+`;
   };
 
   incomeBox.innerHTML =
