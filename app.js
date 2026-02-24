@@ -855,14 +855,21 @@ function closeModal() {
 
 window.closeModal = closeModal;
 
-
+function canPostOperationalDirect() {
+  const s = currentStaff?.();
+  return !!(s && ["manager", "ceo"].includes(s.role));
+}
 
 function openAccountEntryModal(accountId, type) {
   const acc = state.accounts?.[type]?.find(a => a.id === accountId);
   if (!acc) return;
 
-  const box = document.createElement("div");
+  const staff = currentStaff?.();
+  if (!staff) return showToast("Select staff");
 
+  const direct = canPostOperationalDirect();
+
+  const box = document.createElement("div");
   box.innerHTML = `
     <div class="small"><b>${acc.accountNumber} — ${acc.name}</b></div>
 
@@ -877,22 +884,35 @@ function openAccountEntryModal(accountId, type) {
     <div style="margin-top:10px">
       <button
         class="btn solid"
-        style="background:#0f766e;color:white;opacity:1"
-        onclick="saveAccountEntry('${accountId}', '${type}')">
-        Post
+        style="background:#0f766e;color:white;opacity:1;font-weight:700"
+        id="opEntrySubmitBtn">
+        ${direct ? "Post" : "Send Request"}
       </button>
-    </div>
-
-    <div class="small muted" style="margin-top:8px">
-      Tip: Cancel / click outside returns to Operational Transactions.
     </div>
   `;
 
-  // ✅ showCancel=true so Cancel button appears
-  openModalGeneric("Add Account Entry", box, null, true).then(() => {
-    // ✅ When user cancels or clicks away, re-open operational drilldown
-    if (typeof openOperationalDrilldown === "function") openOperationalDrilldown();
-  });
+  openModalGeneric(direct ? "Add Account Entry" : "Request Account Entry", box, null, true)
+    .then(() => {
+      if (typeof openOperationalDrilldown === "function") openOperationalDrilldown();
+    });
+
+  const btn = box.querySelector("#opEntrySubmitBtn");
+  if (btn) {
+    btn.onclick = () => {
+      const amount = Number(box.querySelector("#entryAmount")?.value || 0);
+      const note = (box.querySelector("#entryNote")?.value || "").trim();
+      if (!amount || amount <= 0) return showToast("Enter a valid amount");
+
+      if (direct) {
+        // manager/ceo posts directly
+        saveAccountEntry(accountId, type);
+        return;
+      }
+
+      // staff sends request (no direct posting)
+      requestAccountEntryApproval(accountId, type, amount, note);
+    };
+  }
 }
 window.openAccountEntryModal = openAccountEntryModal;
 
@@ -932,65 +952,14 @@ function saveAccountEntry(accountId, type) {
     }
   }
 
-  function openAccountEntryModal(accountId, type) {
-  const acc = state.accounts?.[type]?.find(a => a.id === accountId);
-  if (!acc) return;
-
-  const box = document.createElement("div");
-
-  box.innerHTML = `
-    <div class="small"><b>${acc.accountNumber} — ${acc.name}</b></div>
-
-    <div style="margin-top:10px">
-      <input id="entryAmount" class="input" type="number" placeholder="Amount">
-    </div>
-
-    <div style="margin-top:6px">
-      <input id="entryNote" class="input" placeholder="Note (optional)">
-    </div>
-
-    <div style="margin-top:10px">
-      <button
-        class="btn solid"
-        style="background:#0f766e;color:white;opacity:1"
-        onclick="saveAccountEntry('${accountId}', '${type}')">
-        Post
-      </button>
-    </div>
-
-    <div class="small muted" style="margin-top:8px">
-      Tip: Cancel / click outside returns to Operational Transactions.
-    </div>
-  `;
-
-  // ✅ showCancel=true so Cancel button appears
-  openModalGeneric("Add Account Entry", box, null, true).then(() => {
-    // ✅ When user cancels or clicks away, re-open operational drilldown
-    if (typeof openOperationalDrilldown === "function") openOperationalDrilldown();
-  });
-}
-window.openAccountEntryModal = openAccountEntryModal;
-
-
-
-
-
-
-
-
-
-
-
-
-
-save();
+  save();
 
 const back = document.getElementById("txModalBack");
 if (back) back.style.display = "none";
 
 // ✅ ALWAYS return to operational drilldown (no conditional)
 if (typeof openOperationalDrilldown === "function") openOperationalDrilldown();
- else {
+  else {
     renderOperationalTransactions();
     renderOperationalAccountLists();
     refreshOperationalHeader?.();
@@ -4930,6 +4899,49 @@ function checkEmpowermentCleared(customerId) {
   // old empowerment engine disabled
 }
 
+function requestAccountEntryApproval(accountId, type, amount, note) {
+  const staff = currentStaff?.();
+  if (!staff) return showToast("Select staff");
+
+  const n = Number(amount || 0);
+  if (!n || n <= 0) return showToast("Enter a valid amount");
+
+  const now = new Date().toISOString();
+
+  const acc = [...(state.accounts?.income || []), ...(state.accounts?.expense || [])]
+    .find(a => a.id === accountId);
+
+  state.approvals = state.approvals || [];
+  state.approvals.unshift({
+    id: uid("ap"),
+    type: "account_entry",     // ✅ new approval type
+    status: "pending",
+    amount: n,                 // ✅ so pending cards show value
+    requestedAt: now,
+    requestedBy: staff.id,
+    requestedByName: staff.name,
+    customerId: null,          // not a customer approval
+    payload: {
+      accountId,
+      accountType: type,       // income | expense
+      amount: n,
+      note: note || "",
+      accountName: acc?.name || "",
+      accountNumber: acc?.accountNumber || ""
+    }
+  });
+
+  save?.();
+  renderApprovals?.();          // managers will see it in approvals
+  showToast("Request sent for approval");
+
+  // close modal then return to operational drilldown
+  const back = document.getElementById("txModalBack");
+  if (back) back.style.display = "none";
+  openOperationalDrilldown?.();
+}
+window.requestAccountEntryApproval = requestAccountEntryApproval;
+
 async function processApproval(id, action) {
   const staff = currentStaff();
 if (!canApprove()) {
@@ -5428,6 +5440,45 @@ state.transactions.push({
   actor: staff.name,
   approvalId: app.id
 });
+}
+
+// =========================
+// APPLY OPERATIONAL ACCOUNT ENTRY APPROVAL
+// =========================
+if (action === "approve" && app.type === "account_entry") {
+  const p = app.payload || {};
+  const accountId = p.accountId;
+  const accType = p.accountType; // income | expense
+  const amt = Number(p.amount || app.amount || 0);
+  const note = p.note || "";
+
+  if (!accountId || !accType || !amt || amt <= 0) {
+    showToast("Invalid account entry approval payload");
+    return;
+  }
+
+  // ✅ create entry WITHOUT manager restriction (because this is the approval path)
+  state.accountEntries = state.accountEntries || [];
+  state.accountEntries.unshift({
+    id: uid("op"),
+    accountId,
+    type: accType,
+    amount: Math.abs(amt), // store positive
+    note: (note || "").trim(),
+    date: app.processedAt || new Date().toISOString(),
+    staffId: app.requestedBy,
+    staffName: app.requestedByName || app.requestedBy || "Staff",
+    approvedBy: currentStaff()?.name || "Manager",
+    approvedAt: new Date().toISOString(),
+    approvalId: app.id
+  });
+
+  save?.();
+  renderOperationalTransactions?.();
+  renderOperationalAccountLists?.();
+  refreshOperationalHeader?.();
+
+  showToast("Account entry approved and posted");
 }
 
 // ===== AUDIT (ROLE-AWARE, DETAILED) =====
