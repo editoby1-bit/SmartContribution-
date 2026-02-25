@@ -6639,9 +6639,7 @@ const myPostedHTML = myPosted.length ? `
     }).join("")}
   </div>
 ` : `
-  <div class="small muted" style="margin:10px 0">No approved posts yet</div>
-`;
-
+  
 const myPendingHTML = myPendingReq.length ? `
   <div class="card warning" style="margin:10px 0;padding:10px">
     <div class="small"><b>My Pending Requests</b></div>
@@ -6655,8 +6653,7 @@ const myPendingHTML = myPendingReq.length ? `
     `).join("")}
   </div>
 ` : `
-  <div class="small muted" style="margin:10px 0">No pending requests</div>
-`;
+  
 
   wrapper.innerHTML = `
     ${myPendingHTML}
