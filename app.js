@@ -4953,48 +4953,6 @@ function checkEmpowermentCleared(customerId) {
   // old empowerment engine disabled
 }
 
-function requestAccountEntryApproval(accountId, type, amount, note) {
-  const staff = currentStaff?.();
-  if (!staff) return showToast("Select staff");
-
-  const n = Number(amount || 0);
-  if (!n || n <= 0) return showToast("Enter a valid amount");
-
-  const now = new Date().toISOString();
-
-  const acc = [...(state.accounts?.income || []), ...(state.accounts?.expense || [])]
-    .find(a => a.id === accountId);
-
-  state.approvals = state.approvals || [];
-  state.approvals.unshift({
-    id: uid("ap"),
-    type: "account_entry",     // ✅ new approval type
-    status: "pending",
-    amount: n,                 // ✅ so pending cards show value
-    requestedAt: now,
-    requestedBy: staff.id,
-    requestedByName: staff.name,
-    customerId: null,          // not a customer approval
-    payload: {
-      accountId,
-      accountType: type,       // income | expense
-      amount: n,
-      note: note || "",
-      accountName: acc?.name || "",
-      accountNumber: acc?.accountNumber || ""
-    }
-  });
-
-  save?.();
-  renderApprovals?.();          // managers will see it in approvals
-  showToast("Request sent for approval");
-
-  // close modal then return to operational drilldown
-  const back = document.getElementById("txModalBack");
-  if (back) back.style.display = "none";
-  openOperationalDrilldown?.();
-}
-window.requestAccountEntryApproval = requestAccountEntryApproval;
 
 async function processApproval(id, action) {
   const staff = currentStaff();
@@ -5286,6 +5244,7 @@ if (app.type === "account_entry") {
   refreshOperationalHeader?.();
   renderDashboard?.();
   renderAudit?.();
+  
 
   showToast(action === "approve" ? "Entry approved and posted" : "Entry rejected");
   return; // ✅ stop normal flow
@@ -5310,8 +5269,35 @@ if (app.type === "account_entry") {
   // ===== APPLY DECISION =====
 app.status = action === "approve" ? "approved" : "rejected";
 
+
   app.processedBy = staff.name;
   app.processedAt = new Date().toISOString();
+  // =========================
+// APPLY ACCOUNT ENTRY APPROVAL (staff income/expense requests)
+// =========================
+if (action === "approve" && app.type === "account_entry") {
+  const p = app.payload || {};
+
+  const accountId = p.accountId || app.accountId;
+  const accountType = p.accountType || p.type || app.accountType || app.type; // income | expense
+  const amount = Number(p.amount ?? app.amount ?? 0);
+  const note = (p.note || "").trim();
+  const date = p.date || app.processedAt;
+
+  if (!accountId || !accountType || !amount) {
+    showToast("Invalid account entry payload");
+    return;
+  }
+
+  // Manager/CEO is approving, so this will create the real entry
+  const ok2 = createAccountEntry(accountId, accountType, Math.abs(amount), note, date);
+  if (!ok2) return;
+
+  // helpful linkage
+  app.accountId = accountId;
+  app.accountType = accountType;
+}
+
 // =========================
 // APPLY EMPOWERMENT APPROVAL (INTEREST AS %)
 // =========================
@@ -5620,35 +5606,49 @@ await pushAudit(
 // NOTE:
 // approvals are never deleted.
 // status alone determines visibility in UI and COD logic. 
-// persist
-save();
+// persist + close confirm modal (for ALL approval types)
+save?.();
+
+const back = document.getElementById("txModalBack");
+if (back) back.style.display = "none";
 
 // 🔥 MASTER UI SYNC (fixes delayed buttons + panels)
-renderApprovals();
-renderCustomerKycApprovals();
-renderDashboardApprovals();
-renderCustomers();
-renderAudit();
-renderDashboard();
+renderApprovals?.();
+renderCustomerKycApprovals?.();
+renderDashboardApprovals?.();
+renderCustomers?.();
+renderAudit?.();
+renderDashboard?.();
 
-// ✅ force customer modal to render Profile correctly after approval
-if (window.activeCustomerId === cust.id) {
-  window.activeApprovalId = null;
-  refreshCustomerProfile("profile");     // ✅ calls setActiveTab internally now
+// ✅ If staff posts modal is open, refresh it so "My Approved Posts" updates instantly
+if (document.getElementById("myOpApproved") || document.getElementById("myOpPending")) {
+  if (typeof openMyOperationalPosts === "function") openMyOperationalPosts();
+  else if (typeof renderMyOperationalPosts === "function") renderMyOperationalPosts();
 }
 
-closeTxModal();
+// ✅ If Operational drilldown is open, refresh it too
+if (document.getElementById("opTxnList")) {
+  renderOperationalTransactions?.();
+  renderOperationalAccountLists?.();
+  refreshOperationalHeader?.();
+}
 
-// ✅ Tools pending card must disappear immediately after any approval decision
+// ✅ force customer modal to render Profile correctly after approval (only if modal is open)
+if (typeof activeCustomerId !== "undefined" && activeCustomerId && typeof refreshCustomerProfile === "function") {
+  window.activeApprovalId = null;
+  refreshCustomerProfile("profile"); // your version calls setActiveTab internally
+}
+
+// ✅ Tools pending card must disappear immediately after any approval decision (only if Tools tab exists)
 window.activeApprovalId = null;
 if (typeof renderToolsTab === "function") renderToolsTab();
 
-showToast(
-  action === "approve"
-    ? "Transaction approved"
-    : "Transaction rejected"
-);
-}
+showToast(action === "approve" ? "Transaction approved" : "Transaction rejected");
+return;
+
+
+
+
 
   let chartWeek = null;
   function buildChart() {
