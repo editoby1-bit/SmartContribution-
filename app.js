@@ -813,8 +813,8 @@ function createAccount(type, name) {
 
 function createAccountEntry(accountId, type, amount, note, date) {
   const staff = currentStaff?.();
-  if (!staff || !["manager", "ceo"].includes(staff.role)) {
-    showToast("Not authorized");
+  if (!staff) {
+    showToast("Select staff");
     return false;
   }
 
@@ -824,20 +824,74 @@ function createAccountEntry(accountId, type, amount, note, date) {
     return false;
   }
 
-  state.accountEntries = state.accountEntries || [];
-  state.accountEntries.unshift({
-    id: uid("op"),
+  const now = new Date().toISOString();
+
+  // Resolve account meta (for approvals UI readability)
+  const acc =
+    [...(state.accounts?.income || []), ...(state.accounts?.expense || [])]
+      .find(a => a.id === accountId);
+
+  const accountName = acc?.name || "Unknown Account";
+  const accountNumber = acc?.accountNumber || "";
+  const accountType = type; // 'income' | 'expense'
+
+  // ✅ Managers/CEO: post immediately (same as before)
+  if (["manager", "ceo"].includes(staff.role)) {
+    state.accountEntries = state.accountEntries || [];
+    state.accountEntries.unshift({
+      id: uid("op"),
+      accountId,
+      type,
+      amount: Math.abs(n), // ✅ store positive always
+      note: (note || "").trim(),
+      date: date || now,
+      createdBy: staff.name,
+      createdById: staff.id,
+      createdAt: now
+    });
+
+    return true;
+  }
+
+  // ✅ Others: send request for approval
+  state.approvals = state.approvals || [];
+  state.approvals.unshift({
+    id: uid("ap"),
+    type: "account_entry",
+    status: "pending",
+
+    requestedAt: now,
+    requestedBy: staff.id,
+    requestedByName: staff.name,
+
+    createdAt: now,
+    createdBy: staff.id,
+    createdByName: staff.name,
+
+    amount: Math.abs(n),
+
+    // For nicer approval display
     accountId,
-    type, // 'income' | 'expense'
-    amount: Math.abs(n), // ✅ store positive always
-    note: (note || "").trim(),
-    date: date || new Date().toISOString(),
-    createdBy: staff.name,
-    createdById: staff.id,
-    createdAt: new Date().toISOString()
+    accountType,
+    accountName,
+    accountNumber,
+
+    payload: {
+      accountId,
+      type: accountType,
+      amount: Math.abs(n),
+      note: (note || "").trim(),
+      date: date || now,
+      accountName,
+      accountNumber
+    }
   });
 
-  return true;
+  save?.();
+  renderApprovals?.();
+
+  showToast("Request sent for approval");
+  return true; // ✅ allows modal to close normally
 }
 window.createAccountEntry = createAccountEntry;
 
@@ -3372,6 +3426,11 @@ function renderToolsTab() {
    Customer Service & Maintenance
  </button>
 
+ <button class="btn" onclick="openOperationalDrilldown()">
+  Operational Accounts (Income/Expense)
+</button>
+
+
  <button class="btn danger" onclick="requestRemoveCustomerFromList('${c.id}')">
  Delete
 </button>
@@ -5170,6 +5229,73 @@ if (app.type === "customer_maintenance") {
   return;
 }
 
+// =========================
+// OPERATIONAL ACCOUNT ENTRY APPROVAL (NO CUSTOMER)
+// =========================
+if (app.type === "account_entry") {
+
+  // confirm
+  const ok = await openModalGeneric(
+    action === "approve" ? "Confirm Approval" : "Confirm Rejection",
+    `
+      <div class="small">
+        <b>${(app.accountType || app.payload?.type || "ENTRY").toUpperCase()}</b> — ${fmt(app.amount || app.payload?.amount || 0)}<br/>
+        Account: <b>${app.accountName || app.payload?.accountName || "—"}</b>
+      </div>
+    `,
+    action === "approve" ? "Approve" : "Reject",
+    true
+  );
+  if (!ok) return;
+
+  // apply decision
+  app.status = action === "approve" ? "approved" : "rejected";
+  app.processedBy = staff.name;
+  app.processedAt = new Date().toISOString();
+
+  if (action === "approve") {
+    const p = app.payload || {};
+    state.accountEntries = state.accountEntries || [];
+    state.accountEntries.unshift({
+      id: uid("op"),
+      accountId: p.accountId || app.accountId,
+      type: p.type || app.accountType || "income",
+      amount: Math.abs(Number(p.amount || app.amount || 0)),
+      note: (p.note || "").trim(),
+      date: p.date || app.processedAt,
+      createdBy: staff.name,
+      createdById: staff.id,
+      createdAt: app.processedAt,
+      approvalId: app.id
+    });
+  }
+
+  await pushAudit(
+    staff.name,
+    staff.role,
+    `approval_${app.status}`,
+    {
+      approvalId: app.id,
+      decision: action,
+      type: app.type,
+      accountId: app.accountId || app.payload?.accountId,
+      accountName: app.accountName || app.payload?.accountName,
+      amount: app.amount || app.payload?.amount
+    }
+  );
+
+  save?.();
+  renderApprovals?.();
+  renderOperationalTransactions?.();
+  renderOperationalAccountLists?.();
+  refreshOperationalHeader?.();
+  renderDashboard?.();
+  renderAudit?.();
+
+  showToast(action === "approve" ? "Entry approved and posted" : "Entry rejected");
+  return; // ✅ stop normal flow
+}
+
   const cust = state.customers.find(c => c.id === app.customerId);
   if (!cust) return showToast("Customer missing");
  
@@ -6377,7 +6503,63 @@ function openOperationalDrilldown() {
 
   const wrapper = document.createElement("div");
 
+  const staff = currentStaff?.();
+const myId = staff?.id;
+
+// ✅ Approved/posted entries by me (these are real entries already saved)
+const myPosted = (state.accountEntries || [])
+  .filter(e => e.staffId === myId)
+  .sort((a,b)=> new Date(b.date||0) - new Date(a.date||0))
+  .slice(0, 30);
+
+// ✅ My pending requests (before approval)
+const myPendingReq = (state.approvals || [])
+  .filter(a => a.type === "account_entry" && a.status === "pending" && a.requestedBy === myId)
+  .sort((a,b)=> new Date(b.requestedAt||b.createdAt||0) - new Date(a.requestedAt||a.createdAt||0))
+  .slice(0, 30);
+
+const myPostedHTML = myPosted.length ? `
+  <div class="card" style="margin:10px 0;padding:10px">
+    <div class="small"><b>My Posted Entries (Approved)</b></div>
+    ${myPosted.map(e => {
+      const acc = [...(state.accounts?.income||[]), ...(state.accounts?.expense||[])]
+        .find(a => a.id === e.accountId);
+      const isIncome = (state.accounts?.income||[]).some(a => a.id === e.accountId);
+      return `
+        <div class="small" style="margin-top:6px;border-bottom:1px solid #eee;padding-bottom:6px">
+          ${new Date(e.date).toLocaleString()} —
+          <b>${fmt(e.amount)}</b>
+          <span style="color:${isIncome ? 'green' : '#b42318'}">
+            (${isIncome ? 'Income' : 'Expense'})
+          </span><br/>
+          <span class="muted">${acc ? acc.name : "Unknown Account"}</span>
+        </div>
+      `;
+    }).join("")}
+  </div>
+` : `
+  <div class="small muted" style="margin:10px 0">No approved posts yet</div>
+`;
+
+const myPendingHTML = myPendingReq.length ? `
+  <div class="card warning" style="margin:10px 0;padding:10px">
+    <div class="small"><b>My Pending Requests</b></div>
+    ${myPendingReq.map(a => `
+      <div class="small" style="margin-top:6px;border-bottom:1px solid #eee;padding-bottom:6px">
+        ${new Date(a.requestedAt||a.createdAt||Date.now()).toLocaleString()} —
+        <b>${fmt(a.payload?.amount || a.amount || 0)}</b>
+        <span class="muted">(${String(a.payload?.accountType||"").toUpperCase()})</span><br/>
+        <span class="muted">${a.payload?.accountName || "Account"}</span>
+      </div>
+    `).join("")}
+  </div>
+` : `
+  <div class="small muted" style="margin:10px 0">No pending requests</div>
+`;
+
   wrapper.innerHTML = `
+    ${myPendingHTML}
+  ${myPostedHTML}
     <div style="margin-bottom:10px">
 
   <div><b>Total Income:</b>
