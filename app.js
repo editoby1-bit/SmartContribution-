@@ -6640,6 +6640,8 @@ const myPostedHTML = myPosted.length ? `
   </div>
 ` : `
   
+`;
+
 const myPendingHTML = myPendingReq.length ? `
   <div class="card warning" style="margin:10px 0;padding:10px">
     <div class="small"><b>My Pending Requests</b></div>
@@ -6654,6 +6656,7 @@ const myPendingHTML = myPendingReq.length ? `
   </div>
 ` : `
   
+`;
 
   wrapper.innerHTML = `
     ${myPendingHTML}
