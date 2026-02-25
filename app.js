@@ -5645,7 +5645,7 @@ if (typeof renderToolsTab === "function") renderToolsTab();
 
 showToast(action === "approve" ? "Transaction approved" : "Transaction rejected");
 return;
-
+}
 
 
 
