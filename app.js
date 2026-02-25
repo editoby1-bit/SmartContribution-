@@ -5193,7 +5193,8 @@ if (app.type === "account_entry") {
     `
       <div class="small">
         <b>${(app.accountType || app.payload?.type || "ENTRY").toUpperCase()}</b> — ${fmt(app.amount || app.payload?.amount || 0)}<br/>
-        Account: <b>${app.accountName || app.payload?.accountName || "—"}</b>
+        Account: <b>${app.accountName || app.payload?.accountName || "—"}</b><br/>
+        Requested by: <b>${app.requestedByName || app.createdByName || app.requestedBy || app.createdBy || "—"}</b>
       </div>
     `,
     action === "approve" ? "Approve" : "Reject",
@@ -5208,18 +5209,33 @@ if (app.type === "account_entry") {
 
   if (action === "approve") {
     const p = app.payload || {};
+    const accountId = p.accountId || app.accountId;
+    const accType = p.type || p.accountType || app.accountType || "income";
+    const amt = Math.abs(Number(p.amount ?? app.amount ?? 0));
+
+    if (!accountId || !accType || !amt) {
+      showToast("Invalid account entry payload");
+      return;
+    }
+
+    // ✅ IMPORTANT: this entry belongs to the REQUESTING STAFF, not the approving manager
+    const requesterId = app.requestedBy || app.createdBy || "";
+    const requesterName = app.requestedByName || app.createdByName || "Staff";
+
     state.accountEntries = state.accountEntries || [];
     state.accountEntries.unshift({
       id: uid("op"),
-      accountId: p.accountId || app.accountId,
-      type: p.type || app.accountType || "income",
-      amount: Math.abs(Number(p.amount || app.amount || 0)),
+      accountId,
+      type: accType,                // income | expense
+      amount: amt,                  // store positive always
       note: (p.note || "").trim(),
       date: p.date || app.processedAt,
-      createdBy: staff.name,
-      createdById: staff.id,
+      createdBy: requesterName,
+      createdById: requesterId,
       createdAt: app.processedAt,
-      approvalId: app.id
+      approvalId: app.id,
+      approvedBy: staff.name,
+      approvedAt: app.processedAt
     });
   }
 
@@ -5233,7 +5249,8 @@ if (app.type === "account_entry") {
       type: app.type,
       accountId: app.accountId || app.payload?.accountId,
       accountName: app.accountName || app.payload?.accountName,
-      amount: app.amount || app.payload?.amount
+      amount: app.amount || app.payload?.amount,
+      requestedBy: app.requestedBy || app.createdBy
     }
   );
 
@@ -5244,7 +5261,15 @@ if (app.type === "account_entry") {
   refreshOperationalHeader?.();
   renderDashboard?.();
   renderAudit?.();
-  
+
+  // ✅ CLOSE the confirm modal immediately after approve/reject
+  const back = document.getElementById("txModalBack");
+  if (back) back.style.display = "none";
+
+  // ✅ If staff “My Posts” modal is open, rebuild it so pending→approved updates + empty texts update
+  if (document.getElementById("myOpApproved") || document.getElementById("myOpPending")) {
+    if (typeof openMyOperationalPosts === "function") openMyOperationalPosts();
+  }
 
   showToast(action === "approve" ? "Entry approved and posted" : "Entry rejected");
   return; // ✅ stop normal flow
@@ -5272,31 +5297,7 @@ app.status = action === "approve" ? "approved" : "rejected";
 
   app.processedBy = staff.name;
   app.processedAt = new Date().toISOString();
-  // =========================
-// APPLY ACCOUNT ENTRY APPROVAL (staff income/expense requests)
-// =========================
-if (action === "approve" && app.type === "account_entry") {
-  const p = app.payload || {};
-
-  const accountId = p.accountId || app.accountId;
-  const accountType = p.accountType || p.type || app.accountType || app.type; // income | expense
-  const amount = Number(p.amount ?? app.amount ?? 0);
-  const note = (p.note || "").trim();
-  const date = p.date || app.processedAt;
-
-  if (!accountId || !accountType || !amount) {
-    showToast("Invalid account entry payload");
-    return;
-  }
-
-  // Manager/CEO is approving, so this will create the real entry
-  const ok2 = createAccountEntry(accountId, accountType, Math.abs(amount), note, date);
-  if (!ok2) return;
-
-  // helpful linkage
-  app.accountId = accountId;
-  app.accountType = accountType;
-}
+ 
 
 // =========================
 // APPLY EMPOWERMENT APPROVAL (INTEREST AS %)
@@ -5549,44 +5550,6 @@ state.transactions.push({
 });
 }
 
-// =========================
-// APPLY OPERATIONAL ACCOUNT ENTRY APPROVAL
-// =========================
-if (action === "approve" && app.type === "account_entry") {
-  const p = app.payload || {};
-  const accountId = p.accountId;
-  const accType = p.accountType; // income | expense
-  const amt = Number(p.amount || app.amount || 0);
-  const note = p.note || "";
-
-  if (!accountId || !accType || !amt || amt <= 0) {
-    showToast("Invalid account entry approval payload");
-    return;
-  }
-
-  // ✅ create entry WITHOUT manager restriction (because this is the approval path)
-  state.accountEntries = state.accountEntries || [];
-  state.accountEntries.unshift({
-    id: uid("op"),
-    accountId,
-    type: accType,
-    amount: Math.abs(amt), // store positive
-    note: (note || "").trim(),
-    date: app.processedAt || new Date().toISOString(),
-    staffId: app.requestedBy,
-    staffName: app.requestedByName || app.requestedBy || "Staff",
-    approvedBy: currentStaff()?.name || "Manager",
-    approvedAt: new Date().toISOString(),
-    approvalId: app.id
-  });
-
-  save?.();
-  renderOperationalTransactions?.();
-  renderOperationalAccountLists?.();
-  refreshOperationalHeader?.();
-
-  showToast("Account entry approved and posted");
-}
 
 // ===== AUDIT (ROLE-AWARE, DETAILED) =====
 await pushAudit(
@@ -6577,7 +6540,7 @@ function openMyOperationalPosts() {
   function renderApproved() {
     const box = wrapper.querySelector("#myOpApproved");
     const mine = (state.accountEntries || [])
-      .filter(e => e.createdById === staff.id)
+  .filter(e => (e.createdById || e.staffId) === staff.id)
       .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
     if (!mine.length) {
