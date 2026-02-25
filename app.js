@@ -3426,11 +3426,6 @@ function renderToolsTab() {
    Customer Service & Maintenance
  </button>
 
- <button class="btn" onclick="openOperationalDrilldown()">
-  Operational Accounts (Income/Expense)
-</button>
-
-
  <button class="btn danger" onclick="requestRemoveCustomerFromList('${c.id}')">
  Delete
 </button>
@@ -6493,9 +6488,152 @@ function printOperationalSummary() {
 
 window.printOperationalSummary = printOperationalSummary;
 
+function openMyOperationalPosts() {
+  const staff = currentStaff?.();
+  if (!staff) return showToast("Select staff");
+
+  // Managers can still use full business drilldown (optional)
+  // If you want managers to also see "My Posts" instead, remove this if block.
+  if (["manager", "ceo"].includes(staff.role)) {
+    openOperationalDrilldown();
+    return;
+  }
+
+  const wrapper = document.createElement("div");
+
+  wrapper.innerHTML = `
+    <div class="small muted" style="margin-bottom:10px">
+      You can only view your own approved posts and your pending requests.
+    </div>
+
+    <div class="card" style="margin-bottom:10px">
+      <div class="small"><b>Send New Income/Expense Request</b></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <select id="myOpType" class="input">
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+        </select>
+
+        <select id="myOpAccount" class="input"></select>
+
+        <input id="myOpAmount" class="input" type="number" placeholder="Amount">
+        <input id="myOpNote" class="input" placeholder="Note (optional)">
+      </div>
+
+      <button id="myOpSend" class="btn solid" style="margin-top:10px;width:100%">
+        Send Request
+      </button>
+    </div>
+
+    <div class="card" style="margin-bottom:10px">
+      <div class="small"><b>My Pending Requests</b></div>
+      <div id="myOpPending" class="small muted" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <div class="small"><b>My Approved Posts</b></div>
+      <div id="myOpApproved" class="small muted" style="margin-top:8px"></div>
+    </div>
+  `;
+
+  openModalGeneric("Income & Expense", wrapper, null);
+
+  // ---- helpers ----
+  function fillAccounts() {
+    const type = wrapper.querySelector("#myOpType").value;
+    const sel = wrapper.querySelector("#myOpAccount");
+    const arr = (state.accounts?.[type] || []);
+
+    sel.innerHTML = arr.map(a =>
+      `<option value="${a.id}">${a.accountNumber} — ${a.name}</option>`
+    ).join("");
+  }
+
+  function renderPending() {
+    const box = wrapper.querySelector("#myOpPending");
+    const pend = (state.approvals || [])
+      .filter(a =>
+        a.type === "account_entry" &&
+        a.status === "pending" &&
+        (a.requestedBy === staff.id || a.createdBy === staff.id)
+      )
+      .sort((a, b) => new Date(b.requestedAt || b.createdAt || 0) - new Date(a.requestedAt || a.createdAt || 0));
+
+    if (!pend.length) {
+      box.innerHTML = `<div class="small muted">No pending requests</div>`;
+      return;
+    }
+
+    box.innerHTML = pend.map(a => `
+      <div style="padding:8px;border-bottom:1px solid #eee">
+        <b>${(a.accountType || a.payload?.type || "").toUpperCase()}</b> — ${fmt(a.amount || a.payload?.amount || 0)}<br/>
+        <span class="muted">${a.accountName || a.payload?.accountName || "—"}</span><br/>
+        <span class="muted">${new Date(a.requestedAt || a.createdAt).toLocaleString()}</span>
+      </div>
+    `).join("");
+  }
+
+  function renderApproved() {
+    const box = wrapper.querySelector("#myOpApproved");
+    const mine = (state.accountEntries || [])
+      .filter(e => e.createdById === staff.id)
+      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+    if (!mine.length) {
+      box.innerHTML = `<div class="small muted">No approved posts yet</div>`;
+      return;
+    }
+
+    box.innerHTML = mine.slice(0, 100).map(e => {
+      const acc = [...(state.accounts?.income || []), ...(state.accounts?.expense || [])]
+        .find(a => a.id === e.accountId);
+
+      return `
+        <div style="padding:8px;border-bottom:1px solid #eee">
+          ${new Date(e.date).toLocaleString()} — <b>${fmt(e.amount)}</b>
+          <span class="muted">(${String(e.type || "").toUpperCase()})</span><br/>
+          <span class="muted">${acc ? acc.name : "Unknown Account"}</span>
+          ${e.note ? `<div class="muted">${e.note}</div>` : ""}
+        </div>
+      `;
+    }).join("");
+  }
+
+  // init
+  fillAccounts();
+  renderPending();
+  renderApproved();
+
+  wrapper.querySelector("#myOpType").onchange = fillAccounts;
+
+  wrapper.querySelector("#myOpSend").onclick = () => {
+    const type = wrapper.querySelector("#myOpType").value;
+    const accountId = wrapper.querySelector("#myOpAccount").value;
+    const amt = Number(wrapper.querySelector("#myOpAmount").value || 0);
+    const note = wrapper.querySelector("#myOpNote").value || "";
+    const date = new Date().toISOString();
+
+    if (!accountId) return showToast("Select account");
+    if (!amt || amt <= 0) return showToast("Enter valid amount");
+
+    // ✅ this will create approval for staff (because createAccountEntry now routes by role)
+    const ok = createAccountEntry(accountId, type, amt, note, date);
+    if (!ok) return;
+
+    // reset fields
+    wrapper.querySelector("#myOpAmount").value = "";
+    wrapper.querySelector("#myOpNote").value = "";
+
+    // refresh view
+    renderPending();
+    renderApproved();
+  };
+}
+window.openMyOperationalPosts = openMyOperationalPosts;
+
 
 function openOperationalDrilldown() {
-
   state.ui.opDateFilter = state.ui.opDateFilter || "today";
   opTxnLimit = 50;
 
@@ -8969,6 +9107,9 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
         "Close"
       );
   });
+  document.getElementById("btnMyOps")?.addEventListener("click", () => {
+  openMyOperationalPosts();
+});
   document
     .getElementById("mobileContrib")
     .addEventListener("click", async () => {
