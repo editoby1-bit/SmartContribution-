@@ -1167,28 +1167,23 @@ const resumeDraft = state.codDrafts[resumeDraftKey] || null;
     </div>
 
     <input
-      id="declaredCash"
-      class="input"
-      placeholder="Enter total cash collected"
-      style="margin-top:10px"
-    />
+  id="openingFloat"
+  class="input"
+  placeholder="Enter Opening Float (cash at start of day)"
+  style="margin-top:10px"
+/>
 
     <div id="codError" class="small danger" style="margin-top:8px;display:none"></div>
   `;
   // 🔒 IF DRAFT EXISTS → LOCK PHASE A & RESUME PHASE B
 if (resumeDraft) {
   const dateInput = box.querySelector("#codDate");
-  const declaredInput = box.querySelector("#declaredCash");
+  const floatInput = box.querySelector("#openingFloat");
 
-  if (dateInput) {
-    dateInput.value = resumeDraft.date;
-    dateInput.disabled = true;
-  }
-
-  if (declaredInput) {
-    declaredInput.value = resumeDraft.initialDeclared;
-    declaredInput.disabled = true;
-  }
+if (floatInput) {
+  floatInput.value = resumeDraft.openingFloat || 0;
+  floatInput.disabled = true;
+}
 }
 
 
@@ -1251,12 +1246,13 @@ submitBtn.onclick = () => {
   }
 
   // 🟢 PHASE A — FIRST & ONLY DECLARATION
-  const initialDeclared = Number(
-    box.querySelector("#declaredCash")?.value || 0
-  );
+  const openingFloat = Number(
+  box.querySelector("#openingFloat")?.value || 0
+);
+
 
   const err = box.querySelector("#codError");
-  if (initialDeclared <= 0) {
+  if (openingFloat <= 0) {
     if (err) {
       err.textContent = "Enter a valid collected cash amount";
       err.style.display = "block";
@@ -1268,24 +1264,24 @@ submitBtn.onclick = () => {
   state.codDrafts[draftKey] = {
     staffId: staff.id,
     date: selectedDate,
-    initialDeclared,
+    openingFloat,
     startedAt: new Date().toISOString()
   };
 
   // 🔒 DISABLE PHASE A INPUTS
   box.querySelector("#codDate")?.setAttribute("disabled", true);
-  box.querySelector("#declaredCash")?.setAttribute("disabled", true);
+  box.querySelector("#openingFloat")?.setAttribute("disabled", true);
 
   save();
 
   // ➜ MOVE TO PHASE B
   renderPhaseB({
-    box,
-    submitBtn,
-    staff,
-    selectedDate,
-    initialDeclared
-  });
+  box,
+  submitBtn,
+  staff,
+  selectedDate,
+  openingFloat
+});
 }
  }
 
@@ -1294,27 +1290,29 @@ function renderPhaseB({
   submitBtn,
   staff,
   selectedDate,
-  initialDeclared
+  openingFloat
 }) {
-  const txs = (state.approvals || []).filter(a =>
-  a.requestedBy === staff.id &&
-  a.requestedAt?.startsWith(selectedDate)
+  // ✅ use APPROVED approvals for this staff & date (source of truth)
+const approved = (state.approvals || []).filter(a =>
+  a.status === "approved" &&
+  (a.requestedBy === staff.id || a.createdBy === staff.id) &&
+  String(a.processedAt || "").startsWith(selectedDate)
 );
 
-const credits = txs
- .filter(t => t.type === "credit")
- .reduce((s, t) => s + Number(t.amount || 0), 0);
+const credits = approved
+  .filter(t => t.type === "credit")
+  .reduce((s, t) => s + Number(t.amount || 0), 0);
 
-const withdrawals = txs
- .filter(t => t.type === "withdraw")
- .reduce((s, t) => s + Number(t.amount || 0), 0);
+const withdrawals = approved
+  .filter(t => t.type === "withdraw")
+  .reduce((s, t) => s + Number(t.amount || 0), 0);
 
-const empowerments = txs
- .filter(t => t.type === "empowerment")
- .reduce((s, t) => s + Number(t.amount || 0), 0);
+const empowerments = approved
+  .filter(t => t.type === "empowerment")
+  .reduce((s, t) => s + Number(t.amount || 0), 0);
 
-// ✅ LOCKED LOGIC
-const expectedCash = credits;
+// ✅ new expected closing cash
+const expectedCash = Number(openingFloat || 0) + credits - withdrawals - empowerments;
 
   // ===== PHASE B UI =====
   box.innerHTML = `
@@ -1325,16 +1323,16 @@ const expectedCash = credits;
       <div class="small">System Credits: ${fmt(credits)}</div>
       <div class="small">Withdrawals (info): ${fmt(withdrawals)}</div>
       <div class="small">Empowerments (info): ${fmt(empowerments)}</div>
-      <div class="small"><b>Expected Cash:</b> ${fmt(expectedCash)}</div>
+      <div class="small"><b>Expected Closing Cash:</b> ${fmt(expectedCash)}</div>
     </div>
 
     <input
-      id="finalDeclared"
-      class="input"
-      value="${initialDeclared}"
-      placeholder="Adjust declared cash if needed"
-      style="margin-top:8px"
-    />
+  id="finalDeclared"
+  class="input"
+  value="${expectedCash}"
+  placeholder="Enter Closing Cash Counted"
+  style="margin-top:8px"
+/>
 
     <textarea
       id="codNote"
@@ -1427,7 +1425,7 @@ const expectedCash = credits;
   variance,
 
   // 🔎 STAFF CONTEXT
-  initialDeclared,
+  openingFloat,
   staffNote: noteBox.value || "",
 
   // 🔎 MANAGER RESOLUTION
@@ -1447,7 +1445,7 @@ const expectedCash = credits;
       staff.role,
       "close_day",
       JSON.stringify({
-        initialDeclared,
+        openingFloat,
         finalDeclared,
         expectedCash,
         variance,
@@ -1547,6 +1545,13 @@ console.log("MODAL BACK FOUND?", back);
     cod.resolvedAt = new Date().toISOString();
     cod.status = "resolved";
     cod.variance = resolvedAmount - cod.systemExpected;
+    // ✅ If final variance is SHORTAGE, manager can charge staff account
+if (cod.variance < 0) {
+  const shortage = Math.abs(cod.variance);
+
+  // charge staff by default (you can add a checkbox later)
+  postStaffCharge(cod.staffId, shortage, `COD shortage on ${cod.date}: ${note}`, cod.id);
+}
 
     save();
 
@@ -1565,6 +1570,32 @@ back.style.display = "flex";
 window.openCODResolutionModal = openCODResolutionModal;
 
 
+function getStaffAccount(staffId) {
+  state.staffAccounts = state.staffAccounts || {};
+  if (!state.staffAccounts[staffId]) {
+    state.staffAccounts[staffId] = { balance: 0, entries: [] }; // balance > 0 means staff owes company
+  }
+  return state.staffAccounts[staffId];
+}
+window.getStaffAccount = getStaffAccount;
+
+function postStaffCharge(staffId, amount, note, codId) {
+  const acc = getStaffAccount(staffId);
+  const n = Math.abs(Number(amount || 0));
+  if (!n) return false;
+
+  acc.balance = Number(acc.balance || 0) + n;
+  acc.entries.unshift({
+    id: uid("sa"),
+    staffId,
+    amount: n,
+    note: note || "COD shortage charge",
+    codId: codId || null,
+    date: new Date().toISOString()
+  });
+  return true;
+}
+window.postStaffCharge = postStaffCharge;
 
 function renderApprovals() {
      const el = document.getElementById("approvals");
@@ -4831,6 +4862,34 @@ async function processTransaction({ type, customerId, amount, desc, interest = 0
     showToast("Description is required for audit purposes");
     return;
   }
+  // ✅ COD float enforcement (cash-out types only)
+if (["withdraw", "empowerment"].includes(type)) {
+  const today = new Date().toISOString().slice(0, 10);
+  const key = `${staff.id}|${today}`;
+  const draft = state.codDrafts?.[key];
+  const openingFloat = Number(draft?.openingFloat || 0);
+
+  if (!openingFloat) {
+    showToast("Declare Opening Float first (Close Day → Continue)");
+    return;
+  }
+
+  // approved outflows today by this staff
+  const approved = (state.approvals || []).filter(a =>
+    a.status === "approved" &&
+    (a.requestedBy === staff.id || a.createdBy === staff.id) &&
+    String(a.processedAt || "").startsWith(today) &&
+    ["withdraw", "empowerment"].includes(a.type)
+  );
+
+  const used = approved.reduce((s, a) => s + Number(a.amount || 0), 0);
+  const remaining = openingFloat - used;
+
+  if (amount > remaining) {
+    showToast(`Insufficient float. Remaining: ${fmt(remaining)}`);
+    return;
+  }
+}
 
   const ok = await openModalGeneric(
     "Confirm Transaction",
@@ -5293,10 +5352,13 @@ if (app.type === "account_entry") {
 
   // ===== APPLY DECISION =====
 app.status = action === "approve" ? "approved" : "rejected";
+app.processedBy = staff.name;
+app.processedAt = new Date().toISOString();
 
+// ✅ real actor is the REQUESTER (teller), not the approver (manager)
+const actorName = app.requestedByName || app.createdByName || staff.name;
+const actorId = app.requestedBy || app.createdBy || staff.id;
 
-  app.processedBy = staff.name;
-  app.processedAt = new Date().toISOString();
  
 
 // =========================
@@ -5418,8 +5480,9 @@ if (action === "approve" && app.type === "withdraw") {
     amount: app.amount,
     date: app.processedAt,
     desc: "Approved withdrawal",
-    actor: staff.name,
-    approvalId: app.id
+    actor: actorName,
+actorId: actorId,
+approvalId: app.id
   });
   state.transactions = state.transactions || [];
 
@@ -5429,8 +5492,12 @@ state.transactions.push({
   amount: app.amount,
   date: app.processedAt,
   customerId: cust.id,
-  desc: "Customer Withdrawal (Business Outflow)"
+  desc: "Customer Withdrawal (Business Outflow)",
+  actor: actorName,   // ✅ add
+  actorId: actorId,   // ✅ add
+  approvalId: app.id  // ✅ add (nice for tracing)
 });
+
 
 }
 
@@ -5532,8 +5599,9 @@ state.transactions.push({
     amount: app.amount,
     date: app.processedAt,
     desc: "Approved credit",
-    actor: staff.name,
-    approvalId: app.id
+    actor: actorName,
+actorId: actorId,
+approvalId: app.id
   });
 
   state.transactions = state.transactions || [];
@@ -5545,7 +5613,8 @@ state.transactions.push({
   date: app.processedAt,
   desc: "Business Credit",
   customerId: cust.id,
-  actor: staff.name,
+  actor: actorName,      // ✅ change
+  actorId: actorId,      // ✅ add
   approvalId: app.id
 });
 }
