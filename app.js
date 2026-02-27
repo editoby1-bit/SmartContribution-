@@ -486,6 +486,95 @@ window.save = save;
     save();
   }
 
+// =========================
+// STAFF ACCOUNT (LIABILITY LEDGER)
+// - debits = staff owes company (shortage)
+// - credits = staff paid back
+// =========================
+function ensureStaffAccount(staffId) {
+  state.staffAccounts = state.staffAccounts || {};
+  if (!state.staffAccounts[staffId]) {
+    state.staffAccounts[staffId] = {
+      staffId,
+      balance: 0,          // amount owed
+      entries: []          // ledger entries
+    };
+  }
+  return state.staffAccounts[staffId];
+}
+
+function postStaffCharge(staffId, amount, note, codId) {
+  const n = Number(amount || 0);
+  if (!staffId) return false;
+  if (isNaN(n) || n <= 0) return false;
+
+  const acc = ensureStaffAccount(staffId);
+  acc.entries = acc.entries || [];
+
+  // ✅ Prevent double-charging same COD
+  const exists = acc.entries.some(e => e.type === "debit" && e.codId === codId);
+  if (exists) return true;
+
+  const entry = {
+    id: uid("staff"),
+    staffId,
+    type: "debit",              // debit increases what staff owes
+    amount: n,
+    note: (note || "").trim(),
+    codId: codId || null,
+    date: new Date().toISOString(),
+    createdBy: currentStaff?.()?.name || "system"
+  };
+
+  acc.entries.unshift(entry);
+  acc.balance = Number(acc.balance || 0) + n;
+
+  // optional audit trail
+  pushAudit?.(
+    currentStaff?.()?.name || "system",
+    currentStaff?.()?.role || "system",
+    "staff_charged_for_shortage",
+    JSON.stringify({ staffId, amount: n, codId, note: entry.note })
+  );
+
+  return true;
+}
+
+// Optional helper if later you want to record repayments:
+function postStaffPayment(staffId, amount, note) {
+  const n = Number(amount || 0);
+  if (!staffId) return false;
+  if (isNaN(n) || n <= 0) return false;
+
+  const acc = ensureStaffAccount(staffId);
+  acc.entries = acc.entries || [];
+
+  const entry = {
+    id: uid("staff"),
+    staffId,
+    type: "credit",             // credit reduces what staff owes
+    amount: n,
+    note: (note || "").trim(),
+    codId: null,
+    date: new Date().toISOString(),
+    createdBy: currentStaff?.()?.name || "system"
+  };
+
+  acc.entries.unshift(entry);
+  acc.balance = Math.max(0, Number(acc.balance || 0) - n);
+
+  pushAudit?.(
+    currentStaff?.()?.name || "system",
+    currentStaff?.()?.role || "system",
+    "staff_paid_shortage",
+    JSON.stringify({ staffId, amount: n, note: entry.note })
+  );
+
+  return true;
+}
+
+window.postStaffCharge = postStaffCharge;
+window.postStaffPayment = postStaffPayment;
 
   async function pushAudit(actor, role, action, details) {
   const staff = currentStaff();
@@ -1240,7 +1329,7 @@ submitBtn.onclick = () => {
       submitBtn,
       staff,
       selectedDate,
-      initialDeclared: existingDraft.initialDeclared
+      openingFloat: existingDraft.openingFloat
     });
     return;
   }
@@ -1545,12 +1634,23 @@ console.log("MODAL BACK FOUND?", back);
     cod.resolvedAt = new Date().toISOString();
     cod.status = "resolved";
     cod.variance = resolvedAmount - cod.systemExpected;
+
     // ✅ If final variance is SHORTAGE, manager can charge staff account
 if (cod.variance < 0) {
   const shortage = Math.abs(cod.variance);
 
-  // charge staff by default (you can add a checkbox later)
-  postStaffCharge(cod.staffId, shortage, `COD shortage on ${cod.date}: ${note}`, cod.id);
+  // ✅ prevent double charge at COD-level too
+  if (!cod.staffCharged) {
+    const ok = postStaffCharge(
+      cod.staffId,
+      shortage,
+      `COD shortage on ${cod.date}: ${note}`,
+      cod.id
+    );
+    if (ok) cod.staffCharged = true;
+  }
+} else {
+  cod.staffCharged = false; // optional, keeps record clean
 }
 
     save();
