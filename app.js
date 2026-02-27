@@ -512,14 +512,15 @@ function postStaffCharge(staffId, amount, note, codId) {
   acc.entries = acc.entries || [];
 
   // ✅ Prevent double-charging same COD
-  const exists = acc.entries.some(e => e.type === "debit" && e.codId === codId);
+  const exists = acc.entries.some(e => e.type === "cod_shortage" && e.codId === codId);
   if (exists) return true;
 
   const entry = {
     id: uid("staff"),
     staffId,
-    type: "debit",              // debit increases what staff owes
+    type: "cod_shortage",        // clearer than "debit"
     amount: n,
+    delta: -n,                   // ✅ shortage reduces wallet
     note: (note || "").trim(),
     codId: codId || null,
     date: new Date().toISOString(),
@@ -527,9 +528,8 @@ function postStaffCharge(staffId, amount, note, codId) {
   };
 
   acc.entries.unshift(entry);
-  acc.balance = Number(acc.balance || 0) + n;
+  acc.balance = Number(acc.balance || 0) - n;   // ✅ wallet goes down (more negative)
 
-  // optional audit trail
   pushAudit?.(
     currentStaff?.()?.name || "system",
     currentStaff?.()?.role || "system",
@@ -540,7 +540,6 @@ function postStaffCharge(staffId, amount, note, codId) {
   return true;
 }
 
-// Optional helper if later you want to record repayments:
 function postStaffPayment(staffId, amount, note) {
   const n = Number(amount || 0);
   if (!staffId) return false;
@@ -552,8 +551,9 @@ function postStaffPayment(staffId, amount, note) {
   const entry = {
     id: uid("staff"),
     staffId,
-    type: "credit",             // credit reduces what staff owes
+    type: "repayment",
     amount: n,
+    delta: +n,                    // ✅ repayment increases wallet
     note: (note || "").trim(),
     codId: null,
     date: new Date().toISOString(),
@@ -561,7 +561,7 @@ function postStaffPayment(staffId, amount, note) {
   };
 
   acc.entries.unshift(entry);
-  acc.balance = Math.max(0, Number(acc.balance || 0) - n);
+  acc.balance = Number(acc.balance || 0) + n;   // ✅ wallet goes up (toward positive)
 
   pushAudit?.(
     currentStaff?.()?.name || "system",
@@ -1349,6 +1349,28 @@ submitBtn.onclick = () => {
     return;
   }
 
+  // ✅ Post Opening Float into staff account ONCE per day
+const refOpen = `OPENFLOAT|${staff.id}|${selectedDate}`;
+const staffAcc = ensureStaffAccount(staff.id);
+
+staffAcc.entries = staffAcc.entries || [];
+const alreadyPosted = staffAcc.entries.some(e => e.refId === refOpen);
+
+if (!alreadyPosted) {
+  staffAcc.balance = Number(staffAcc.balance || 0) + Math.abs(openingFloat);
+  staffAcc.entries.unshift({
+    id: uid("sf"),
+    staffId: staff.id,
+    type: "opening_float",
+    amount: Math.abs(openingFloat),
+    delta: +Math.abs(openingFloat),
+    date: selectedDate + "T00:00:00.000Z",
+    refId: refOpen,
+    note: `Opening Float for ${selectedDate}`
+  });
+}
+
+
   // 🔒 LOCK PHASE A
   state.codDrafts[draftKey] = {
     staffId: staff.id,
@@ -1401,7 +1423,7 @@ const empowerments = approved
   .reduce((s, t) => s + Number(t.amount || 0), 0);
 
 // ✅ new expected closing cash
-const expectedCash = Number(openingFloat || 0) + credits - withdrawals - empowerments;
+const expectedCash = Number(openingFloat || 0) - Number(credits || 0);
 
   // ===== PHASE B UI =====
   box.innerHTML = `
@@ -1409,7 +1431,7 @@ const expectedCash = Number(openingFloat || 0) + credits - withdrawals - empower
     <div class="small"><b>Date:</b> ${selectedDate}</div>
 
     <div class="card" style="margin-top:10px">
-      <div class="small">System Credits: ${fmt(credits)}</div>
+      <div class="small">System Credits (cash given out): ${fmt(credits)}</div>
       <div class="small">Withdrawals (info): ${fmt(withdrawals)}</div>
       <div class="small">Empowerments (info): ${fmt(empowerments)}</div>
       <div class="small"><b>Expected Closing Cash:</b> ${fmt(expectedCash)}</div>
@@ -1541,7 +1563,6 @@ const expectedCash = Number(openingFloat || 0) + credits - withdrawals - empower
         note: noteBox.value || ""
       })
     );
-
     delete state.codDrafts?.[draftKey];
     save();
 
@@ -5609,6 +5630,19 @@ state.transactions.push({
 // CREDIT APPROVAL ONLY
 // =========================
 if (action === "approve" && app.type === "credit") {
+// ✅ CREDIT must be backed by teller opening float (credits only)
+const tellerId = actorId; // requester (teller), not manager
+const todayKey = String(app.processedAt || new Date().toISOString()).slice(0, 10);
+const refOpen = `OPENFLOAT|${tellerId}|${todayKey}`;
+
+// must have declared opening float today
+const cashAcc = ensureStaffAccount(tellerId);
+const hasOpenFloatToday = (cashAcc.entries || []).some(e => e.refId === refOpen);
+
+if (!hasOpenFloatToday) {
+  showToast("Declare Opening Float before approving credits");
+  return;
+}
 
   let creditedToBalance = app.amount;
 
@@ -5704,6 +5738,30 @@ actorId: actorId,
 approvalId: app.id
   });
 
+  // ✅ Deduct teller float by the FULL approved credit amount (credits only)
+// 🔒 Prevent double deduction if approval logic re-runs
+cashAcc.entries = cashAcc.entries || [];
+
+const alreadyDeducted = cashAcc.entries.some(
+  e => e.refId === app.id && e.type === "credit_out"
+);
+
+if (!alreadyDeducted) {
+  cashAcc.balance = Number(cashAcc.balance || 0) - Math.abs(app.amount);
+
+  cashAcc.entries.unshift({
+    id: uid("sf"),
+    staffId: tellerId,
+    type: "credit_out",
+    amount: Math.abs(app.amount),
+    delta: -Math.abs(app.amount),
+    date: app.processedAt,
+    refId: app.id,
+    note: `Credit to ${cust.name}`
+  });
+}
+
+
   state.transactions = state.transactions || [];
 
 state.transactions.push({
@@ -5717,6 +5775,8 @@ state.transactions.push({
   actorId: actorId,      // ✅ add
   approvalId: app.id
 });
+
+
 }
 
 
