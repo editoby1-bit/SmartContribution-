@@ -1137,6 +1137,7 @@ function openDeclareFloatModal(dateOverride = null) {
   const refOpen = `OPENFLOAT|${staff.id}|${selectedDate}`;
 
   const staffAcc = ensureStaffAccount(staff.id);
+  const balNow = Number(staffAcc.balance || 0);
   staffAcc.entries = staffAcc.entries || [];
 
   // already declared today?
@@ -1152,6 +1153,10 @@ function openDeclareFloatModal(dateOverride = null) {
     <div class="small muted" style="margin-top:6px">
       Declare your opening float for <b>${selectedDate}</b>.
     </div>
+    
+    <div class="small" style="margin-top:6px">
+  <b>Current Balance:</b> <span id="staffBalNow">${fmt(balNow)}</span>
+</div>
 
     <input id="floatAmt" class="input" type="number"
       placeholder="Enter Opening Float"
@@ -1198,11 +1203,39 @@ function openDeclareFloatModal(dateOverride = null) {
     if (back) back.style.display = "none";
 
     showToast("Opening Float declared");
+    if (typeof openMyStaffAccount === "function") openMyStaffAccount();
   });
 }
 
 window.openDeclareFloatModal = openDeclareFloatModal;
 
+function openMyStaffAccount() {
+  const staff = currentStaff?.();
+  if (!staff) return showToast("Select staff");
+
+  const acc = ensureStaffAccount(staff.id);
+  acc.entries = acc.entries || [];
+
+  const box = document.createElement("div");
+  box.innerHTML = `
+    <div class="small"><b>${staff.name}</b> — Staff Account</div>
+    <div class="card" style="margin-top:10px">
+      <div class="small"><b>Balance:</b> ${fmt(Number(acc.balance || 0))}</div>
+    </div>
+    <div style="margin-top:10px;max-height:280px;overflow:auto">
+      ${(acc.entries || []).slice(0, 50).map(e => `
+        <div style="padding:8px;border-bottom:1px solid #eee">
+          <div class="small"><b>${String(e.type || "").toUpperCase()}</b> — ${fmt(Number(e.amount || 0))}</div>
+          <div class="small muted">${new Date(e.date || Date.now()).toLocaleString()}</div>
+          ${e.note ? `<div class="small muted">${e.note}</div>` : ""}
+        </div>
+      `).join("") || `<div class="small muted">No entries yet</div>`}
+    </div>
+  `;
+
+  openModalGeneric("My Staff Account", box, "Close", true);
+}
+window.openMyStaffAccount = openMyStaffAccount;
 
 function openMyCOD() {
   const staff = currentStaff();
@@ -1329,24 +1362,56 @@ const resumeDraft = state.codDrafts[resumeDraftKey] || null;
       />
     </div>
 
-    <input
-  id="openingFloat"
-  class="input"
-  placeholder="Enter Opening Float (cash at start of day)"
-  style="margin-top:10px"
-/>
+    <div class="card" style="margin-top:10px">
+  <div class="small"><b>Opening Balance (Declared):</b> <span id="codOpenFloatValue">${fmt(0)}</span></div>
+  <div class="small muted" style="margin-top:6px" id="codOpenFloatHint"></div>
+</div>
 
     <div id="codError" class="small danger" style="margin-top:8px;display:none"></div>
   `;
-  // 🔒 IF DRAFT EXISTS → LOCK PHASE A & RESUME PHASE B
+  function getDeclaredOpeningFloat(dateStr) {
+  const refOpen = `OPENFLOAT|${staff.id}|${dateStr}`; // ✅ must be OPENFLOAT (no typo)
+  const acc = ensureStaffAccount(staff.id);
+  const entry = (acc.entries || []).find(e => e.refId === refOpen && e.type === "opening_float");
+  return entry ? Number(entry.amount || 0) : 0;
+}
+
+function renderOpeningFloatReadOnly(dateStr) {
+  const v = getDeclaredOpeningFloat(dateStr);
+  const valEl = box.querySelector("#codOpenFloatValue");
+  const hintEl = box.querySelector("#codOpenFloatHint");
+  if (valEl) valEl.textContent = fmt(v);
+
+  if (hintEl) {
+    if (v > 0) {
+      hintEl.textContent = "✔ Opening Balance found for this date.";
+      hintEl.style.color = "green";
+    } else {
+      hintEl.textContent = "No Opening Balance declared for this date.";
+      hintEl.style.color = "#b42318";
+    }
+  }
+}
+
+// initial render
+renderOpeningFloatReadOnly(today);
+
+// if date changes, refresh the read-only display too
+box.querySelector("#codDate")?.addEventListener("change", (e) => {
+  renderOpeningFloatReadOnly(e.target.value || today);
+});
+
+
+  // 🔒 IF DRAFT EXISTS → LOCK DATE ONLY & RESUME PHASE B
 if (resumeDraft) {
   const dateInput = box.querySelector("#codDate");
-  const floatInput = box.querySelector("#openingFloat");
+  if (dateInput) {
+    dateInput.value = resumeDraft.date;
+    dateInput.disabled = true;
+  }
 
-if (floatInput) {
-  floatInput.value = resumeDraft.openingFloat || 0;
-  floatInput.disabled = true;
-}
+  // keep read-only float display accurate for the resumed date
+  renderOpeningFloatReadOnly(resumeDraft.date);
 }
 
 
@@ -1372,6 +1437,14 @@ back.style.display = "flex";
   // ===== FIRST CLICK ONLY =====
 submitBtn.onclick = () => {
   selectedDate = box.querySelector("#codDate")?.value || today;
+  
+  const openingFloat = getDeclaredOpeningFloat(selectedDate);
+if (!openingFloat || openingFloat <= 0) {
+  showToast("Declare Opening Balance first");
+  openDeclareFloatModal(selectedDate); // ✅ uses your existing declare modal
+  return;
+}
+
 
   if (!state.codDrafts) state.codDrafts = {};
 
@@ -1403,64 +1476,32 @@ submitBtn.onclick = () => {
       submitBtn,
       staff,
       selectedDate,
-      openingFloat: existingDraft.openingFloat
+      openingFloat: getDeclaredOpeningFloat(selectedDate)
     });
     return;
   }
 
   // 🟢 PHASE A — FIRST & ONLY DECLARATION
-  const openingFloat = Number(
-  box.querySelector("#openingFloat")?.value || 0
-);
+  const openingFloat = getDeclaredOpeningFloat(selectedDate);
 
-
-  const err = box.querySelector("#codError");
-  if (openingFloat <= 0) {
-    if (err) {
-      err.textContent = "Enter a valid collected cash amount";
-      err.style.display = "block";
-    }
-    return;
-  }
-
-  // ✅ Post Opening Float into staff account ONCE per day
-const refOpen = `OPENFLOAT|${staff.id}|${selectedDate}`;
-const staffAcc = ensureStaffAccount(staff.id);
-
-staffAcc.entries = staffAcc.entries || [];
-const alreadyPosted = staffAcc.entries.some(e => e.refId === refOpen);
-
-if (!alreadyPosted) {
-  staffAcc.balance = Number(staffAcc.balance || 0) + Math.abs(openingFloat);
-  staffAcc.entries.unshift({
-    id: uid("sf"),
-    staffId: staff.id,
-    type: "opening_float",
-    amount: Math.abs(openingFloat),
-    delta: +Math.abs(openingFloat),
-    date: selectedDate + "T00:00:00.000Z",
-    refId: refOpen,
-    note: `Opening Float for ${selectedDate}`
-  });
+if (!openingFloat || openingFloat <= 0) {
+  showToast("Declare Opening Balance first");
+  openDeclareFloatModal(selectedDate);
+  return;
 }
 
+// store draft (NO openingFloat stored)
+state.codDrafts[draftKey] = {
+  staffId: staff.id,
+  date: selectedDate,
+  startedAt: new Date().toISOString()
+};
 
-  // 🔒 LOCK PHASE A
-  state.codDrafts[draftKey] = {
-    staffId: staff.id,
-    date: selectedDate,
-    openingFloat,
-    startedAt: new Date().toISOString()
-  };
+box.querySelector("#codDate")?.setAttribute("disabled", true);
+save();
 
-  // 🔒 DISABLE PHASE A INPUTS
-  box.querySelector("#codDate")?.setAttribute("disabled", true);
-  box.querySelector("#openingFloat")?.setAttribute("disabled", true);
-
-  save();
-
-  // ➜ MOVE TO PHASE B
-  renderPhaseB({
+// ➜ MOVE TO PHASE B
+renderPhaseB({
   box,
   submitBtn,
   staff,
@@ -1488,16 +1529,7 @@ const credits = approved
   .filter(t => t.type === "credit")
   .reduce((s, t) => s + Number(t.amount || 0), 0);
 
-const withdrawals = approved
-  .filter(t => t.type === "withdraw")
-  .reduce((s, t) => s + Number(t.amount || 0), 0);
-
-const empowerments = approved
-  .filter(t => t.type === "empowerment")
-  .reduce((s, t) => s + Number(t.amount || 0), 0);
-
-// ✅ new expected closing cash
-const expectedCash = Number(openingFloat || 0) - Number(credits || 0);
+const expectedCash = Number(openingFloat || 0) - credits;
 
   // ===== PHASE B UI =====
   box.innerHTML = `
@@ -1570,6 +1602,22 @@ const expectedCash = Number(openingFloat || 0) - Number(credits || 0);
 
     finalErr.style.display = "none";
 
+    // ✅ recompute credits at submit-time (latest approvals)
+const approvedNow = (state.approvals || []).filter(a =>
+  a.status === "approved" &&
+  (a.requestedBy === staff.id || a.createdBy === staff.id) &&
+  String(a.processedAt || "").startsWith(selectedDate) &&
+  a.type === "credit"
+);
+
+const creditsNow = approvedNow.reduce((s, t) => s + Number(t.amount || 0), 0);
+
+// ✅ credits only affect float
+const expectedCashNow = Number(openingFloat || 0) - creditsNow;
+
+const finalDeclared = Number(finalDeclaredInput.value || 0);
+const variance = finalDeclared - expectedCashNow;
+
     if (variance !== 0 && !noteBox.value.trim()) {
       finalErr.textContent = "Explanation is required for variance";
       finalErr.style.display = "block";
@@ -1599,15 +1647,14 @@ const expectedCash = Number(openingFloat || 0) - Number(credits || 0);
 
   // 🔒 SNAPSHOT (SOURCE OF TRUTH)
   snapshot: {
-    credits: Number(credits || 0),
-    withdrawals: Number(withdrawals || 0),
-    empowerments: Number(empowerments || 0),
-  },
+  credits: Number(creditsNow || 0),
+  withdrawals: 0,
+  empowerments: 0
+},
 
-  // 🔑 SYSTEM VALUES (LOCKED)
-  systemExpected: expectedCash,
-  staffDeclared: finalDeclared,
-  variance,
+systemExpected: expectedCashNow,
+staffDeclared: finalDeclared,
+variance,
 
   // 🔎 STAFF CONTEXT
   openingFloat,
@@ -1630,12 +1677,12 @@ const expectedCash = Number(openingFloat || 0) - Number(credits || 0);
       staff.role,
       "close_day",
       JSON.stringify({
-        openingFloat,
-        finalDeclared,
-        expectedCash,
-        variance,
-        note: noteBox.value || ""
-      })
+  openingFloat,
+  finalDeclared,
+  expectedCash: expectedCashNow,
+  variance,
+  note: noteBox.value || ""
+})
     );
     delete state.codDrafts?.[draftKey];
     save();
@@ -3673,28 +3720,28 @@ function renderToolsTab() {
     const rejectBtn = document.getElementById("rejectBtn");
 
     if (approveBtn) {
-      approveBtn.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        approveBtn.disabled = true;
+  approveBtn.onclick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    approveBtn.disabled = true;
 
-        processApproval(approval.id, "approve");
-        window.activeApprovalId = null;
-        renderToolsTab();
-      };
-    }
+    await processApproval(approval.id, "approve");
+    window.activeApprovalId = null;
+    renderToolsTab();
+  };
+}
 
     if (rejectBtn) {
-      rejectBtn.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        rejectBtn.disabled = true;
+  rejectBtn.onclick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    rejectBtn.disabled = true;
 
-        processApproval(approval.id, "reject");
-        window.activeApprovalId = null;
-        renderToolsTab();
-      };
-    }
+    await processApproval(approval.id, "reject");
+    window.activeApprovalId = null;
+    renderToolsTab();
+  };
+}
 
     const sel = document.getElementById("approvalSelect");
     if (sel) {
@@ -3715,6 +3762,18 @@ window.renderToolsTab = renderToolsTab;
 
 // 1. Open credit/withdraw modal *with correct customer context*
 async function openActionModal(type) {
+  const staff = currentStaff?.();
+if (staff && staff.role === "teller") {
+  const d = new Date().toISOString().slice(0,10);
+  const refOpen = `OPENFLOAT|${staff.id}|${d}`;
+  const acc = ensureStaffAccount(staff.id);
+  const hasOpen = (acc.entries || []).some(e => e.refId === refOpen && e.type === "opening_float");
+  if (!hasOpen) {
+    showToast("Declare Opening Balance first");
+    openDeclareFloatModal(d);
+    return;
+  }
+}
   const c = state.customers.find(x => x.id === activeCustomerId);
   if (!c) return;
   if (c.frozen) return showToast("Account is frozen");
@@ -5072,24 +5131,13 @@ if (type === "credit") {
     showToast("Description is required for audit purposes");
     return;
   }
-  // ✅ COD float enforcement (cash-out types only)
-if (["withdraw", "empowerment"].includes(type)) {
-  const today = new Date().toISOString().slice(0, 10);
-  const key = `${staff.id}|${today}`;
-  const draft = state.codDrafts?.[key];
-  const openingFloat = Number(draft?.openingFloat || 0);
-
-  if (!openingFloat) {
-    showToast("Declare Opening Float first (Close Day → Continue)");
-    return;
-  }
-
+ 
   // approved outflows today by this staff
   const approved = (state.approvals || []).filter(a =>
     a.status === "approved" &&
     (a.requestedBy === staff.id || a.createdBy === staff.id) &&
     String(a.processedAt || "").startsWith(today) &&
-    ["withdraw", "empowerment"].includes(a.type)
+    ["empowerment"].includes(a.type)
   );
 
   const used = approved.reduce((s, a) => s + Number(a.amount || 0), 0);
