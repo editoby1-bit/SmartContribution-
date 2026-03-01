@@ -1129,6 +1129,80 @@ function getCODDraft(staffId, date) {
   return state.codDrafts[`${staffId}|${date}`] || null;
 }
 
+function openDeclareFloatModal(dateOverride = null) {
+  const staff = currentStaff?.();
+  if (!staff) return showToast("Select staff");
+
+  const selectedDate = dateOverride || new Date().toISOString().slice(0, 10);
+  const refOpen = `OPENFLOAT|${staff.id}|${selectedDate}`;
+
+  const staffAcc = ensureStaffAccount(staff.id);
+  staffAcc.entries = staffAcc.entries || [];
+
+  // already declared today?
+  const existing = staffAcc.entries.find(e => e.refId === refOpen);
+  if (existing) {
+    showToast("Opening Float already declared for today");
+    return;
+  }
+
+  const box = document.createElement("div");
+  box.innerHTML = `
+    <div class="small"><b>Staff:</b> ${staff.name}</div>
+    <div class="small muted" style="margin-top:6px">
+      Declare your opening float for <b>${selectedDate}</b>.
+    </div>
+
+    <input id="floatAmt" class="input" type="number"
+      placeholder="Enter Opening Float"
+      style="margin-top:10px" />
+
+    <div id="floatErr" class="small danger" style="margin-top:8px;display:none"></div>
+  `;
+
+  openModalGeneric("Declare Opening Float", box, "Declare", true, () => {
+    const n = Number(box.querySelector("#floatAmt")?.value || 0);
+    const err = box.querySelector("#floatErr");
+    if (!n || n <= 0) {
+      if (err) {
+        err.textContent = "Enter a valid opening float amount";
+        err.style.display = "block";
+      }
+      return false;
+    }
+    return true;
+  }).then((ok) => {
+    if (!ok) return;
+
+    const openingFloat = Math.abs(Number(box.querySelector("#floatAmt").value || 0));
+    const now = new Date().toISOString();
+
+    // ✅ Post opening float ONCE per day
+    staffAcc.balance = Number(staffAcc.balance || 0) + openingFloat;
+
+    staffAcc.entries.unshift({
+      id: uid("sf"),
+      staffId: staff.id,
+      type: "opening_float",
+      amount: openingFloat,
+      delta: +openingFloat,
+      date: selectedDate + "T00:00:00.000Z", // ✅ daily anchor (optional but recommended)
+      refId: refOpen,
+      note: `Opening Float for ${selectedDate}`
+    });
+
+    save?.();
+
+    // close modal
+    const back = document.getElementById("txModalBack");
+    if (back) back.style.display = "none";
+
+    showToast("Opening Float declared");
+  });
+}
+
+window.openDeclareFloatModal = openDeclareFloatModal;
+
 
 function openMyCOD() {
   const staff = currentStaff();
@@ -4971,6 +5045,21 @@ async function processTransaction({ type, customerId, amount, desc, interest = 0
 
   const staff = currentStaff();
   if (!staff) return showToast("Select staff");
+
+  // ✅ Teller must declare Opening Float before sending CREDIT requests
+if (type === "credit") {
+  const selectedDate = new Date().toISOString().slice(0, 10);
+  const refOpen = `OPENFLOAT|${staff.id}|${selectedDate}`;
+
+  const staffAcc = ensureStaffAccount(staff.id);
+  const hasOpen = (staffAcc.entries || []).some(e => e.refId === refOpen);
+
+  if (!hasOpen) {
+    showToast("Declare Opening Float before sending credit requests");
+    openDeclareFloatModal(selectedDate); // prompt immediately
+    return;
+  }
+}
 
   const cust = state.customers.find(c => c.id === customerId);
   if (!cust) return showToast("Customer missing");
@@ -9299,6 +9388,9 @@ document.getElementById("btnVerify").addEventListener("click", async () => {
         "Close"
       );
   });
+  document.getElementById("btnDeclareFloat")?.addEventListener("click", () => {
+  openDeclareFloatModal();
+});
   document.getElementById("btnMyOps")?.addEventListener("click", () => {
   openMyOperationalPosts();
 });
