@@ -1497,10 +1497,21 @@ const approved = (state.approvals || []).filter(a =>
   String(a.processedAt || "").startsWith(selectedDate)
 );
 
+// 🔴 FLOAT-IMPACTING (SOURCE OF TRUTH)
 const credits = approved
   .filter(t => t.type === "credit")
   .reduce((s, t) => s + Number(t.amount || 0), 0);
 
+// 🔎 INFO-ONLY (DO NOT AFFECT FLOAT)
+const withdrawals = approved
+  .filter(t => t.type === "withdraw")
+  .reduce((s, t) => s + Number(t.amount || 0), 0);
+
+const empowerments = approved
+  .filter(t => t.type === "empowerment")
+  .reduce((s, t) => s + Number(t.amount || 0), 0);
+
+// ✅ EXPECTED CASH = OPENING FLOAT - CREDITS ONLY (CRITICAL RULE)
 const expectedCash = Number(openingFloat || 0) - credits;
 
   // ===== PHASE B UI =====
