@@ -5549,6 +5549,14 @@ if (app.type === "account_entry") {
 
   const cust = state.customers.find(c => c.id === app.customerId);
   if (!cust) return showToast("Customer missing");
+
+  // ✅ harden legacy records (prevents .push undefined crash)
+cust.transactions = Array.isArray(cust.transactions) ? cust.transactions : [];
+state.transactions = Array.isArray(state.transactions) ? state.transactions : [];
+state.empowerments = Array.isArray(state.empowerments) ? state.empowerments : [];
+
+cust.empowerment = cust.empowerment || {};
+cust.empowerment.history = Array.isArray(cust.empowerment.history) ? cust.empowerment.history : [];
  
   // ===== CONFIRM =====
   const ok = await openModalGeneric(
