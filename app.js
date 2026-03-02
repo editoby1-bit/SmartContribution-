@@ -1569,8 +1569,9 @@ const expectedCash = Number(openingFloat || 0) - credits;
 
   // ===== FINAL SUBMIT =====
   submitBtn.onclick = () => {
-    const finalDeclared = Number(finalDeclaredInput.value || 0);
-    const variance = finalDeclared - expectedCash;
+   let finalDeclared = Number(finalDeclaredInput.value || 0);
+let variance = finalDeclared - expectedCash;
+
 
     finalErr.style.display = "none";
 
@@ -1586,9 +1587,8 @@ const creditsNow = approvedNow.reduce((s, t) => s + Number(t.amount || 0), 0);
 
 // ✅ credits only affect float
 const expectedCashNow = Number(openingFloat || 0) - creditsNow;
-
-const finalDeclared = Number(finalDeclaredInput.value || 0);
-const variance = finalDeclared - expectedCashNow;
+finalDeclared = Number(finalDeclaredInput.value || 0);
+variance = finalDeclared - expectedCashNow;
 
     if (variance !== 0 && !noteBox.value.trim()) {
       finalErr.textContent = "Explanation is required for variance";
