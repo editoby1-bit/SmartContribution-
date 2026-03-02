@@ -1437,24 +1437,20 @@ back.style.display = "flex";
   // ===== FIRST CLICK ONLY =====
 submitBtn.onclick = () => {
   selectedDate = box.querySelector("#codDate")?.value || today;
-  
-  const openingFloat = getDeclaredOpeningFloat(selectedDate);
-if (!openingFloat || openingFloat <= 0) {
-  showToast("Declare Opening Balance first");
-  openDeclareFloatModal(selectedDate); // ✅ uses your existing declare modal
-  return;
-}
 
+  const openingFloat = getDeclaredOpeningFloat(selectedDate);
+  if (!openingFloat || openingFloat <= 0) {
+    showToast("Declare Opening Balance first");
+    openDeclareFloatModal(selectedDate);
+    return;
+  }
 
   if (!state.codDrafts) state.codDrafts = {};
-
   const draftKey = `${staff.id}|${selectedDate}`;
 
-  // 🚫 HARD BLOCK — already submitted
   const alreadySubmitted = (state.cod || []).some(
     c => c.staffId === staff.id && c.date === selectedDate
   );
-
   const hasDraft = state.codDrafts[draftKey];
 
   if (alreadySubmitted) {
@@ -1462,54 +1458,30 @@ if (!openingFloat || openingFloat <= 0) {
     return;
   }
 
-  // 🔑 allow restart if draft exists but final COD was cleared
   if (hasDraft && !alreadySubmitted) {
     delete state.codDrafts[draftKey];
     save();
   }
 
-  // 🔑 RESUME PHASE B IF DRAFT EXISTS
   const existingDraft = state.codDrafts[draftKey];
   if (existingDraft) {
-    renderPhaseB({
-      box,
-      submitBtn,
-      staff,
-      selectedDate,
-      openingFloat: getDeclaredOpeningFloat(selectedDate)
-    });
+    renderPhaseB({ box, submitBtn, staff, selectedDate, openingFloat });
     return;
   }
 
-  // 🟢 PHASE A — FIRST & ONLY DECLARATION
-  const openingFloat = getDeclaredOpeningFloat(selectedDate);
+  state.codDrafts[draftKey] = {
+    staffId: staff.id,
+    date: selectedDate,
+    startedAt: new Date().toISOString()
+  };
 
-if (!openingFloat || openingFloat <= 0) {
-  showToast("Declare Opening Balance first");
-  openDeclareFloatModal(selectedDate);
-  return;
-}
+  box.querySelector("#codDate")?.setAttribute("disabled", true);
+  save();
 
-// store draft (NO openingFloat stored)
-state.codDrafts[draftKey] = {
-  staffId: staff.id,
-  date: selectedDate,
-  startedAt: new Date().toISOString()
+  renderPhaseB({ box, submitBtn, staff, selectedDate, openingFloat });
 };
-
-box.querySelector("#codDate")?.setAttribute("disabled", true);
-save();
-
-// ➜ MOVE TO PHASE B
-renderPhaseB({
-  box,
-  submitBtn,
-  staff,
-  selectedDate,
-  openingFloat
-});
 }
- }
+ 
 
 function renderPhaseB({
   box,
