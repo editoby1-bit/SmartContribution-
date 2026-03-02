@@ -5104,24 +5104,7 @@ if (type === "credit") {
     return;
   }
  
-  // approved outflows today by this staff
-  const approved = (state.approvals || []).filter(a =>
-    a.status === "approved" &&
-    (a.requestedBy === staff.id || a.createdBy === staff.id) &&
-    String(a.processedAt || "").startsWith(today) &&
-    ["empowerment"].includes(a.type)
-  );
-
-  const used = approved.reduce((s, a) => s + Number(a.amount || 0), 0);
-  const remaining = openingFloat - used;
-
-  if (amount > remaining) {
-    showToast(`Insufficient float. Remaining: ${fmt(remaining)}`);
-    return;
-  }
-}
-
-  const ok = await openModalGeneric(
+    const ok = await openModalGeneric(
     "Confirm Transaction",
     `
       <div class="small">
