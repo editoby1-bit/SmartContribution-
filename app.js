@@ -155,7 +155,13 @@ state.empowerments = Array.isArray(data.empowerments) ? data.empowerments : [];
 
 // 🔥 RESTORE EMPOWERMENT TRANSACTIONS
 state.transactions = Array.isArray(data.transactions) ? data.transactions : [];
+state.staffAccounts = (data.staffAccounts && typeof data.staffAccounts === "object")
+  ? data.staffAccounts
+  : {};
 
+state.accounts = state.accounts && typeof state.accounts === "object"
+  ? state.accounts
+  : { income: [], expense: [] };
 
     if (data.accounts) {
   state.accounts.income = Array.isArray(data.accounts.income)
@@ -250,6 +256,7 @@ function dashboardIsOpen() {
       audit: Array.isArray(state.audit) ? state.audit : [],
       cod: Array.isArray(state.cod) ? state.cod : [],
       codDrafts: state.codDrafts || {},
+      staffAccounts: state.staffAccounts || {},
       empowerments: Array.isArray(state.empowerments) ? state.empowerments : [],
       transactions: Array.isArray(state.transactions) ? state.transactions : [],
 
@@ -502,6 +509,15 @@ function ensureStaffAccount(staffId) {
   }
   return state.staffAccounts[staffId];
 }
+
+function getOpeningBalanceForStaffDate(staffId, dateStr) {
+  const refOpen = `OPENFLOAT|${staffId}|${dateStr}`;
+  const acc = ensureStaffAccount(staffId);
+  const entry = (acc.entries || []).find(e => e.refId === refOpen && e.type === "opening_float");
+  return entry ? Number(entry.amount || 0) : 0;
+}
+window.getOpeningBalanceForStaffDate = getOpeningBalanceForStaffDate;
+
 
 function postStaffCharge(staffId, amount, note, codId) {
   const n = Number(amount || 0);
@@ -1141,7 +1157,10 @@ function openDeclareFloatModal(dateOverride = null) {
   staffAcc.entries = staffAcc.entries || [];
 
   // already declared today?
-  const existing = staffAcc.entries.find(e => e.refId === refOpen);
+  // already declared today? (ONLY opening_float counts)
+const existing = (staffAcc.entries || []).find(e =>
+  e.refId === refOpen && e.type === "opening_float"
+);
   if (existing) {
     showToast("Opening Float already declared for today");
     return;
@@ -1579,107 +1598,93 @@ const expectedCash = Number(openingFloat || 0) - credits;
   recalcVariance();
 
   // ===== FINAL SUBMIT =====
-  submitBtn.onclick = () => {
-   let finalDeclared = Number(finalDeclaredInput.value || 0);
-let variance = finalDeclared - expectedCash;
+submitBtn.onclick = () => {
+  // ✅ recompute credits at submit-time (latest approvals)
+  const approvedNow = (state.approvals || []).filter(a =>
+    a.status === "approved" &&
+    (a.requestedBy === staff.id || a.createdBy === staff.id) &&
+    String(a.processedAt || "").startsWith(selectedDate) &&
+    a.type === "credit"
+  );
 
+  const creditsNow = approvedNow.reduce((s, t) => s + Number(t.amount || 0), 0);
+  const expectedCashNow = Number(openingFloat || 0) - creditsNow;
 
-    finalErr.style.display = "none";
+  const finalDeclared = Number(finalDeclaredInput.value || 0);
+  const variance = finalDeclared - expectedCashNow;
 
-    // ✅ recompute credits at submit-time (latest approvals)
-const approvedNow = (state.approvals || []).filter(a =>
-  a.status === "approved" &&
-  (a.requestedBy === staff.id || a.createdBy === staff.id) &&
-  String(a.processedAt || "").startsWith(selectedDate) &&
-  a.type === "credit"
-);
+  finalErr.style.display = "none";
 
-const creditsNow = approvedNow.reduce((s, t) => s + Number(t.amount || 0), 0);
+  if (variance !== 0 && !noteBox.value.trim()) {
+    finalErr.textContent = "Explanation is required for variance";
+    finalErr.style.display = "block";
+    submitBtn.disabled = false;
+    return;
+  }
 
-// ✅ credits only affect float
-const expectedCashNow = Number(openingFloat || 0) - creditsNow;
-finalDeclared = Number(finalDeclaredInput.value || 0);
-variance = finalDeclared - expectedCashNow;
+  submitBtn.disabled = true;
 
-    if (variance !== 0 && !noteBox.value.trim()) {
-      finalErr.textContent = "Explanation is required for variance";
-      finalErr.style.display = "block";
-      submitBtn.disabled = false;
-      return;
-    }
-    submitBtn.disabled = true;
- 
+  if (!Array.isArray(state.cod)) state.cod = [];
 
-    if (!state.cod) state.cod = [];
+  const submittedLate = selectedDate !== new Date().toISOString().slice(0, 10);
+  const draftKey = `${staff.id}|${selectedDate}`;
 
-    const submittedLate = selectedDate !== new Date().toISOString().slice(0, 10);
-    const draftKey = `${staff.id}|${selectedDate}`;
-     
-  if (!Array.isArray(state.cod)) {
-  state.cod = [];
-}
   state.cod.push({
-  id: uid("cod"),
+    id: uid("cod"),
+    staffId: staff.id,
+    staffName: staff.name,
+    role: staff.role,
+    date: selectedDate,
+    submittedLate,
 
-  staffId: staff.id,
-  staffName: staff.name,
-  role: staff.role,
-  date: selectedDate,
+    snapshot: {
+      credits: Number(creditsNow || 0),
+      withdrawals: Number(withdrawals || 0),   // info only
+      empowerments: Number(empowerments || 0), // info only
+    },
 
-  submittedLate,
+    systemExpected: expectedCashNow,
+    staffDeclared: finalDeclared,
+    variance,
 
-  // 🔒 SNAPSHOT (SOURCE OF TRUTH)
-  snapshot: {
-  credits: Number(creditsNow || 0),
-  withdrawals: 0,
-  empowerments: 0
-},
+    openingFloat,
+    staffNote: noteBox.value || "",
 
-systemExpected: expectedCashNow,
-staffDeclared: finalDeclared,
-variance,
+    status: variance === 0 ? "balanced" : "flagged",
+    resolvedAmount: null,
+    resolutionNote: "",
+    resolvedBy: null,
+    resolvedAt: null,
 
-  // 🔎 STAFF CONTEXT
-  openingFloat,
-  staffNote: noteBox.value || "",
+    createdAt: new Date().toISOString(),
+  });
 
-  // 🔎 MANAGER RESOLUTION
-  status: variance === 0 ? "balanced" : "flagged",
-  resolvedAmount: null,
-  resolutionNote: "",
-  resolvedBy: null,
-  resolvedAt: null,
+  pushAudit(
+    staff.name,
+    staff.role,
+    "close_day",
+    JSON.stringify({
+      openingFloat,
+      finalDeclared,
+      expectedCash: expectedCashNow,
+      variance,
+      note: noteBox.value || ""
+    })
+  );
 
-  createdAt: new Date().toISOString()
-});
+  delete state.codDrafts?.[draftKey];
+  save();
 
+  const back = document.getElementById("txModalBack");
+  if (back) back.style.display = "none";
 
+  // reset button state
+  submitBtn.onclick = null;
+  submitBtn.disabled = false;
+  submitBtn.dataset.submitted = "0";
 
-    pushAudit(
-      staff.name,
-      staff.role,
-      "close_day",
-      JSON.stringify({
-  openingFloat,
-  finalDeclared,
-  expectedCash: expectedCashNow,
-  variance,
-  note: noteBox.value || ""
-})
-    );
-    delete state.codDrafts?.[draftKey];
-    save();
-
-    const back = document.getElementById("txModalBack");
-back.style.display = "none";
-
-// 🔑 RESET FOR NEXT OPEN
-submitBtn.onclick = null;
-submitBtn.disabled = false;
-submitBtn.dataset.submitted = "0";
-back.onclick = null; // 🔑 release modal capture
-    showToast("Close of Day submitted");
-  };
+  showToast("Close of Day submitted");
+};
 }
 
 function openCODResolutionModal(codId) {
@@ -5243,6 +5248,8 @@ if (!canApprove()) {
   showToast("You are not authorized to approve transactions");
   return;
 }
+state.transactions = Array.isArray(state.transactions) ? state.transactions : [];
+state.staffAccounts = state.staffAccounts || {};
 const closeTxModal = () => {
   const back = document.getElementById("txModalBack");
   if (back) back.style.display = "none";
@@ -6434,6 +6441,26 @@ window.renderCODForDate = renderCODForDate;
 
 
 function renderManagerCODSummary(dateStr) {
+  const rows = (state.cod || []).filter(c => c.date === dateStr);
+
+if (rows.length === 0) {
+  // render zeros (use your own element IDs here)
+  // IMPORTANT: do NOT compute totals from approvals if no COD exists
+  // Example:
+  // document.getElementById("mgrApprovedCash").textContent = fmt(0);
+
+  return;
+}
+const expectedTotal = rows.reduce((s, c) => s + Number(c.systemExpected || 0), 0);
+
+const declaredTotal = rows.reduce((s, c) => {
+  const used = (c.status === "resolved" && c.resolvedAmount !== null)
+    ? Number(c.resolvedAmount || 0)
+    : Number(c.staffDeclared || 0);
+  return s + used;
+}, 0);
+
+const varianceTotal = declaredTotal - expectedTotal;
   const staff = currentStaff();
   if (!staff || !["manager", "ceo"].includes(staff.role)) return;
 
