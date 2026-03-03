@@ -1647,20 +1647,22 @@ submitBtn.onclick = () => {
   if (submitBtn.dataset.submitted === "1") return;
   submitBtn.dataset.submitted = "1";
 
+  // ✅ require global normDate
   const dateKey = normDate(selectedDate);
 
-  // ✅ always recompute from latest approvals at submit-time
+  // ✅ recompute from latest approvals at submit-time
   const approvedNow = (state.approvals || []).filter(a =>
     a.status === "approved" &&
     (a.requestedBy === staff.id || a.createdBy === staff.id) &&
     normDate(a.processedAt || a.requestedAt || "") === dateKey
   );
 
+  // 🔴 FLOAT-IMPACTING (SOURCE OF TRUTH)
   const creditsNow = approvedNow
     .filter(t => t.type === "credit")
     .reduce((s, t) => s + Number(t.amount || 0), 0);
 
-  // info-only (NOT part of variance)
+  // 🔎 INFO-ONLY (DO NOT AFFECT FLOAT)
   const withdrawalsInfo = approvedNow
     .filter(t => t.type === "withdraw")
     .reduce((s, t) => s + Number(t.amount || 0), 0);
@@ -1669,17 +1671,31 @@ submitBtn.onclick = () => {
     .filter(t => t.type === "empowerment")
     .reduce((s, t) => s + Number(t.amount || 0), 0);
 
-  // ✅ float rule: ONLY credits affect expected cash
-  const expectedCashNow = Number(openingFloat || 0) - Number(creditsNow || 0);
+  const opening = Number(openingFloat || 0);
 
-  const finalDeclared = moneyNumber(finalDeclaredInput?.value);
+  // ✅ RAW can be negative
+  const expectedRawNow = opening - Number(creditsNow || 0);
+
+  // ✅ physical expected cash (never negative)
+  const expectedCashNow = Math.max(0, expectedRawNow);
+
+  // ✅ staff owes this much if overdraw
+  const overdrawNow = Math.max(0, -expectedRawNow);
+
+  // ✅ declared cash must be physical (0+)
+  const finalDeclaredRaw = moneyNumber(finalDeclaredInput?.value);
+  const finalDeclared = Math.max(0, finalDeclaredRaw);
+
   const variance = finalDeclared - expectedCashNow;
 
   finalErr.style.display = "none";
 
-  // ✅ NOTE ENFORCEMENT (THIS is what you said is missing)
-  if (variance !== 0 && !noteBox.value.trim()) {
-    finalErr.textContent = "Explanation is required for variance";
+  // ✅ NOTE ENFORCEMENT:
+  // - required if variance != 0 OR overdraw exists
+  if ((variance !== 0 || overdrawNow > 0) && !noteBox.value.trim()) {
+    finalErr.textContent = overdrawNow > 0
+      ? "Explanation is required because you exceeded your Opening Float (overdraw)"
+      : "Explanation is required for variance";
     finalErr.style.display = "block";
     submitBtn.dataset.submitted = "0";
     return;
@@ -1711,14 +1727,23 @@ submitBtn.onclick = () => {
       empowerments: Number(empowermentsInfo || 0)
     },
 
-    systemExpected: expectedCashNow,
-    staffDeclared: finalDeclared,
-    variance,
+    // ✅ split expected into physical + owed
+    expectedRaw: expectedRawNow,      // can be negative
+    expectedCash: expectedCashNow,    // 0+
+    overdraw: overdrawNow,            // 0+
 
-    openingFloat: Number(openingFloat || 0),
+    systemExpected: expectedCashNow,  // keep for backward compatibility
+    staffDeclared: finalDeclared,     // physical cash counted
+    variance,                         // against physical expected
+
+    openingFloat: opening,
     staffNote: noteBox.value.trim(),
 
-    status: variance === 0 ? "balanced" : "flagged",
+    // ✅ status rules:
+    // - overdraw is NOT "balanced"
+    // - but it's also not a cash variance if variance==0
+    status: (variance === 0 && overdrawNow === 0) ? "balanced" : "flagged",
+
     resolvedAmount: null,
     resolutionNote: "",
     resolvedBy: null,
@@ -1734,7 +1759,6 @@ submitBtn.onclick = () => {
   showToast("Close of Day submitted");
   closeTxModal?.();
 };
-}
 
 function openCODResolutionModal(codId) {
   console.log("STEP 3: openCODResolutionModal ENTERED", codId);
@@ -6370,15 +6394,31 @@ state.staff.forEach(staff => {
     return;
   }
 
-  // 🔎 STATUS FLAGS
-  const isResolved = rec.status === "resolved";
-  const isFlagged = rec.status === "flagged";
-  const isBalanced = rec.status === "balanced";
+  // 🔎 DERIVED STATUS (prevents "Balanced" when overdraw exists)
+const expected = Number(rec.expectedCash ?? rec.systemExpected ?? 0);
 
-  const statusLabel = isBalanced
-    ? `<span style="color:green">✔ Balanced</span>`
-    : isResolved
-      ? `<span style="color:#1976d2">✔ Resolved</span>`
+const declared = (rec.status === "resolved" && rec.resolvedAmount != null)
+  ? Number(rec.resolvedAmount || 0)
+  : Number(rec.staffDeclared || 0);
+
+const varianceNum = declared - expected;
+const overdrawNum = Number(rec.overdraw || 0);
+
+const isResolved = rec.status === "resolved";
+const isFlagged = rec.status === "flagged";
+
+// "Balanced" should only be true when variance is zero AND no overdraw
+const isTrulyBalanced = (varianceNum === 0 && overdrawNum === 0);
+
+// special case: variance is zero but staff owes float
+const isOverdrawn = (varianceNum === 0 && overdrawNum > 0);
+
+const statusLabel = isTrulyBalanced
+  ? `<span style="color:green">✔ Balanced</span>`
+  : isResolved
+    ? `<span style="color:#1976d2">✔ Resolved</span>`
+    : isOverdrawn
+      ? `<span style="color:#ed6c02">⚠ Overdrawn (owed)</span>`
       : `<span style="color:red">⚠ Flagged</span>`;
 
   html += `
@@ -6389,18 +6429,18 @@ state.staff.forEach(staff => {
       style="
         margin-bottom:8px;
         cursor:pointer;
-        border-left:4px solid ${
-          isBalanced ? '#2e7d32'
-          : isResolved ? '#1976d2'
-          : isFlagged ? '#ed6c02'
-          : '#d32f2f'
-        };
-        background:${
-          isBalanced ? '#e8f5e9'
-          : isResolved ? '#e3f2fd'
-          : isFlagged ? '#fff3e0'
-          : '#ffebee'
-        };
+       border-left:4px solid ${
+  isTrulyBalanced ? '#2e7d32'
+  : isResolved ? '#1976d2'
+  : isOverdrawn ? '#ed6c02'
+  : '#d32f2f'
+};
+background:${
+  isTrulyBalanced ? '#e8f5e9'
+  : isResolved ? '#e3f2fd'
+  : isOverdrawn ? '#fff3e0'
+  : '#ffebee'
+};
         padding-left:8px;
       "
     >
