@@ -493,6 +493,26 @@ window.save = save;
     save();
   }
 
+  function normDate(d) {
+  if (!d) return "";
+  if (d instanceof Date) return d.toISOString().slice(0, 10);
+
+  const s = String(d).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); // DD/MM/YYYY
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+
+  try { return new Date(s).toISOString().slice(0, 10); } catch { return s; }
+}
+
+function moneyNumber(v) {
+  const s = String(v ?? "").replace(/,/g, "").trim();
+  const n = Number(s || 0);
+  return isNaN(n) ? 0 : n;
+}
+
+
 // =========================
 // STAFF ACCOUNT (LIABILITY LEDGER)
 // - debits = staff owes company (shortage)
@@ -1263,14 +1283,16 @@ function openMyCOD() {
   let selectedDate = new Date().toISOString().slice(0, 10);
 
   function getRecords(date) {
+    const dKey = normDate(date);
+
     return (state.cod || [])
       .filter(c =>
-        c.staffId === staff.id &&
-        (!date || c.date === date)
+        String(c.staffId) === String(staff.id) &&
+        (!dKey || normDate(c.date) === dKey)
       )
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
+      .sort((a, b) => new Date(normDate(b.date)) - new Date(normDate(a.date)));
   }
-  
+
   const box = document.createElement("div");
 
   const header = document.createElement("div");
@@ -1286,55 +1308,74 @@ function openMyCOD() {
   box.appendChild(list);
 
   function renderList(date) {
-  const records = getRecords(date);
+    const records = getRecords(date);
 
-  if (!records.length) {
-    list.innerHTML = `<div class="small muted">No records for this date</div>`;
-    return;
-  }
+    if (!records.length) {
+      list.innerHTML = `<div class="small muted">No records for this date</div>`;
+      return;
+    }
 
-  list.innerHTML = records.map(rec => {
-    const expected = Number(rec.systemExpected || 0);
-    const initial = Number(rec.initialDeclared || 0);
-    const declared = Number(rec.staffDeclared || 0);
-    const variance = Number(rec.variance || 0);
+    list.innerHTML = records.map(rec => {
+      const expected = Number(rec.systemExpected || 0);
 
-    return `
-      <div class="card" style="margin-bottom:10px">
-        <div class="small"><b>Date:</b> ${rec.date}</div>
+      // ✅ resolved amount overrides declared (manager resolution)
+      const declaredUsed =
+        (rec.resolvedAmount !== null && rec.resolvedAmount !== undefined)
+          ? Number(rec.resolvedAmount || 0)
+          : Number(rec.staffDeclared || 0);
 
-        <div class="small" style="margin-top:6px">
-          <b>System Expected:</b> ${fmt(expected)}<br/>
-          <b>Initial Declared:</b> ${fmt(initial)}<br/>
-          <b>Final Declared:</b> ${fmt(declared)}<br/>
-          <b>Variance:</b>
-          <span style="color:${variance === 0 ? "green" : "red"}">
-            ${fmt(variance)}
-          </span>
-        </div>
+      const variance = Number(rec.variance ?? (declaredUsed - expected) ?? 0);
 
-        ${rec.staffNote ? `
-          <div class="small muted" style="margin-top:6px">
-            Staff note: ${rec.staffNote}
+      const withdrawalsInfo = Number(rec.snapshot?.withdrawals || 0);
+      const empowermentsInfo = Number(rec.snapshot?.empowerments || 0);
+      const creditsInfo = Number(rec.snapshot?.credits || 0);
+
+      const statusLabel =
+        (variance === 0) ? "balanced" :
+        (rec.resolvedAmount !== null && rec.resolvedAmount !== undefined) ? "resolved" :
+        "flagged";
+
+      return `
+        <div class="card" style="margin-bottom:10px">
+          <div class="small"><b>Date:</b> ${normDate(rec.date)}</div>
+
+          <div class="small" style="margin-top:6px">
+            <b>System Expected:</b> ${fmt(expected)}<br/>
+            <b>Staff Declared:</b> ${fmt(Number(rec.staffDeclared || 0))}<br/>
+            ${(rec.resolvedAmount !== null && rec.resolvedAmount !== undefined) ? `
+              <b>Resolved Amount:</b> ${fmt(Number(rec.resolvedAmount || 0))}<br/>
+            ` : ""}
+            <b>Variance:</b>
+            <span style="color:${variance === 0 ? "green" : "red"}">
+              ${fmt(variance)}
+            </span>
+            <div class="small muted" style="margin-top:6px">
+              Status: <b>${statusLabel}</b>
+            </div>
           </div>
-        ` : ""}
 
-        ${rec.status === "resolved" ? `
-  <div class="small success" style="margin-top:6px">
-    <b>Resolved Amount:</b> ${fmt(rec.resolvedAmount)}
-  </div>
-  <div class="small muted">
-    🧾 Resolution Note: ${rec.resolutionNote || "—"}
-  </div>
-` : rec.managerNote ? `
-  <div class="small warning" style="margin-top:6px">
-    ⚠ Manager Note: ${rec.managerNote}
-  </div>
-` : ""}
-      </div>
-    `;
-  }).join("");
-}
+          <div class="small muted" style="margin-top:8px">
+            Credits (cash given out): <b>${fmt(creditsInfo)}</b><br/>
+            Withdrawals (info): <b>${fmt(withdrawalsInfo)}</b><br/>
+            Empowerments (info): <b>${fmt(empowermentsInfo)}</b>
+          </div>
+
+          ${rec.staffNote ? `
+            <div class="small muted" style="margin-top:8px">
+              <b>Staff note:</b> ${rec.staffNote}
+            </div>
+          ` : ""}
+
+          ${(rec.resolutionNote || rec.resolvedBy) ? `
+            <div class="small muted" style="margin-top:8px">
+              <b>Resolution note:</b> ${rec.resolutionNote || "—"}<br/>
+              <b>Resolved by:</b> ${rec.resolvedBy || "—"}
+            </div>
+          ` : ""}
+        </div>
+      `;
+    }).join("");
+  }
 
   renderList(selectedDate);
 
@@ -1345,7 +1386,6 @@ function openMyCOD() {
 
   openModalGeneric("My Close of Day", box, "Close");
 }
-
 window.openMyCOD = openMyCOD;
 
 
@@ -1599,56 +1639,80 @@ const expectedCash = Number(openingFloat || 0) - credits;
 
   // ===== FINAL SUBMIT =====
 submitBtn.onclick = () => {
-  // ✅ recompute credits at submit-time (latest approvals)
+  // stop double click
+  if (submitBtn.dataset.submitted === "1") return;
+  submitBtn.dataset.submitted = "1";
+
+  const dateKey = normDate(selectedDate);
+
+  // ✅ always recompute from latest approvals at submit-time
   const approvedNow = (state.approvals || []).filter(a =>
     a.status === "approved" &&
     (a.requestedBy === staff.id || a.createdBy === staff.id) &&
-    String(a.processedAt || "").startsWith(selectedDate) &&
-    a.type === "credit"
+    normDate(a.processedAt || a.requestedAt || "") === dateKey
   );
 
-  const creditsNow = approvedNow.reduce((s, t) => s + Number(t.amount || 0), 0);
-  const expectedCashNow = Number(openingFloat || 0) - creditsNow;
+  const creditsNow = approvedNow
+    .filter(t => t.type === "credit")
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
 
-  const finalDeclared = Number(finalDeclaredInput.value || 0);
+  // info-only (NOT part of variance)
+  const withdrawalsInfo = approvedNow
+    .filter(t => t.type === "withdraw")
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+
+  const empowermentsInfo = approvedNow
+    .filter(t => t.type === "empowerment")
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+
+  // ✅ float rule: ONLY credits affect expected cash
+  const expectedCashNow = Number(openingFloat || 0) - Number(creditsNow || 0);
+
+  const finalDeclared = moneyNumber(finalDeclaredInput?.value);
   const variance = finalDeclared - expectedCashNow;
 
   finalErr.style.display = "none";
 
+  // ✅ NOTE ENFORCEMENT (THIS is what you said is missing)
   if (variance !== 0 && !noteBox.value.trim()) {
     finalErr.textContent = "Explanation is required for variance";
     finalErr.style.display = "block";
-    submitBtn.disabled = false;
+    submitBtn.dataset.submitted = "0";
     return;
   }
 
-  submitBtn.disabled = true;
+  // ✅ HARD BLOCK duplicate COD for same staff/date
+  state.cod = Array.isArray(state.cod) ? state.cod : [];
+  const already = state.cod.some(c =>
+    String(c.staffId) === String(staff.id) &&
+    normDate(c.date) === dateKey
+  );
+  if (already) {
+    showToast("Close of Day already submitted for this date");
+    submitBtn.dataset.submitted = "0";
+    return;
+  }
 
-  if (!Array.isArray(state.cod)) state.cod = [];
-
-  const submittedLate = selectedDate !== new Date().toISOString().slice(0, 10);
-  const draftKey = `${staff.id}|${selectedDate}`;
-
+  // ✅ persist record
   state.cod.push({
     id: uid("cod"),
-    staffId: staff.id,
+    staffId: String(staff.id),
     staffName: staff.name,
     role: staff.role,
-    date: selectedDate,
-    submittedLate,
+    date: dateKey,
 
     snapshot: {
       credits: Number(creditsNow || 0),
-      withdrawals: Number(withdrawals || 0),   // info only
-      empowerments: Number(empowerments || 0), // info only
+      withdrawals: Number(withdrawalsInfo || 0),
+      empowerments: Number(empowermentsInfo || 0)
     },
 
     systemExpected: expectedCashNow,
     staffDeclared: finalDeclared,
     variance,
 
-    openingFloat,
-    staffNote: noteBox.value || "",
+    openingFloat: Number(openingFloat || 0),
+    staffNote: noteBox.value.trim(),
 
     status: variance === 0 ? "balanced" : "flagged",
     resolvedAmount: null,
@@ -1656,34 +1720,15 @@ submitBtn.onclick = () => {
     resolvedBy: null,
     resolvedAt: null,
 
-    createdAt: new Date().toISOString(),
+    createdAt: new Date().toISOString()
   });
 
-  pushAudit(
-    staff.name,
-    staff.role,
-    "close_day",
-    JSON.stringify({
-      openingFloat,
-      finalDeclared,
-      expectedCash: expectedCashNow,
-      variance,
-      note: noteBox.value || ""
-    })
-  );
+  // cleanup draft
+  if (state.codDrafts) delete state.codDrafts[`${staff.id}|${dateKey}`];
 
-  delete state.codDrafts?.[draftKey];
-  save();
-
-  const back = document.getElementById("txModalBack");
-  if (back) back.style.display = "none";
-
-  // reset button state
-  submitBtn.onclick = null;
-  submitBtn.disabled = false;
-  submitBtn.dataset.submitted = "0";
-
+  save?.();
   showToast("Close of Day submitted");
+  closeTxModal?.();
 };
 }
 
@@ -6441,74 +6486,68 @@ window.renderCODForDate = renderCODForDate;
 
 
 function renderManagerCODSummary(dateStr) {
-  const rows = (state.cod || []).filter(c => c.date === dateStr);
-
-if (rows.length === 0) {
-  // render zeros (use your own element IDs here)
-  // IMPORTANT: do NOT compute totals from approvals if no COD exists
-  // Example:
-  // document.getElementById("mgrApprovedCash").textContent = fmt(0);
-
-  return;
-}
-const expectedTotal = rows.reduce((s, c) => s + Number(c.systemExpected || 0), 0);
-
-const declaredTotal = rows.reduce((s, c) => {
-  const used = (c.status === "resolved" && c.resolvedAmount !== null)
-    ? Number(c.resolvedAmount || 0)
-    : Number(c.staffDeclared || 0);
-  return s + used;
-}, 0);
-
-const varianceTotal = declaredTotal - expectedTotal;
   const staff = currentStaff();
   if (!staff || !["manager", "ceo"].includes(staff.role)) return;
 
   const date =
-    dateStr ||
-    window.activeCODDate ||
-    new Date().toISOString().slice(0, 10);
+    normDate(dateStr || window.activeCODDate || new Date().toISOString().slice(0, 10));
 
-  const records = (state.cod || []).filter(c => c.date === date);
+  const records = (state.cod || []).filter(c => normDate(c.date) === date);
 
-  // =========================
-  // 🔑 APPROVED CREDITS (MANAGER VIEW)
-  // =========================
-  const approvedTxs = (state.approvals || []).filter(a =>
-    a.type === "credit" &&
-    a.status === "approved" &&
-    (a.processedAt || a.requestedAt)?.startsWith(date)
-  );
+  // ✅ if no COD submitted for this date, show zeros and correct counts
+  const tellers = (state.staff || []).filter(s => s.role === "teller");
 
-  const approvedTotal = approvedTxs.reduce(
-    (sum, a) => sum + Number(a.amount || 0),
-    0
-  );
-
-  // =========================
-  // 🔑 SYSTEM DECLARED (FROM COD)
-  // =========================
-  const systemDeclared = records.reduce((sum, r) => {
-    return (
-      sum +
-      (
-        r.status === "resolved"
-          ? Number(r.resolvedAmount || 0)
-          : Number(r.staffDeclared || 0)
-      )
-    );
-  }, 0);
-
-  // =========================
-  // 🔑 MANAGER VARIANCE
-  // =========================
-  const variance = approvedTotal - systemDeclared;
-
-  const submittedCount = records.length;
-  const notSubmitted = state.staff.length - submittedCount;
+  const submittedIds = new Set(records.map(r => String(r.staffId)));
+  const submittedCount = tellers.filter(t => submittedIds.has(String(t.id))).length;
+  const notSubmitted = tellers.length - submittedCount;
 
   const el = document.getElementById("managerCODSummary");
   if (!el) return;
+
+  if (!records.length) {
+    el.innerHTML = `
+      <div class="card" style="margin-bottom:12px">
+        <h4>Manager Close of Day Summary</h4>
+        <div class="small"><b>Date:</b> ${date}</div>
+
+        <div class="kv">
+          <div class="kv-label">Approved Cash (from COD credits)</div>
+          <div>${fmt(0)}</div>
+        </div>
+
+        <div class="kv">
+          <div class="kv-label">System Declared Cash</div>
+          <div>${fmt(0)}</div>
+        </div>
+
+        <div class="kv">
+          <div class="kv-label">Approval Variance</div>
+          <div style="color:green">${fmt(0)}</div>
+        </div>
+
+        <hr/>
+
+        <div class="small">
+          Submitted: <b>${submittedCount}</b><br/>
+          Not Submitted: <b>${notSubmitted}</b>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // ✅ totals from COD only
+  const approvedCash = records.reduce((s, r) => s + Number(r.snapshot?.credits || 0), 0);
+
+  const systemDeclaredCash = records.reduce((s, r) => {
+    const used =
+      (r.resolvedAmount !== null && r.resolvedAmount !== undefined)
+        ? Number(r.resolvedAmount || 0)
+        : Number(r.staffDeclared || 0);
+    return s + used;
+  }, 0);
+
+  const approvalVariance = approvedCash - systemDeclaredCash;
 
   el.innerHTML = `
     <div class="card" style="margin-bottom:12px">
@@ -6517,19 +6556,19 @@ const varianceTotal = declaredTotal - expectedTotal;
       <div class="small"><b>Date:</b> ${date}</div>
 
       <div class="kv">
-        <div class="kv-label">Approved Cash</div>
-        <div>${fmt(approvedTotal)}</div>
+        <div class="kv-label">Approved Cash (from COD credits)</div>
+        <div>${fmt(approvedCash)}</div>
       </div>
 
       <div class="kv">
         <div class="kv-label">System Declared Cash</div>
-        <div>${fmt(systemDeclared)}</div>
+        <div>${fmt(systemDeclaredCash)}</div>
       </div>
 
       <div class="kv">
         <div class="kv-label">Approval Variance</div>
-        <div style="color:${variance === 0 ? "green" : "red"}">
-          ${fmt(variance)}
+        <div style="color:${approvalVariance === 0 ? "green" : "red"}">
+          ${fmt(approvalVariance)}
         </div>
       </div>
 
@@ -6542,7 +6581,6 @@ const varianceTotal = declaredTotal - expectedTotal;
     </div>
   `;
 }
-
 window.renderManagerCODSummary = renderManagerCODSummary;
 
 function opTxnMatchesFilter(dateStr) {
