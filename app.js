@@ -1232,17 +1232,27 @@ const existing = (staffAcc.entries || []).find(e =>
     const now = new Date().toISOString();
 
     // ✅ Post opening float ONCE per day (LEDGER ONLY)
-// ❌ Opening float must NOT change staffAcc.balance (balance is "amount owed", not float)
+// ✅ Opening float is NOT debt. Do not change staffAcc.balance.
 staffAcc.entries.unshift({
   id: uid("sf"),
   staffId: staff.id,
   type: "opening_float",
   amount: openingFloat,
-  delta: 0, // informational only
+  delta: 0, // ✅ does NOT affect debt
   date: selectedDate + "T00:00:00.000Z",
   refId: refOpen,
   note: `Opening Float for ${selectedDate}`
 });
+
+// ✅ keep balance clean by recomputing from ledger (excluding opening_float)
+staffAcc.balance = (staffAcc.entries || []).reduce((sum, e) => {
+  const t = String(e.type || "").toLowerCase();
+  if (t === "opening_float" || t === "opening") return sum;
+  if (t === "credit_out" || t === "credit") return sum - Math.abs(Number(e.amount || 0));
+  if (t === "repay" || t === "payin" || t === "credit_in") return sum + Math.abs(Number(e.amount || 0));
+  return sum + Number(e.delta || 0);
+}, 0);
+
 
     save?.();
 
@@ -1670,28 +1680,27 @@ ${overdraw > 0 ? `<div class="small" style="color:#ed6c02"><b>Overdraw (owed):</
   finalDeclaredInput.oninput = recalcVariance;
   recalcVariance();
 
-  // ===== FINAL SUBMIT =====
+ // ===== FINAL SUBMIT =====
 submitBtn.onclick = () => {
   // stop double click
   if (submitBtn.dataset.submitted === "1") return;
   submitBtn.dataset.submitted = "1";
 
-  // ✅ require global normDate
   const dateKey = normDate(selectedDate);
 
-  // ✅ recompute from latest approvals at submit-time
+  // ✅ latest approvals at submit-time
   const approvedNow = (state.approvals || []).filter(a =>
     a.status === "approved" &&
     (a.requestedBy === staff.id || a.createdBy === staff.id) &&
     normDate(a.processedAt || a.requestedAt || "") === dateKey
   );
 
-  // 🔴 FLOAT-IMPACTING (SOURCE OF TRUTH)
+  // credits affect float
   const creditsNow = approvedNow
     .filter(t => t.type === "credit")
     .reduce((s, t) => s + Number(t.amount || 0), 0);
 
-  // 🔎 INFO-ONLY (DO NOT AFFECT FLOAT)
+  // info-only
   const withdrawalsInfo = approvedNow
     .filter(t => t.type === "withdraw")
     .reduce((s, t) => s + Number(t.amount || 0), 0);
@@ -1700,37 +1709,30 @@ submitBtn.onclick = () => {
     .filter(t => t.type === "empowerment")
     .reduce((s, t) => s + Number(t.amount || 0), 0);
 
+  // ✅ float rule
   const opening = Number(openingFloat || 0);
+  const expectedCashNow = opening - Number(creditsNow || 0);
 
-  // ✅ RAW can be negative
-  const expectedRawNow = opening - Number(creditsNow || 0);
+  // ✅ overdraw is separate from cash variance
+  const overdraw = Math.max(0, Number(creditsNow || 0) - opening);
 
-  // ✅ physical expected cash (never negative)
-  const expectedCashNow = Math.max(0, expectedRawNow);
-
-  // ✅ staff owes this much if overdraw
-  const overdrawNow = Math.max(0, -expectedRawNow);
-
-  // ✅ declared cash must be physical (0+)
-  const finalDeclaredRaw = moneyNumber(finalDeclaredInput?.value);
-  const finalDeclared = Math.max(0, finalDeclaredRaw);
-
-  const variance = finalDeclared - expectedCashNow;
+  const finalDeclared = moneyNumber(finalDeclaredInput?.value);
+  const cashVariance = finalDeclared - expectedCashNow;
 
   finalErr.style.display = "none";
 
   // ✅ NOTE ENFORCEMENT:
-  // - required if variance != 0 OR overdraw exists
-  if ((variance !== 0 || overdrawNow > 0) && !noteBox.value.trim()) {
-    finalErr.textContent = overdrawNow > 0
-      ? "Explanation is required because you exceeded your Opening Float (overdraw)"
+  // require note if cash mismatch OR teller overdrawn
+  if ((cashVariance !== 0 || overdraw > 0) && !noteBox.value.trim()) {
+    finalErr.textContent = overdraw > 0
+      ? `Explanation is required (Overdrawn: ${fmt(overdraw)})`
       : "Explanation is required for variance";
     finalErr.style.display = "block";
     submitBtn.dataset.submitted = "0";
     return;
   }
 
-  // ✅ HARD BLOCK duplicate COD for same staff/date
+  // ✅ block duplicate COD for same staff/date
   state.cod = Array.isArray(state.cod) ? state.cod : [];
   const already = state.cod.some(c =>
     String(c.staffId) === String(staff.id) &&
@@ -1742,7 +1744,8 @@ submitBtn.onclick = () => {
     return;
   }
 
-  // ✅ persist record
+  const status = (cashVariance === 0 && overdraw === 0) ? "balanced" : "flagged";
+
   state.cod.push({
     id: uid("cod"),
     staffId: String(staff.id),
@@ -1756,23 +1759,20 @@ submitBtn.onclick = () => {
       empowerments: Number(empowermentsInfo || 0)
     },
 
-    // ✅ split expected into physical + owed
-    expectedRaw: expectedRawNow,      // can be negative
-    expectedCash: expectedCashNow,    // 0+
-    overdraw: overdrawNow,            // 0+
-
-    systemExpected: expectedCashNow,  // keep for backward compatibility
-    staffDeclared: finalDeclared,     // physical cash counted
-    variance,                         // against physical expected
-
     openingFloat: opening,
+
+    // ✅ cash math
+    systemExpected: expectedCashNow,
+    staffDeclared: finalDeclared,
+    variance: cashVariance,
+
+    // ✅ overdraw tracking (NEW)
+    overdraw,                 // teller exceeded opening
+    isOverdrawn: overdraw > 0,
+
     staffNote: noteBox.value.trim(),
 
-    // ✅ status rules:
-    // - overdraw is NOT "balanced"
-    // - but it's also not a cash variance if variance==0
-    status: (variance === 0 && overdrawNow === 0) ? "balanced" : "flagged",
-
+    status,
     resolvedAmount: null,
     resolutionNote: "",
     resolvedBy: null,
