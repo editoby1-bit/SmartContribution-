@@ -5965,7 +5965,7 @@ cashAcc.entries = cashAcc.entries || [];
 
 // ✅ Overdraw split: ONLY the portion above today's opening float becomes debt
 const dateKey = normDate(app.processedAt || app.requestedAt || new Date());
-const cashAcc = ensureStaffAccount(app.requestedBy || app.createdBy); // teller id
+
 cashAcc.entries = cashAcc.entries || [];
 
 // 1) get today's opening float (ledger-only)
