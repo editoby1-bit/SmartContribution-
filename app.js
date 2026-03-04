@@ -6002,28 +6002,7 @@ if (!alreadyInfo && withinFloat > 0) {
     note: `Within float for ${dateKey} (approval ${app.id})`
   });
 }
-// --- Ledger guard (prevents duplicates) ---
-cashAcc.entries = cashAcc.entries || [];
-const ref = String(app.id);
 
-// if already posted, do nothing
-const already = cashAcc.entries.some(e =>
-  String(e.refId) === ref && String(e.type).toLowerCase() === "credit_out"
-);
-if (already) {
-  // IMPORTANT: return/skip ONLY the ledger posting part,
-  // not the whole approval logic
-} else {
-  cashAcc.entries.unshift({
-    id: uid("sf"),
-    staffId: cashAcc.staffId || (app.requestedBy || app.createdBy),
-    type: "credit_out",
-    amount: Math.abs(Number(app.amount || 0)),
-    refId: ref,
-    date: app.processedAt || new Date().toISOString(),
-    note: `Credit approved: ${fmt(app.amount)}`
-  });
-}
 
 // 4) record ONLY overdraw as debt
 const alreadyDebt = cashAcc.entries.some(e => e.refId === app.id && e.type === "credit_out");
@@ -6049,16 +6028,7 @@ cashAcc.balance = (cashAcc.entries || []).reduce((sum, e) => {
   return sum + Number(e.delta || 0);
 }, 0);
 
-  cashAcc.entries.unshift({
-    id: uid("sf"),
-    staffId: tellerId,
-    type: "credit_out",
-    amount: Math.abs(app.amount),
-    delta: -Math.abs(app.amount),
-    date: app.processedAt,
-    refId: app.id,
-    note: `Credit to ${cust.name}`
-  });
+  
 }
 
 
