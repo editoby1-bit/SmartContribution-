@@ -5963,13 +5963,38 @@ approvalId: app.id
 // 🔒 Prevent double deduction if approval logic re-runs
 cashAcc.entries = cashAcc.entries || [];
 
+// ✅ Deduct teller debt by FULL approved credit amount (credits only)
+// 🔒 Prevent double deduction if approval logic re-runs
+cashAcc.entries = cashAcc.entries || [];
+
 const alreadyDeducted = cashAcc.entries.some(
-  e => e.refId === app.id && e.type === "credit_out"
+  e => e.refId === app.id && String(e.type).toLowerCase() === "credit_out"
 );
 
 if (!alreadyDeducted) {
-  cashAcc.balance = Number(cashAcc.balance || 0) - Math.abs(app.amount);
+  const amt = Math.abs(Number(app.amount || 0));
 
+  // ledger entry first
+  cashAcc.entries.unshift({
+    id: uid("sf"),
+    staffId: staff.id,
+    type: "credit_out",
+    amount: amt,
+    delta: -amt,
+    date: app.processedAt || new Date().toISOString(),
+    refId: app.id,
+    note: `Credit to ${app.customerName || app.customer || ""}`.trim()
+  });
+
+  // then recompute balance from ledger (source of truth)
+  cashAcc.balance = cashAcc.entries.reduce((sum, e) => {
+    const t = String(e.type || "").toLowerCase();
+    if (t === "opening_float" || t === "opening") return sum;
+    if (t === "credit_out" || t === "credit") return sum - Math.abs(Number(e.amount || 0));
+    if (t === "repay" || t === "payin" || t === "credit_in") return sum + Math.abs(Number(e.amount || 0));
+    return sum + Number(e.delta || 0);
+  }, 0);
+}
   cashAcc.entries.unshift({
     id: uid("sf"),
     staffId: tellerId,
