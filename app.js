@@ -538,6 +538,7 @@ function ensureStaffAccount(staffId) {
   }
   return state.staffAccounts[staffId];
 }
+window.ensureStaffAccount = ensureStaffAccount;
 
 function getOpeningBalanceForStaffDate(staffId, dateStr) {
   const refOpen = `OPENFLOAT|${staffId}|${dateStr}`;
