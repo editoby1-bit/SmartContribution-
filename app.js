@@ -1230,19 +1230,18 @@ const existing = (staffAcc.entries || []).find(e =>
     const openingFloat = Math.abs(Number(box.querySelector("#floatAmt").value || 0));
     const now = new Date().toISOString();
 
-    // ✅ Post opening float ONCE per day
-    staffAcc.balance = Number(staffAcc.balance || 0) + openingFloat;
-
-    staffAcc.entries.unshift({
-      id: uid("sf"),
-      staffId: staff.id,
-      type: "opening_float",
-      amount: openingFloat,
-      delta: +openingFloat,
-      date: selectedDate + "T00:00:00.000Z", // ✅ daily anchor (optional but recommended)
-      refId: refOpen,
-      note: `Opening Float for ${selectedDate}`
-    });
+    // ✅ Post opening float ONCE per day (LEDGER ONLY)
+// ❌ Opening float must NOT change staffAcc.balance (balance is "amount owed", not float)
+staffAcc.entries.unshift({
+  id: uid("sf"),
+  staffId: staff.id,
+  type: "opening_float",
+  amount: openingFloat,
+  delta: 0, // informational only
+  date: selectedDate + "T00:00:00.000Z",
+  refId: refOpen,
+  note: `Opening Float for ${selectedDate}`
+});
 
     save?.();
 
@@ -1263,6 +1262,23 @@ function openMyStaffAccount() {
 
   const acc = ensureStaffAccount(staff.id);
   acc.entries = acc.entries || [];
+  // ✅ Safety: OPENING_FLOAT must not affect debt balance.
+// If old entries exist, recompute balance from entries excluding opening_float.
+const recomputed = (acc.entries || []).reduce((sum, e) => {
+  const t = String(e.type || "").toLowerCase();
+  if (t === "opening_float" || t === "opening") return sum; // ignore
+
+  // credit_out increases debt (more negative)
+  if (t === "credit_out" || t === "credit") return sum - Math.abs(Number(e.amount || 0));
+
+  // repayments reduce debt (move toward zero)
+  if (t === "repay" || t === "payin" || t === "credit_in") return sum + Math.abs(Number(e.amount || 0));
+
+  return sum;
+}, 0);
+
+// If your balance is corrupted from previous versions, snap it to recomputed
+acc.balance = Number(recomputed || 0);
 
   const box = document.createElement("div");
   box.innerHTML = `
@@ -1574,7 +1590,10 @@ const empowerments = approved
   .reduce((s, t) => s + Number(t.amount || 0), 0);
 
 // ✅ EXPECTED CASH = OPENING FLOAT - CREDITS ONLY (CRITICAL RULE)
-const expectedCash = Number(openingFloat || 0) - credits;
+const opening = Number(openingFloat || 0);
+const expectedRaw = opening - credits;        // can be negative
+const expectedCash = Math.max(0, expectedRaw); // physical cash expectation (never negative)
+const overdraw = Math.max(0, -expectedRaw);    // owed amount
 
   // ===== PHASE B UI =====
   box.innerHTML = `
@@ -1586,6 +1605,7 @@ const expectedCash = Number(openingFloat || 0) - credits;
       <div class="small">Withdrawals (info): ${fmt(withdrawals)}</div>
       <div class="small">Empowerments (info): ${fmt(empowerments)}</div>
       <div class="small"><b>Expected Closing Cash:</b> ${fmt(expectedCash)}</div>
+${overdraw > 0 ? `<div class="small" style="color:#ed6c02"><b>Overdraw (owed):</b> ${fmt(overdraw)}</div>` : ""}
     </div>
 
     <input
@@ -1620,8 +1640,16 @@ const expectedCash = Number(openingFloat || 0) - credits;
   box.insertBefore(indicator, noteBox);
 
   function recalcVariance() {
-  // keep UI variance consistent with the same rule: openingFloat - credits
-  const v = moneyNumber(finalDeclaredInput.value) - expectedCash;
+  const declared = Math.max(0, moneyNumber(finalDeclaredInput.value));
+  const v = declared - expectedCash;
+
+  // If there is overdraw, NEVER show Balanced
+  if (v === 0 && overdraw > 0) {
+    indicator.textContent = `Overdrawn (owed) ${fmt(overdraw)}`;
+    indicator.style.color = "orange";
+    noteBox.style.display = "block";
+    return;
+  }
 
   if (v === 0) {
     indicator.textContent = "Balanced ✔";
