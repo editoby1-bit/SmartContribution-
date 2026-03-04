@@ -6022,10 +6022,6 @@ state.transactions.push({
   approvalId: app.id
 });
 
-
-}
-
-
 // ===== AUDIT (ROLE-AWARE, DETAILED) =====
 await pushAudit(
   staff.name,
