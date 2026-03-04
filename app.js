@@ -1754,10 +1754,11 @@ submitBtn.onclick = () => {
     date: dateKey,
 
     snapshot: {
-      credits: Number(creditsNow || 0),
-      withdrawals: Number(withdrawalsInfo || 0),
-      empowerments: Number(empowermentsInfo || 0)
-    },
+  credits: Number(creditsNow || 0),
+  withdrawals: Number(withdrawalsInfo || 0),
+  empowerments: Number(empowermentsInfo || 0),
+  overdrawOwed: Math.max(0, Number(creditsNow || 0) - Number(openingFloat || 0))
+},
 
     openingFloat: opening,
 
@@ -6479,22 +6480,33 @@ const declared = (rec.status === "resolved" && rec.resolvedAmount != null)
 const varianceNum = declared - expected;
 const overdrawNum = Number(rec.overdraw || 0);
 
+// 🔎 STATUS FLAGS (MUST be defined before using in template)
 const isResolved = rec.status === "resolved";
-const isFlagged = rec.status === "flagged";
+const isFlagged  = rec.status === "flagged";
 
-// "Balanced" should only be true when variance is zero AND no overdraw
-const isTrulyBalanced = (varianceNum === 0 && overdrawNum === 0);
+// pull overdraw owed from snapshot (safe defaults)
+const overdrawOwed = Math.max(0, Number(rec.snapshot?.overdrawOwed || 0));
 
-// special case: variance is zero but staff owes float
-const isOverdrawn = (varianceNum === 0 && overdrawNum > 0);
+// "Balanced" is ONLY when variance is 0 AND not overdrawn AND not resolved
+const isTrulyBalanced =
+  !isResolved &&
+  Number(rec.variance || 0) === 0 &&
+  overdrawOwed === 0;
 
-const statusLabel = isTrulyBalanced
-  ? `<span style="color:green">✔ Balanced</span>`
-  : isResolved
-    ? `<span style="color:#1976d2">✔ Resolved</span>`
+const isOverdrawn = !isResolved && overdrawOwed > 0;
+
+// keep the old variable name so your existing code doesn't crash
+const isBalanced = isTrulyBalanced;
+
+const statusLabel =
+  isTrulyBalanced
+    ? `<span style="color:green">✔ Balanced</span>`
     : isOverdrawn
       ? `<span style="color:#ed6c02">⚠ Overdrawn (owed)</span>`
-      : `<span style="color:red">⚠ Flagged</span>`;
+      : isResolved
+        ? `<span style="color:#1976d2">✔ Resolved</span>`
+        : `<span style="color:red">⚠ Flagged</span>`;
+
 
   html += `
     <div
@@ -6508,14 +6520,17 @@ const statusLabel = isTrulyBalanced
   isTrulyBalanced ? '#2e7d32'
   : isResolved ? '#1976d2'
   : isOverdrawn ? '#ed6c02'
+  : isFlagged ? '#d32f2f'
   : '#d32f2f'
 };
 background:${
   isTrulyBalanced ? '#e8f5e9'
   : isResolved ? '#e3f2fd'
   : isOverdrawn ? '#fff3e0'
+  : isFlagged ? '#ffebee'
   : '#ffebee'
 };
+
         padding-left:8px;
       "
     >
