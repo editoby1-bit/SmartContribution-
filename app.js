@@ -1759,6 +1759,7 @@ submitBtn.onclick = () => {
   showToast("Close of Day submitted");
   closeTxModal?.();
 };
+}
 
 function openCODResolutionModal(codId) {
   console.log("STEP 3: openCODResolutionModal ENTERED", codId);
