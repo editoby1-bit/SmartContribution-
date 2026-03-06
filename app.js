@@ -1370,22 +1370,30 @@ function openMyStaffAccount() {
  const acc = ensureStaffAccount(staff.id);
  acc.entries = acc.entries || [];
 
- // ✅ recompute debt safely
+ // ✅ recompute debt safely (debt can NEVER be positive)
 const recomputed = (acc.entries || []).reduce((sum, e) => {
- const t = String(e.type || "").toLowerCase();
+  const t = String(e.type || "").toLowerCase();
 
- if (t === "opening_float" || t === "opening") return sum;
+  // informational only
+  if (t === "opening_float" || t === "opening" || t === "float_used" || t === "staff_deposit") {
+    return sum;
+  }
 
- if (t === "credit_out" || t === "credit") 
-   return sum - Math.abs(Number(e.amount || 0));
+  // debt creators
+  if (t === "credit_out" || t === "credit" || t === "cod_shortage") {
+    return sum - Math.abs(Number(e.amount || 0));
+  }
 
- if (t === "repay" || t === "payin" || t === "credit_in" || t === "debt_repayment")
-   return sum + Math.abs(Number(e.amount || 0));
+  // debt reducers
+  if (t === "repay" || t === "payin" || t === "credit_in" || t === "debt_repayment") {
+    return sum + Math.abs(Number(e.amount || 0));
+  }
 
- return sum;
+  return sum;
 }, 0);
 
-acc.balance = Number(recomputed || 0);
+// debt must stay <= 0
+acc.balance = Math.min(0, Number(recomputed || 0));
 
 // ✅ Today summary
 const today = new Date().toISOString().slice(0,10);
@@ -1461,7 +1469,7 @@ box.innerHTML = `
 `;
 
 // open modal
-openModalGeneric("My Staff Account", box, "Close", true);
+openModalGeneric("My Staff Account", box, "Cancel", true);
 
 // 🔘 wire buttons
 setTimeout(() => {
@@ -1539,12 +1547,27 @@ setTimeout(() => {
   if (repayBtn) repayBtn.onclick = async () => {
 
  const repayBox = document.createElement("div");
- repayBox.innerHTML = `
-   <div class="small"><b>System</b></div>
-   <div class="small muted" style="margin-top:6px">Enter repayment amount</div>
-   <input id="staffRepayAmt" class="input" type="number" placeholder="Enter amount" style="margin-top:10px" />
-   <div id="staffRepayErr" class="small danger" style="margin-top:8px;display:none"></div>
- `;
+
+const accNow = ensureStaffAccount(staff.id);
+const currentDebt = Math.abs(Number(accNow.balance || 0));
+const currentWallet = Number(accNow.walletBalance || 0);
+
+repayBox.innerHTML = `
+  <div class="small"><b>System</b></div>
+  <div class="small muted" style="margin-top:6px">Enter repayment amount</div>
+
+  <div class="small" style="margin-top:8px">
+    <b>Current Debt:</b> ${fmt(currentDebt)}
+  </div>
+
+  <div class="small" style="margin-top:4px">
+    <b>Wallet Balance:</b> ${fmt(currentWallet)}
+  </div>
+
+  <input id="staffRepayAmt" class="input" type="number" placeholder="Enter amount" style="margin-top:10px" />
+  <div id="staffRepayErr" class="small danger" style="margin-top:8px;display:none"></div>
+`;
+
 
  const okInput = await openModalGeneric("System", repayBox, "Continue", true, () => {
    const amt = Number(repayBox.querySelector("#staffRepayAmt")?.value || 0);
