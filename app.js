@@ -528,27 +528,42 @@ function moneyNumber(v) {
 // - credits = staff paid back
 // =========================
 function ensureStaffAccount(staffId) {
- state.staffAccounts = state.staffAccounts || {};
+  state.staffAccounts = state.staffAccounts || {};
 
- if (!state.staffAccounts[staffId]) {
+  if (!state.staffAccounts[staffId]) {
+    const existingNums = Object.values(state.staffAccounts || {})
+      .map(x => Number(x?.accountNumber || 0))
+      .filter(n => n >= 4000);
 
-   // generate staff account number (4000 series)
-   const existing = Object.values(state.staffAccounts || {});
-   const nextNum = 4000 + existing.length;
+    const nextNum = existingNums.length ? Math.max(...existingNums) + 1 : 4000;
 
-   state.staffAccounts[staffId] = {
-     staffId,
+    state.staffAccounts[staffId] = {
+      staffId,
+      accountNumber: nextNum,
+      walletBalance: 0,
+      balance: 0,
+      entries: []
+    };
+  }
 
-     accountNumber: nextNum,     // staff internal account
-     walletBalance: 0,           // money owned by staff
-     balance: 0,                 // debt balance (negative means owed)
+  // ✅ backfill missing fields for old accounts
+  const acc = state.staffAccounts[staffId];
 
-     entries: []
-   };
- }
+  if (!acc.accountNumber) {
+    const usedNums = Object.values(state.staffAccounts || {})
+      .map(x => Number(x?.accountNumber || 0))
+      .filter(n => n >= 4000);
 
- return state.staffAccounts[staffId];
+    acc.accountNumber = usedNums.length ? Math.max(...usedNums) + 1 : 4000;
+  }
+
+  if (typeof acc.walletBalance !== "number") acc.walletBalance = 0;
+  if (!Array.isArray(acc.entries)) acc.entries = [];
+  if (typeof acc.balance !== "number") acc.balance = 0;
+
+  return acc;
 }
+
 window.ensureStaffAccount = ensureStaffAccount;
 
 
@@ -1338,6 +1353,7 @@ staffAcc.balance = (staffAcc.entries || []).reduce((sum, e) => {
 
 window.openDeclareFloatModal = openDeclareFloatModal;
 
+
 function openMyStaffAccount() {
  const staff = currentStaff?.();
  if (!staff) return showToast("Select staff");
@@ -1385,54 +1401,54 @@ const todaysRemaining = Math.max(0, todaysFloat - todaysUsed);
 const box = document.createElement("div");
 
 box.innerHTML = `
- <div class="small"><b>${staff.name}</b> — Staff Account</div>
+<div class="small"><b>${staff.name}</b> — Staff Account</div>
 
- <div class="card" style="margin-top:10px">
+<div class="card" style="margin-top:10px">
 
-   <div class="small"><b>Account Number:</b> ${acc.accountNumber}</div>
+  <div class="small"><b>Account Number:</b> ${acc.accountNumber || "-"}</div>
 
-   <div class="small"><b>Wallet Balance:</b> ${fmt(Number(acc.walletBalance || 0))}</div>
+  <div class="small"><b>Wallet Balance:</b> ${fmt(Number(acc.walletBalance || 0))}</div>
 
-   <div class="small"><b>Debt Balance:</b> ${fmt(Number(acc.balance || 0))}</div>
+  <div class="small"><b>Debt Balance:</b> ${fmt(Number(acc.balance || 0))}</div>
 
-   <div class="small muted" style="margin-top:6px">
-     <b>Today's Opening Float:</b> ${fmt(todaysFloat)}
-   </div>
+  <div class="small muted" style="margin-top:6px">
+    <b>Today's Opening Float:</b> ${fmt(Number(todaysFloat || 0))}
+  </div>
 
-   <div class="small muted" style="margin-top:4px">
-     <b>Float Used Today:</b> ${fmt(todaysUsed)}
-   </div>
+  <div class="small muted" style="margin-top:4px">
+    <b>Float Used Today:</b> ${fmt(Number(todaysUsed || 0))}
+  </div>
 
-   <div class="small muted" style="margin-top:4px">
-     <b>Remaining Float Today:</b> ${fmt(todaysRemaining)}
-   </div>
+  <div class="small muted" style="margin-top:4px">
+    <b>Remaining Float Today:</b> ${fmt(Number(todaysRemaining || 0))}
+  </div>
 
- </div>
+</div>
 
- <div style="margin-top:10px;display:flex;gap:6px">
-   <button class="btn primary" id="staffDepositBtn">Deposit</button>
-   <button class="btn danger" id="staffRepayBtn">Pay Debt</button>
- </div>
+<div style="margin-top:10px;display:flex;gap:6px">
+  <button class="btn primary" id="staffDepositBtn">Deposit</button>
+  <button class="btn danger" id="staffRepayBtn">Pay Debt</button>
+</div>
 
- <div style="margin-top:10px;max-height:280px;overflow:auto">
+<div style="margin-top:10px;max-height:280px;overflow:auto">
 
-   ${(acc.entries || []).slice(0, 50).map(e => `
-     <div style="padding:8px;border-bottom:1px solid #eee">
+  ${(acc.entries || []).slice(0,50).map(e => `
+    <div style="padding:8px;border-bottom:1px solid #eee">
 
-       <div class="small">
-         <b>${String(e.type || "").toUpperCase()}</b> — ${fmt(Number(e.amount || 0))}
-       </div>
+      <div class="small">
+        <b>${String(e.type || "").toUpperCase()}</b> — ${fmt(Number(e.amount || 0))}
+      </div>
 
-       <div class="small muted">
-         ${new Date(e.date || Date.now()).toLocaleString()}
-       </div>
+      <div class="small muted">
+        ${new Date(e.date || Date.now()).toLocaleString()}
+      </div>
 
-       ${e.note ? `<div class="small muted">${e.note}</div>` : ""}
+      ${e.note ? `<div class="small muted">${e.note}</div>` : ""}
 
-     </div>
-   `).join("") || `<div class="small muted">No entries yet</div>`}
+    </div>
+  `).join("") || `<div class="small muted">No entries yet</div>`}
 
- </div>
+</div>
 `;
 
 // open modal
@@ -1440,30 +1456,77 @@ openModalGeneric("My Staff Account", box, "Close", true);
 
 // 🔘 wire buttons
 setTimeout(() => {
+  const depBtn = box.querySelector("#staffDepositBtn");
+  const repayBtn = box.querySelector("#staffRepayBtn");
 
- const depBtn = box.querySelector("#staffDepositBtn");
- const repayBtn = box.querySelector("#staffRepayBtn");
+  if (depBtn) depBtn.onclick = async () => {
+    const depBox = document.createElement("div");
+    depBox.innerHTML = `
+      <div class="small"><b>System</b></div>
+      <div class="small muted" style="margin-top:6px">Enter deposit amount</div>
+      <input id="staffDepositAmt" class="input" type="number" placeholder="Enter amount" style="margin-top:10px" />
+      <div id="staffDepositErr" class="small danger" style="margin-top:8px;display:none"></div>
+    `;
 
- if (depBtn) depBtn.onclick = () => {
+    const ok = await openModalGeneric("System", depBox, "Confirm", true, () => {
+      const amt = Number(depBox.querySelector("#staffDepositAmt")?.value || 0);
+      const err = depBox.querySelector("#staffDepositErr");
+      if (!amt || amt <= 0) {
+        if (err) {
+          err.textContent = "Enter a valid deposit amount";
+          err.style.display = "block";
+        }
+        return false;
+      }
+      return true;
+    });
 
-   const amt = prompt("Enter deposit amount");
-   if (!amt) return;
+    if (!ok) return;
 
-   postStaffPayment(staff.id, Number(amt), "Manual deposit");
+    const amt = Number(depBox.querySelector("#staffDepositAmt")?.value || 0);
+    postStaffPayment(staff.id, amt, "Manual deposit");
+    openMyStaffAccount();
+  };
 
-   openMyStaffAccount(); // refresh
- };
+  if (repayBtn) repayBtn.onclick = async () => {
+    const repayBox = document.createElement("div");
+    repayBox.innerHTML = `
+      <div class="small"><b>System</b></div>
+      <div class="small muted" style="margin-top:6px">Enter repayment amount</div>
+      <input id="staffRepayAmt" class="input" type="number" placeholder="Enter amount" style="margin-top:10px" />
+      <div id="staffRepayErr" class="small danger" style="margin-top:8px;display:none"></div>
+    `;
 
- if (repayBtn) repayBtn.onclick = () => {
+    const ok = await openModalGeneric("System", repayBox, "Confirm", true, () => {
+      const amt = Number(repayBox.querySelector("#staffRepayAmt")?.value || 0);
+      const err = repayBox.querySelector("#staffRepayErr");
 
-   const amt = prompt("Enter repayment amount");
-   if (!amt) return;
+      if (!amt || amt <= 0) {
+        if (err) {
+          err.textContent = "Enter a valid repayment amount";
+          err.style.display = "block";
+        }
+        return false;
+      }
 
-   postStaffDebtRepayment(staff.id, Number(amt));
+      const accNow = ensureStaffAccount(staff.id);
+      if (Number(accNow.walletBalance || 0) < amt) {
+        if (err) {
+          err.textContent = "Insufficient wallet balance";
+          err.style.display = "block";
+        }
+        return false;
+      }
 
-   openMyStaffAccount(); // refresh
- };
+      return true;
+    });
 
+    if (!ok) return;
+
+    const amt = Number(repayBox.querySelector("#staffRepayAmt")?.value || 0);
+    postStaffDebtRepayment(staff.id, amt);
+    openMyStaffAccount();
+  };
 }, 50);
 
 }
