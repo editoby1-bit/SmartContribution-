@@ -670,11 +670,19 @@ function postStaffDebtRepayment(staffId, amount) {
 
  if (!amount) return showToast("Invalid amount");
 
- if (acc.walletBalance < amount)
+ const debtNow = Math.abs(Number(acc.balance || 0));
+
+ // ✅ cap repayment so debt never goes positive
+ amount = Math.min(amount, debtNow);
+
+ if (!amount) return showToast("No debt to repay");
+
+ if (Number(acc.walletBalance || 0) < amount)
    return showToast("Insufficient wallet balance");
 
  acc.walletBalance -= amount;
 
+ // debt is negative, so adding repayment moves it toward zero
  acc.balance += amount;
 
  acc.entries.unshift({
@@ -687,6 +695,7 @@ function postStaffDebtRepayment(staffId, amount) {
    refId: uid("repay"),
    note: "Debt repayment"
  });
+
 
  // business receives repayment
  state.accounts = state.accounts || {};
@@ -1551,16 +1560,26 @@ setTimeout(() => {
 
    const accNow = ensureStaffAccount(staff.id);
 
-   if (Number(accNow.walletBalance || 0) < amt) {
-     if (err) {
-       err.textContent = "Insufficient wallet balance";
-       err.style.display = "block";
-     }
-     return false;
-   }
+if (Number(accNow.walletBalance || 0) < amt) {
+  if (err) {
+    err.textContent = "Insufficient wallet balance";
+    err.style.display = "block";
+  }
+  return false;
+}
 
-   return true;
- });
+const debtNow = Math.abs(Number(accNow.balance || 0));
+
+if (amt > debtNow) {
+  if (err) {
+    err.textContent = "Repayment cannot exceed current debt";
+    err.style.display = "block";
+  }
+  return false;
+}
+
+return true;
+});
 
  if (!okInput) return;
 
