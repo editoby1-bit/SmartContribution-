@@ -1291,22 +1291,46 @@ const recomputed = (acc.entries || []).reduce((sum, e) => {
 // If your balance is corrupted from previous versions, snap it to recomputed
 acc.balance = Number(recomputed || 0);
 
-  const box = document.createElement("div");
-  box.innerHTML = `
-    <div class="small"><b>${staff.name}</b> — Staff Account</div>
-    <div class="card" style="margin-top:10px">
-      <div class="small"><b>Balance:</b> ${fmt(Number(acc.balance || 0))}</div>
-    </div>
-    <div style="margin-top:10px;max-height:280px;overflow:auto">
-      ${(acc.entries || []).slice(0, 50).map(e => `
-        <div style="padding:8px;border-bottom:1px solid #eee">
-          <div class="small"><b>${String(e.type || "").toUpperCase()}</b> — ${fmt(Number(e.amount || 0))}</div>
-          <div class="small muted">${new Date(e.date || Date.now()).toLocaleString()}</div>
-          ${e.note ? `<div class="small muted">${e.note}</div>` : ""}
-        </div>
-      `).join("") || `<div class="small muted">No entries yet</div>`}
-    </div>
-  `;
+// ✅ Today summary for quick view
+const today = new Date().toISOString().slice(0,10);
+
+const todaysFloat = (acc.entries || [])
+  .filter(e =>
+    String(e.type || "").toLowerCase() === "opening_float" &&
+    normDate(e.date) === today
+  )
+  .reduce((s, e) => s + Math.abs(Number(e.amount || 0)), 0);
+
+const todaysUsed = (acc.entries || [])
+  .filter(e =>
+    String(e.type || "").toLowerCase() === "float_used" &&
+    normDate(e.date) === today
+  )
+  .reduce((s, e) => s + Math.abs(Number(e.amount || 0)), 0);
+
+const todaysRemaining = Math.max(0, todaysFloat - todaysUsed);
+
+const box = document.createElement("div");
+box.innerHTML = `
+  <div class="small"><b>${staff.name}</b> — Staff Account</div>
+
+  <div class="card" style="margin-top:10px">
+    <div class="small"><b>Debt Balance:</b> ${fmt(Number(acc.balance || 0))}</div>
+    <div class="small muted" style="margin-top:6px"><b>Today's Opening Float:</b> ${fmt(todaysFloat)}</div>
+    <div class="small muted" style="margin-top:4px"><b>Float Used Today:</b> ${fmt(todaysUsed)}</div>
+    <div class="small muted" style="margin-top:4px"><b>Remaining Float Today:</b> ${fmt(todaysRemaining)}</div>
+  </div>
+
+  <div style="margin-top:10px;max-height:280px;overflow:auto">
+    ${(acc.entries || []).slice(0, 50).map(e => `
+      <div style="padding:8px;border-bottom:1px solid #eee">
+        <div class="small"><b>${String(e.type || "").toUpperCase()}</b> — ${fmt(Number(e.amount || 0))}</div>
+        <div class="small muted">${new Date(e.date || Date.now()).toLocaleString()}</div>
+        ${e.note ? `<div class="small muted">${e.note}</div>` : ""}
+      </div>
+    `).join("") || `<div class="small muted">No entries yet</div>`}
+  </div>
+`;
 
   openModalGeneric("My Staff Account", box, "Close", true);
 }
