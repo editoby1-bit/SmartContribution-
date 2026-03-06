@@ -528,17 +528,30 @@ function moneyNumber(v) {
 // - credits = staff paid back
 // =========================
 function ensureStaffAccount(staffId) {
-  state.staffAccounts = state.staffAccounts || {};
-  if (!state.staffAccounts[staffId]) {
-    state.staffAccounts[staffId] = {
-      staffId,
-      balance: 0,          // amount owed
-      entries: []          // ledger entries
-    };
-  }
-  return state.staffAccounts[staffId];
+ state.staffAccounts = state.staffAccounts || {};
+
+ if (!state.staffAccounts[staffId]) {
+
+   // generate staff account number (4000 series)
+   const existing = Object.values(state.staffAccounts || {});
+   const nextNum = 4000 + existing.length;
+
+   state.staffAccounts[staffId] = {
+     staffId,
+
+     accountNumber: nextNum,     // staff internal account
+     walletBalance: 0,           // money owned by staff
+     balance: 0,                 // debt balance (negative means owed)
+
+     entries: []
+   };
+ }
+
+ return state.staffAccounts[staffId];
 }
 window.ensureStaffAccount = ensureStaffAccount;
+
+
 
 function getOpeningBalanceForStaffDate(staffId, dateStr) {
   const refOpen = `OPENFLOAT|${staffId}|${dateStr}`;
@@ -550,77 +563,135 @@ window.getOpeningBalanceForStaffDate = getOpeningBalanceForStaffDate;
 
 
 function postStaffCharge(staffId, amount, note, codId) {
-  const n = Number(amount || 0);
-  if (!staffId) return false;
-  if (isNaN(n) || n <= 0) return false;
 
-  const acc = ensureStaffAccount(staffId);
-  acc.entries = acc.entries || [];
+ const n = Number(amount || 0);
+ if (!staffId) return false;
+ if (isNaN(n) || n <= 0) return false;
 
-  // ✅ Prevent double-charging same COD
-  const exists = acc.entries.some(e => e.type === "cod_shortage" && e.codId === codId);
-  if (exists) return true;
+ const acc = ensureStaffAccount(staffId);
+ acc.entries = acc.entries || [];
 
-  const entry = {
-    id: uid("staff"),
-    staffId,
-    type: "cod_shortage",        // clearer than "debit"
-    amount: n,
-    delta: -n,                   // ✅ shortage reduces wallet
-    note: (note || "").trim(),
-    codId: codId || null,
-    date: new Date().toISOString(),
-    createdBy: currentStaff?.()?.name || "system"
-  };
+ const exists = acc.entries.some(e => e.type === "cod_shortage" && e.codId === codId);
+ if (exists) return true;
 
-  acc.entries.unshift(entry);
-  acc.balance = Number(acc.balance || 0) - n;   // ✅ wallet goes down (more negative)
+ const entry = {
+   id: uid("staff"),
+   staffId,
+   type: "cod_shortage",
+   amount: n,
+   delta: -n,
+   note: (note || "").trim(),
+   codId: codId || null,
+   date: new Date().toISOString(),
+   createdBy: currentStaff?.()?.name || "system"
+ };
 
-  pushAudit?.(
-    currentStaff?.()?.name || "system",
-    currentStaff?.()?.role || "system",
-    "staff_charged_for_shortage",
-    JSON.stringify({ staffId, amount: n, codId, note: entry.note })
-  );
+ acc.entries.unshift(entry);
 
-  return true;
-}
+ // shortage increases debt
+ acc.balance = Number(acc.balance || 0) - n;
 
-function postStaffPayment(staffId, amount, note) {
-  const n = Number(amount || 0);
-  if (!staffId) return false;
-  if (isNaN(n) || n <= 0) return false;
+ pushAudit?.(
+   currentStaff?.()?.name || "system",
+   currentStaff?.()?.role || "system",
+   "staff_charged_for_shortage",
+   JSON.stringify({ staffId, amount: n, codId, note: entry.note })
+ );
 
-  const acc = ensureStaffAccount(staffId);
-  acc.entries = acc.entries || [];
+ save?.();
 
-  const entry = {
-    id: uid("staff"),
-    staffId,
-    type: "repayment",
-    amount: n,
-    delta: +n,                    // ✅ repayment increases wallet
-    note: (note || "").trim(),
-    codId: null,
-    date: new Date().toISOString(),
-    createdBy: currentStaff?.()?.name || "system"
-  };
-
-  acc.entries.unshift(entry);
-  acc.balance = Number(acc.balance || 0) + n;   // ✅ wallet goes up (toward positive)
-
-  pushAudit?.(
-    currentStaff?.()?.name || "system",
-    currentStaff?.()?.role || "system",
-    "staff_paid_shortage",
-    JSON.stringify({ staffId, amount: n, note: entry.note })
-  );
-
-  return true;
+ return true;
 }
 
 window.postStaffCharge = postStaffCharge;
+
+
+function postStaffPayment(staffId, amount, note) {
+
+ const n = Number(amount || 0);
+ if (!staffId) return false;
+ if (isNaN(n) || n <= 0) return false;
+
+ const acc = ensureStaffAccount(staffId);
+ acc.entries = acc.entries || [];
+
+ const amt = Math.abs(n);
+
+ acc.walletBalance = Number(acc.walletBalance || 0) + amt;
+
+ const entry = {
+   id: uid("staff"),
+   staffId,
+   type: "staff_deposit",
+   amount: amt,
+   delta: 0,
+   note: (note || "").trim(),
+   date: new Date().toISOString(),
+   createdBy: currentStaff?.()?.name || "system"
+ };
+
+ acc.entries.unshift(entry);
+
+ pushAudit?.(
+   currentStaff?.()?.name || "system",
+   currentStaff?.()?.role || "system",
+   "staff_wallet_deposit",
+   JSON.stringify({ staffId, amount: amt, note: entry.note })
+ );
+
+ save?.();
+
+ return true;
+}
+
 window.postStaffPayment = postStaffPayment;
+
+
+function postStaffDebtRepayment(staffId, amount) {
+
+ const acc = ensureStaffAccount(staffId);
+
+ amount = Math.abs(Number(amount || 0));
+
+ if (!amount) return showToast("Invalid amount");
+
+ if (acc.walletBalance < amount)
+   return showToast("Insufficient wallet balance");
+
+ acc.walletBalance -= amount;
+
+ acc.balance += amount;
+
+ acc.entries.unshift({
+   id: uid("sf"),
+   staffId,
+   type: "debt_repayment",
+   amount,
+   delta: amount,
+   date: new Date().toISOString(),
+   refId: uid("repay"),
+   note: "Debt repayment"
+ });
+
+ // business receives repayment
+ state.accounts = state.accounts || {};
+ state.accounts.income = state.accounts.income || [];
+
+ state.accounts.income.push({
+   id: uid("inc"),
+   type: "staff_debt_payment",
+   amount,
+   staffId,
+   date: new Date().toISOString(),
+   note: "Staff debt repayment"
+ });
+
+ save?.();
+}
+
+window.postStaffDebtRepayment = postStaffDebtRepayment;
+
+
 
   async function pushAudit(actor, role, action, details) {
   const staff = currentStaff();
@@ -1268,73 +1339,137 @@ staffAcc.balance = (staffAcc.entries || []).reduce((sum, e) => {
 window.openDeclareFloatModal = openDeclareFloatModal;
 
 function openMyStaffAccount() {
-  const staff = currentStaff?.();
-  if (!staff) return showToast("Select staff");
+ const staff = currentStaff?.();
+ if (!staff) return showToast("Select staff");
 
-  const acc = ensureStaffAccount(staff.id);
-  acc.entries = acc.entries || [];
-  // ✅ Safety: OPENING_FLOAT must not affect debt balance.
-// If old entries exist, recompute balance from entries excluding opening_float.
+ const acc = ensureStaffAccount(staff.id);
+ acc.entries = acc.entries || [];
+
+ // ✅ recompute debt safely
 const recomputed = (acc.entries || []).reduce((sum, e) => {
-  const t = String(e.type || "").toLowerCase();
-  if (t === "opening_float" || t === "opening") return sum; // ignore
+ const t = String(e.type || "").toLowerCase();
 
-  // credit_out increases debt (more negative)
-  if (t === "credit_out" || t === "credit") return sum - Math.abs(Number(e.amount || 0));
+ if (t === "opening_float" || t === "opening") return sum;
 
-  // repayments reduce debt (move toward zero)
-  if (t === "repay" || t === "payin" || t === "credit_in") return sum + Math.abs(Number(e.amount || 0));
+ if (t === "credit_out" || t === "credit") 
+   return sum - Math.abs(Number(e.amount || 0));
 
-  return sum;
+ if (t === "repay" || t === "payin" || t === "credit_in" || t === "debt_repayment")
+   return sum + Math.abs(Number(e.amount || 0));
+
+ return sum;
 }, 0);
 
-// If your balance is corrupted from previous versions, snap it to recomputed
 acc.balance = Number(recomputed || 0);
 
-// ✅ Today summary for quick view
+// ✅ Today summary
 const today = new Date().toISOString().slice(0,10);
 
 const todaysFloat = (acc.entries || [])
-  .filter(e =>
-    String(e.type || "").toLowerCase() === "opening_float" &&
-    normDate(e.date) === today
-  )
-  .reduce((s, e) => s + Math.abs(Number(e.amount || 0)), 0);
+ .filter(e =>
+   String(e.type || "").toLowerCase() === "opening_float" &&
+   normDate(e.date) === today
+ )
+ .reduce((s, e) => s + Math.abs(Number(e.amount || 0)), 0);
 
 const todaysUsed = (acc.entries || [])
-  .filter(e =>
-    String(e.type || "").toLowerCase() === "float_used" &&
-    normDate(e.date) === today
-  )
-  .reduce((s, e) => s + Math.abs(Number(e.amount || 0)), 0);
+ .filter(e =>
+   String(e.type || "").toLowerCase() === "float_used" &&
+   normDate(e.date) === today
+ )
+ .reduce((s, e) => s + Math.abs(Number(e.amount || 0)), 0);
 
 const todaysRemaining = Math.max(0, todaysFloat - todaysUsed);
 
+// 🧾 Build modal
 const box = document.createElement("div");
+
 box.innerHTML = `
-  <div class="small"><b>${staff.name}</b> — Staff Account</div>
+ <div class="small"><b>${staff.name}</b> — Staff Account</div>
 
-  <div class="card" style="margin-top:10px">
-    <div class="small"><b>Debt Balance:</b> ${fmt(Number(acc.balance || 0))}</div>
-    <div class="small muted" style="margin-top:6px"><b>Today's Opening Float:</b> ${fmt(todaysFloat)}</div>
-    <div class="small muted" style="margin-top:4px"><b>Float Used Today:</b> ${fmt(todaysUsed)}</div>
-    <div class="small muted" style="margin-top:4px"><b>Remaining Float Today:</b> ${fmt(todaysRemaining)}</div>
-  </div>
+ <div class="card" style="margin-top:10px">
 
-  <div style="margin-top:10px;max-height:280px;overflow:auto">
-    ${(acc.entries || []).slice(0, 50).map(e => `
-      <div style="padding:8px;border-bottom:1px solid #eee">
-        <div class="small"><b>${String(e.type || "").toUpperCase()}</b> — ${fmt(Number(e.amount || 0))}</div>
-        <div class="small muted">${new Date(e.date || Date.now()).toLocaleString()}</div>
-        ${e.note ? `<div class="small muted">${e.note}</div>` : ""}
-      </div>
-    `).join("") || `<div class="small muted">No entries yet</div>`}
-  </div>
+   <div class="small"><b>Account Number:</b> ${acc.accountNumber}</div>
+
+   <div class="small"><b>Wallet Balance:</b> ${fmt(Number(acc.walletBalance || 0))}</div>
+
+   <div class="small"><b>Debt Balance:</b> ${fmt(Number(acc.balance || 0))}</div>
+
+   <div class="small muted" style="margin-top:6px">
+     <b>Today's Opening Float:</b> ${fmt(todaysFloat)}
+   </div>
+
+   <div class="small muted" style="margin-top:4px">
+     <b>Float Used Today:</b> ${fmt(todaysUsed)}
+   </div>
+
+   <div class="small muted" style="margin-top:4px">
+     <b>Remaining Float Today:</b> ${fmt(todaysRemaining)}
+   </div>
+
+ </div>
+
+ <div style="margin-top:10px;display:flex;gap:6px">
+   <button class="btn primary" id="staffDepositBtn">Deposit</button>
+   <button class="btn danger" id="staffRepayBtn">Pay Debt</button>
+ </div>
+
+ <div style="margin-top:10px;max-height:280px;overflow:auto">
+
+   ${(acc.entries || []).slice(0, 50).map(e => `
+     <div style="padding:8px;border-bottom:1px solid #eee">
+
+       <div class="small">
+         <b>${String(e.type || "").toUpperCase()}</b> — ${fmt(Number(e.amount || 0))}
+       </div>
+
+       <div class="small muted">
+         ${new Date(e.date || Date.now()).toLocaleString()}
+       </div>
+
+       ${e.note ? `<div class="small muted">${e.note}</div>` : ""}
+
+     </div>
+   `).join("") || `<div class="small muted">No entries yet</div>`}
+
+ </div>
 `;
 
-  openModalGeneric("My Staff Account", box, "Close", true);
+// open modal
+openModalGeneric("My Staff Account", box, "Close", true);
+
+// 🔘 wire buttons
+setTimeout(() => {
+
+ const depBtn = box.querySelector("#staffDepositBtn");
+ const repayBtn = box.querySelector("#staffRepayBtn");
+
+ if (depBtn) depBtn.onclick = () => {
+
+   const amt = prompt("Enter deposit amount");
+   if (!amt) return;
+
+   postStaffPayment(staff.id, Number(amt), "Manual deposit");
+
+   openMyStaffAccount(); // refresh
+ };
+
+ if (repayBtn) repayBtn.onclick = () => {
+
+   const amt = prompt("Enter repayment amount");
+   if (!amt) return;
+
+   postStaffDebtRepayment(staff.id, Number(amt));
+
+   openMyStaffAccount(); // refresh
+ };
+
+}, 50);
+
 }
+
 window.openMyStaffAccount = openMyStaffAccount;
+
 
 function openMyCOD() {
   const staff = currentStaff();
