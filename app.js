@@ -5969,28 +5969,36 @@ const dateKey = normDate(app.processedAt || app.requestedAt || new Date());
 
 cashAcc.entries = cashAcc.entries || [];
 
-// 1) get today's opening float (ledger-only)
-const openingFloat = Number(getOpeningBalanceForStaffDate?.(cashAcc.staffId, dateKey) || 0);
-
-// 2) compute credits already approved today (exclude this approval id)
-const creditsBefore = (state.approvals || [])
-  .filter(a =>
-    a.status === "approved" &&
-    a.type === "credit" &&
-    (a.requestedBy === cashAcc.staffId || a.createdBy === cashAcc.staffId) &&
-    normDate(a.processedAt || a.requestedAt || "") === dateKey &&
-    a.id !== app.id
+// 1) get today's opening float from LEDGER ONLY
+const openingFloat = (cashAcc.entries || [])
+  .filter(e =>
+    String(e.type || "").toLowerCase() === "opening_float" &&
+    normDate(e.date) === dateKey
   )
-  .reduce((s, a) => s + Math.abs(Number(a.amount || 0)), 0);
+  .reduce((s, e) => s + Math.abs(Number(e.amount || 0)), 0);
 
+// 2) get today's float already used from LEDGER ONLY
+const floatUsedAlready = (cashAcc.entries || [])
+  .filter(e =>
+    String(e.type || "").toLowerCase() === "float_used" &&
+    normDate(e.date) === dateKey
+  )
+  .reduce((s, e) => s + Math.abs(Number(e.amount || 0)), 0);
+
+// 3) split this approval amount into within-float and overdraw parts
 const amt = Math.abs(Number(app.amount || 0));
-const remainingFloat = Math.max(0, openingFloat - creditsBefore);
+const remainingFloat = Math.max(0, openingFloat - floatUsedAlready);
 const withinFloat = Math.min(amt, remainingFloat);
 const overdrawPart = Math.max(0, amt - withinFloat);
 
-// 3) record info entry for within-float (optional but VERY helpful for audit)
+// 4) record within-float portion as float_used
 const infoRef = `FLOATUSED|${app.id}`;
-const alreadyInfo = cashAcc.entries.some(e => e.refId === infoRef && e.type === "float_used");
+const alreadyInfo = cashAcc.entries.some(
+  e =>
+    String(e.refId) === String(infoRef) &&
+    String(e.type || "").toLowerCase() === "float_used"
+);
+
 if (!alreadyInfo && withinFloat > 0) {
   cashAcc.entries.unshift({
     id: uid("sf"),
@@ -6004,9 +6012,13 @@ if (!alreadyInfo && withinFloat > 0) {
   });
 }
 
+// 5) record ONLY overdraw portion as debt
+const alreadyDebt = cashAcc.entries.some(
+  e =>
+    String(e.refId) === String(app.id) &&
+    String(e.type || "").toLowerCase() === "credit_out"
+);
 
-// 4) record ONLY overdraw as debt
-const alreadyDebt = cashAcc.entries.some(e => e.refId === app.id && e.type === "credit_out");
 if (!alreadyDebt && overdrawPart > 0) {
   cashAcc.entries.unshift({
     id: uid("sf"),
@@ -6020,7 +6032,7 @@ if (!alreadyDebt && overdrawPart > 0) {
   });
 }
 
-// 5) recompute debt balance from ledger (opening_float + float_used do NOT affect debt)
+// 6) recompute debt balance from ledger
 cashAcc.balance = (cashAcc.entries || []).reduce((sum, e) => {
   const t = String(e.type || "").toLowerCase();
   if (t === "opening_float" || t === "opening" || t === "float_used") return sum;
