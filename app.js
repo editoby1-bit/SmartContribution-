@@ -1426,7 +1426,7 @@ box.innerHTML = `
 </div>
 
 <div style="margin-top:10px;display:flex;gap:6px">
-  <button class="btn primary" id="staffDepositBtn">Deposit</button>
+  <button class="btn primary" id="staffDepositBtn" style="color:#fff;font-weight:600">Deposit</button>
   <button class="btn danger" id="staffRepayBtn">Pay Debt</button>
 </div>
 
@@ -1484,7 +1484,28 @@ setTimeout(() => {
     if (!ok) return;
 
     const amt = Number(depBox.querySelector("#staffDepositAmt")?.value || 0);
-    postStaffPayment(staff.id, amt, "Manual deposit");
+    state.approvals = state.approvals || [];
+
+state.approvals.unshift({
+  id: uid("app"),
+  type: "staff_wallet_deposit",
+  amount: amt,
+  staffId: staff.id,
+  staffName: staff.name,
+  status: "pending",
+  requestedAt: new Date().toISOString(),
+  requestedBy: staff.id
+});
+
+pushAudit?.(
+  staff.name,
+  staff.role,
+  "staff_wallet_deposit_requested",
+  { staffId: staff.id, amount: amt }
+);
+
+save?.();
+showToast("Deposit request sent for approval");
     openMyStaffAccount();
   };
 
@@ -1524,7 +1545,28 @@ setTimeout(() => {
     if (!ok) return;
 
     const amt = Number(repayBox.querySelector("#staffRepayAmt")?.value || 0);
-    postStaffDebtRepayment(staff.id, amt);
+    state.approvals = state.approvals || [];
+
+state.approvals.unshift({
+  id: uid("app"),
+  type: "staff_debt_repayment",
+  amount: amt,
+  staffId: staff.id,
+  staffName: staff.name,
+  status: "pending",
+  requestedAt: new Date().toISOString(),
+  requestedBy: staff.id
+});
+
+pushAudit?.(
+  staff.name,
+  staff.role,
+  "staff_debt_repayment_requested",
+  { staffId: staff.id, amount: amt }
+);
+
+save?.();
+showToast("Debt repayment request sent for approval");
     openMyStaffAccount();
   };
 }, 50);
@@ -6280,6 +6322,18 @@ state.transactions.push({
   actorId: actorId,      // ✅ add
   approvalId: app.id
 });
+
+// ===== STAFF WALLET APPROVALS =====
+
+// wallet deposit approval
+if (app.type === "staff_wallet_deposit") {
+  postStaffPayment(app.staffId, app.amount, "Approved wallet deposit");
+}
+
+// debt repayment approval
+if (app.type === "staff_debt_repayment") {
+  postStaffDebtRepayment(app.staffId, app.amount);
+}
 
 // ===== AUDIT (ROLE-AWARE, DETAILED) =====
 await pushAudit(
