@@ -662,7 +662,7 @@ function postStaffPayment(staffId, amount, note) {
 window.postStaffPayment = postStaffPayment;
 
 
- openCODResolutionModal(codId) {
+ function openCODResolutionModal(codId) {
  console.log("STEP 3: openCODResolutionModal ENTERED", codId);
 
  if (!isManager()) {
