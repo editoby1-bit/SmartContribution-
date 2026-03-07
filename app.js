@@ -1602,176 +1602,175 @@ setTimeout(() => {
 
   if (depBtn) depBtn.onclick = async () => {
 
- const depBox = document.createElement("div");
- depBox.innerHTML = `
-   <div class="small"><b>System</b></div>
-   <div class="small muted" style="margin-top:6px">Enter deposit amount</div>
-   <input id="staffDepositAmt" class="input" type="number" placeholder="Enter amount" style="margin-top:10px" />
-   <div id="staffDepositErr" class="small danger" style="margin-top:8px;display:none"></div>
- `;
+  const depBox = document.createElement("div");
+  depBox.innerHTML = `
+    <div class="small"><b>System</b></div>
+    <div class="small muted" style="margin-top:6px">Enter deposit amount</div>
+    <input id="staffDepositAmt" class="input" type="number" placeholder="Enter amount" style="margin-top:10px" />
+    <div id="staffDepositErr" class="small danger" style="margin-top:8px;display:none"></div>
+  `;
 
- const okInput = await openModalGeneric("System", depBox, "Continue", true, () => {
-   const amt = Number(depBox.querySelector("#staffDepositAmt")?.value || 0);
-   const err = depBox.querySelector("#staffDepositErr");
+  const okInput = await openModalGeneric("System", depBox, "Continue", true, () => {
+    const amt = Number(depBox.querySelector("#staffDepositAmt")?.value || 0);
+    const err = depBox.querySelector("#staffDepositErr");
 
-   if (!amt || amt <= 0) {
-     if (err) {
-       err.textContent = "Enter a valid deposit amount";
-       err.style.display = "block";
-     }
-     return false;
-   }
+    if (!amt || amt <= 0) {
+      if (err) {
+        err.textContent = "Enter a valid deposit amount";
+        err.style.display = "block";
+      }
+      return false;
+    }
 
-   return true;
- });
+    return true;
+  });
 
- if (!okInput) return;
+  if (!okInput) return;
 
- const amt = Number(depBox.querySelector("#staffDepositAmt")?.value || 0);
+  const amt = Number(depBox.querySelector("#staffDepositAmt")?.value || 0);
 
- const okConfirm = await openModalGeneric(
-   "Confirm Deposit Request",
-   `
-   <div class="small">
-     Send deposit request for <b>${fmt(amt)}</b> to your staff wallet?
-   </div>
-   `,
-   "Send for Approval",
-   true
- );
+  const okConfirm = await openModalGeneric(
+    "Confirm Deposit Request",
+    `
+    <div class="small">
+      Send deposit request for <b>${fmt(amt)}</b> to your staff wallet?
+    </div>
+    `,
+    "Send for Approval",
+    true
+  );
 
- if (!okConfirm) return;
+  if (!okConfirm) return;
 
- state.approvals = state.approvals || [];
+  state.approvals = state.approvals || [];
 
- state.approvals.unshift({
-   id: uid("app"),
-   type: "staff_wallet_deposit",
-   amount: amt,
-   staffId: staff.id,
-   staffName: staff.name,
-   status: "pending",
-   requestedAt: new Date().toISOString(),
-   requestedBy: staff.id
- });
+  state.approvals.unshift({
+    id: uid("app"),
+    type: "staff_wallet_deposit",
+    amount: amt,
+    staffId: staff.id,
+    staffName: staff.name,
+    status: "pending",
+    requestedAt: new Date().toISOString(),
+    requestedBy: staff.id
+  });
 
- pushAudit?.(
-   staff.name,
-   staff.role,
-   "staff_wallet_deposit_requested",
-   { staffId: staff.id, amount: amt }
- );
+  pushAudit?.(
+    staff.name,
+    staff.role,
+    "staff_wallet_deposit_requested",
+    { staffId: staff.id, amount: amt }
+  );
 
- save?.();
-showToast("Deposit request sent for approval");
+  save?.();
+  showToast("Deposit request sent for approval");
 
-// reopen staff account after modal closes
-setTimeout(() => openMyStaffAccount(), 50);
+  // reopen staff account after modal closes
+  setTimeout(() => openMyStaffAccount(), 50);
+};
 
-  if (repayBtn) repayBtn.onclick = async () => {
+if (repayBtn) repayBtn.onclick = async () => {
 
- const repayBox = document.createElement("div");
+  const repayBox = document.createElement("div");
 
-const accNow = ensureStaffAccount(staff.id);
-const currentDebt = Math.abs(Number(accNow.balance || 0));
-const currentWallet = Number(accNow.walletBalance || 0);
+  const accNow = ensureStaffAccount(staff.id);
+  const currentDebt = Math.abs(Number(accNow.balance || 0));
+  const currentWallet = Number(accNow.walletBalance || 0);
 
-repayBox.innerHTML = `
-  <div class="small"><b>System</b></div>
-  <div class="small muted" style="margin-top:6px">Enter repayment amount</div>
+  repayBox.innerHTML = `
+    <div class="small"><b>System</b></div>
+    <div class="small muted" style="margin-top:6px">Enter repayment amount</div>
 
-  <div class="small" style="margin-top:8px">
-    <b>Current Debt:</b> ${fmt(currentDebt)}
-  </div>
+    <div class="small" style="margin-top:8px">
+      <b>Current Debt:</b> ${fmt(currentDebt)}
+    </div>
 
-  <div class="small" style="margin-top:4px">
-    <b>Wallet Balance:</b> ${fmt(currentWallet)}
-  </div>
+    <div class="small" style="margin-top:4px">
+      <b>Wallet Balance:</b> ${fmt(currentWallet)}
+    </div>
 
-  <input id="staffRepayAmt" class="input" type="number" placeholder="Enter amount" style="margin-top:10px" />
-  <div id="staffRepayErr" class="small danger" style="margin-top:8px;display:none"></div>
-`;
+    <input id="staffRepayAmt" class="input" type="number" placeholder="Enter amount" style="margin-top:10px" />
+    <div id="staffRepayErr" class="small danger" style="margin-top:8px;display:none"></div>
+  `;
 
+  const okInput = await openModalGeneric("System", repayBox, "Continue", true, () => {
+    const amt = Number(repayBox.querySelector("#staffRepayAmt")?.value || 0);
+    const err = repayBox.querySelector("#staffRepayErr");
 
- const okInput = await openModalGeneric("System", repayBox, "Continue", true, () => {
-   const amt = Number(repayBox.querySelector("#staffRepayAmt")?.value || 0);
-   const err = repayBox.querySelector("#staffRepayErr");
+    if (!amt || amt <= 0) {
+      if (err) {
+        err.textContent = "Enter a valid repayment amount";
+        err.style.display = "block";
+      }
+      return false;
+    }
 
-   if (!amt || amt <= 0) {
-     if (err) {
-       err.textContent = "Enter a valid repayment amount";
-       err.style.display = "block";
-     }
-     return false;
-   }
+    const accNow = ensureStaffAccount(staff.id);
 
-   const accNow = ensureStaffAccount(staff.id);
+    if (Number(accNow.walletBalance || 0) < amt) {
+      if (err) {
+        err.textContent = "Insufficient wallet balance";
+        err.style.display = "block";
+      }
+      return false;
+    }
 
-if (Number(accNow.walletBalance || 0) < amt) {
-  if (err) {
-    err.textContent = "Insufficient wallet balance";
-    err.style.display = "block";
-  }
-  return false;
-}
+    const debtNow = Math.abs(Number(accNow.balance || 0));
 
-const debtNow = Math.abs(Number(accNow.balance || 0));
+    if (amt > debtNow) {
+      if (err) {
+        err.textContent = "Repayment cannot exceed current debt";
+        err.style.display = "block";
+      }
+      return false;
+    }
 
-if (amt > debtNow) {
-  if (err) {
-    err.textContent = "Repayment cannot exceed current debt";
-    err.style.display = "block";
-  }
-  return false;
-}
+    return true;
+  });
 
-return true;
-});
+  if (!okInput) return;
 
- if (!okInput) return;
+  const amt = Number(repayBox.querySelector("#staffRepayAmt")?.value || 0);
 
- const amt = Number(repayBox.querySelector("#staffRepayAmt")?.value || 0);
+  const okConfirm = await openModalGeneric(
+    "Confirm Debt Repayment",
+    `
+    <div class="small">
+      Send debt repayment request for <b>${fmt(amt)}</b>?
+    </div>
+    `,
+    "Send for Approval",
+    true
+  );
 
- const okConfirm = await openModalGeneric(
-   "Confirm Debt Repayment",
-   `
-   <div class="small">
-     Send debt repayment request for <b>${fmt(amt)}</b>?
-   </div>
-   `,
-   "Send for Approval",
-   true
- );
+  if (!okConfirm) return;
 
- if (!okConfirm) return;
+  state.approvals = state.approvals || [];
 
- state.approvals = state.approvals || [];
+  state.approvals.unshift({
+    id: uid("app"),
+    type: "staff_debt_repayment",
+    amount: amt,
+    staffId: staff.id,
+    staffName: staff.name,
+    status: "pending",
+    requestedAt: new Date().toISOString(),
+    requestedBy: staff.id
+  });
 
- state.approvals.unshift({
-   id: uid("app"),
-   type: "staff_debt_repayment",
-   amount: amt,
-   staffId: staff.id,
-   staffName: staff.name,
-   status: "pending",
-   requestedAt: new Date().toISOString(),
-   requestedBy: staff.id
- });
+  pushAudit?.(
+    staff.name,
+    staff.role,
+    "staff_debt_repayment_requested",
+    { staffId: staff.id, amount: amt }
+  );
 
- pushAudit?.(
-   staff.name,
-   staff.role,
-   "staff_debt_repayment_requested",
-   { staffId: staff.id, amount: amt }
- );
+  save?.();
+  showToast("Debt repayment request sent for approval");
 
- save?.();
-showToast("Debt repayment request sent for approval");
-
-// reopen staff account after modal closes
-setTimeout(() => openMyStaffAccount(), 50);
-
-}
+  // reopen staff account after modal closes
+  setTimeout(() => openMyStaffAccount(), 50);
+};
 
 window.openMyStaffAccount = openMyStaffAccount;
 
