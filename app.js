@@ -818,14 +818,21 @@ acc.entries.unshift({
 state.accounts = state.accounts || {};
 state.accounts.income = state.accounts.income || [];
 
-state.accounts.income.push({
-  id: uid("inc"),
-  type: "staff_debt_payment",
+state.transactions = state.transactions || [];
+
+state.transactions.push({
+  id: uid("tx"),
+  type: "credit",
   amount,
-  staffId,
   date: new Date().toISOString(),
-  note: "Staff debt repayment"
+  desc: "Staff debt repayment",
+  customerId: null,
+  actor: currentStaff()?.name || "system",
+  actorId: staffId,
+  approvalId: null,
+  metaType: "staff_debt_payment"
 });
+
 
 save?.();
 }
@@ -1586,7 +1593,7 @@ box.innerHTML = `
 `;
 
 // open modal
-openModalGeneric("My Staff Account", box, "Cancel", true);
+openModalGeneric("My Staff Account", box);
 
 // 🔘 wire buttons
 setTimeout(() => {
@@ -1656,10 +1663,10 @@ setTimeout(() => {
  );
 
  save?.();
- showToast("Deposit request sent for approval");
+showToast("Deposit request sent for approval");
 
- openMyStaffAccount();
-};
+// reopen staff account after modal closes
+setTimeout(() => openMyStaffAccount(), 50);
 
   if (repayBtn) repayBtn.onclick = async () => {
 
@@ -1759,11 +1766,10 @@ return true;
  );
 
  save?.();
- showToast("Debt repayment request sent for approval");
+showToast("Debt repayment request sent for approval");
 
- openMyStaffAccount();
-};
-}, 50);
+// reopen staff account after modal closes
+setTimeout(() => openMyStaffAccount(), 50);
 
 }
 
