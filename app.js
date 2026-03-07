@@ -662,55 +662,172 @@ function postStaffPayment(staffId, amount, note) {
 window.postStaffPayment = postStaffPayment;
 
 
+ openCODResolutionModal(codId) {
+ console.log("STEP 3: openCODResolutionModal ENTERED", codId);
+
+ if (!isManager()) {
+   showToast("Only managers can resolve COD");
+   return;
+ }
+
+ // 🔑 FETCH REAL RECORD FROM STATE
+ const cod = state.cod.find(c => c.id === codId);
+ if (!cod) {
+   showToast("COD record not found");
+   console.error("COD not found in state:", codId, state.cod);
+   return;
+ }
+
+ const back = document.getElementById("txModalBack");
+const modal = document.getElementById("txModal");
+const body = document.getElementById("txBody");
+const title = document.getElementById("txTitle");
+
+console.log("MODAL BACK FOUND?", back);
+
+ title.textContent = "Resolve Close of Day Variance";
+
+ body.innerHTML = `
+   <div class="small">
+     <b>Staff:</b> ${cod.staffName}<br/>
+     <b>Date:</b> ${cod.date}
+   </div>
+
+   <div class="card" style="margin-top:10px">
+     <div class="small">System Expected: ${fmt(cod.systemExpected)}</div>
+     <div class="small">Staff Declared: ${fmt(cod.staffDeclared)}</div>
+     <div class="small danger">Variance: ${fmt(cod.variance)}</div>
+   </div>
+
+   <input
+     id="resolvedAmount"
+     class="input"
+     style="margin-top:10px"
+     value="${cod.systemExpected}"
+     placeholder="Final accepted cash amount"
+   />
+
+   <textarea
+     id="resolutionNote"
+     class="input"
+     placeholder="Resolution note (required)"
+     style="margin-top:8px"
+   ></textarea>
+ `;
+
+ modal.querySelectorAll(".tx-ok").forEach(b => b.remove());
+
+ const btn = document.createElement("button");
+ btn.className = "btn success tx-ok";
+ btn.textContent = "Resolve COD";
+
+ btn.onclick = () => {
+   const resolvedAmount = Number(
+     document.getElementById("resolvedAmount").value
+   );
+   const note = document.getElementById("resolutionNote").value.trim();
+
+   if (!note) {
+     showToast("Resolution note is required");
+     return;
+   }
+
+   // 🔑 UPDATE REAL RECORD
+   cod.resolvedAmount = resolvedAmount;
+   cod.resolutionNote = note;
+   cod.resolvedBy = currentStaff().name;
+   cod.resolvedAt = new Date().toISOString();
+   cod.status = "resolved";
+   cod.variance = resolvedAmount - cod.systemExpected;
+
+   // ✅ If final variance is SHORTAGE, manager can charge staff account
+if (cod.variance < 0) {
+ const shortage = Math.abs(cod.variance);
+
+ // ✅ prevent double charge at COD-level too
+ if (!cod.staffCharged) {
+   const ok = postStaffCharge(
+     cod.staffId,
+     shortage,
+     `COD shortage on ${cod.date}: ${note}`,
+     cod.id
+   );
+   if (ok) cod.staffCharged = true;
+ }
+} else {
+ cod.staffCharged = false; // optional, keeps record clean
+}
+
+   save();
+
+   renderCODForDate(window.activeCODDate);
+   renderManagerCODSummary(window.activeCODDate);
+
+   document.getElementById("txModalBack").style.display = "none";
+showToast("COD resolved");
+ };
+
+ modal.querySelector(".modal-actions").appendChild(btn);
+
+// 🔑 SHOW MODAL (THIS WAS MISSING)
+back.style.display = "flex";
+}
+window.openCODResolutionModal = openCODResolutionModal;
+
+
+
+
+
+
 function postStaffDebtRepayment(staffId, amount) {
 
- const acc = ensureStaffAccount(staffId);
+const acc = ensureStaffAccount(staffId);
 
- amount = Math.abs(Number(amount || 0));
+amount = Math.abs(Number(amount || 0));
 
- if (!amount) return showToast("Invalid amount");
+if (!amount) return showToast("Invalid amount");
 
- const debtNow = Math.abs(Number(acc.balance || 0));
+const debtNow = Math.abs(Number(acc.balance || 0));
 
- // ✅ cap repayment so debt never goes positive
- amount = Math.min(amount, debtNow);
+// ✅ cap repayment so debt never goes positive
+amount = Math.min(amount, debtNow);
 
- if (!amount) return showToast("No debt to repay");
+if (!amount) return showToast("No debt to repay");
 
- if (Number(acc.walletBalance || 0) < amount)
-   return showToast("Insufficient wallet balance");
+if (Number(acc.walletBalance || 0) < amount)
+  return showToast("Insufficient wallet balance");
 
- acc.walletBalance -= amount;
+acc.walletBalance -= amount;
 
- // debt is negative, so adding repayment moves it toward zero
- acc.balance += amount;
+// debt is negative, so adding repayment moves it toward zero
+acc.balance += amount;
 
- acc.entries.unshift({
-   id: uid("sf"),
-   staffId,
-   type: "debt_repayment",
-   amount,
-   delta: amount,
-   date: new Date().toISOString(),
-   refId: uid("repay"),
-   note: "Debt repayment"
- });
+acc.entries.unshift({
+  id: uid("sf"),
+  staffId,
+  type: "debt_repayment",
+  amount,
+  delta: amount,
+  date: new Date().toISOString(),
+  refId: uid("repay"),
+  note: "Debt repayment"
+});
 
 
- // business receives repayment
- state.accounts = state.accounts || {};
- state.accounts.income = state.accounts.income || [];
+// business receives repayment
+state.accounts = state.accounts || {};
+state.accounts.income = state.accounts.income || [];
 
- state.accounts.income.push({
-   id: uid("inc"),
-   type: "staff_debt_payment",
-   amount,
-   staffId,
-   date: new Date().toISOString(),
-   note: "Staff debt repayment"
- });
+state.accounts.income.push({
+  id: uid("inc"),
+  type: "staff_debt_payment",
+  amount,
+  staffId,
+  date: new Date().toISOString(),
+  note: "Staff debt repayment"
+});
 
- save?.();
+save?.();
 }
 
 window.postStaffDebtRepayment = postStaffDebtRepayment;
@@ -2127,8 +2244,15 @@ submitBtn.onclick = () => {
   if (state.codDrafts) delete state.codDrafts[`${staff.id}|${dateKey}`];
 
   save?.();
-  showToast("Close of Day submitted");
-  closeTxModal?.();
+
+window.activeCODDate = dateKey;
+
+renderCODForDate?.(dateKey);
+renderManagerCODSummary?.(dateKey);
+renderDashboard?.();
+
+showToast("Close of Day submitted");
+closeTxModal?.();
 };
 }
 
@@ -2140,20 +2264,39 @@ function openCODResolutionModal(codId) {
     return;
   }
 
-  // 🔑 FETCH REAL RECORD FROM STATE
-  const cod = state.cod.find(c => c.id === codId);
+  const cod = (state.cod || []).find(c => c.id === codId);
   if (!cod) {
     showToast("COD record not found");
     console.error("COD not found in state:", codId, state.cod);
     return;
   }
 
-  const back = document.getElementById("txModalBack");
-const modal = document.getElementById("txModal");
-const body = document.getElementById("txBody");
-const title = document.getElementById("txTitle");
+  const acc = ensureStaffAccount(cod.staffId);
 
-console.log("MODAL BACK FOUND?", back);
+  const openingFloat = Number(cod.openingFloat || 0);
+  const credits = Number(cod.snapshot?.credits || 0);
+  const withdrawals = Number(cod.snapshot?.withdrawals || 0);
+  const empowerments = Number(cod.snapshot?.empowerments || 0);
+
+  const walletBalance = Number(acc.walletBalance || 0);
+  const debtBalance = Number(acc.balance || 0);
+
+  const repaymentsMade = (acc.entries || [])
+    .filter(e =>
+      String(e.type || "").toLowerCase() === "debt_repayment" &&
+      normDate(e.date) === normDate(cod.date)
+    )
+    .reduce((s, e) => s + Math.abs(Number(e.amount || 0)), 0);
+
+  const back = document.getElementById("txModalBack");
+  const modal = document.getElementById("txModal");
+  const body = document.getElementById("txBody");
+  const title = document.getElementById("txTitle");
+
+  if (!back || !modal || !body || !title) {
+    console.error("Resolve COD modal elements missing");
+    return;
+  }
 
   title.textContent = "Resolve Close of Day Variance";
 
@@ -2164,17 +2307,33 @@ console.log("MODAL BACK FOUND?", back);
     </div>
 
     <div class="card" style="margin-top:10px">
-      <div class="small">System Expected: ${fmt(cod.systemExpected)}</div>
-      <div class="small">Staff Declared: ${fmt(cod.staffDeclared)}</div>
-      <div class="small danger">Variance: ${fmt(cod.variance)}</div>
+      <div class="small"><b>Opening Float:</b> ${fmt(openingFloat)}</div>
+      <div class="small"><b>Credits:</b> ${fmt(credits)}</div>
+      <div class="small"><b>Withdrawals (info):</b> ${fmt(withdrawals)}</div>
+      <div class="small"><b>Empowerments (info):</b> ${fmt(empowerments)}</div>
+
+      <div class="small" style="margin-top:8px"><b>System Expected:</b> ${fmt(Number(cod.systemExpected || 0))}</div>
+      <div class="small"><b>Staff Declared:</b> ${fmt(Number(cod.staffDeclared || 0))}</div>
+      <div class="small danger"><b>Variance:</b> ${fmt(Number(cod.variance || 0))}</div>
+
+      <div class="small" style="margin-top:8px"><b>Staff Wallet Balance:</b> ${fmt(walletBalance)}</div>
+      <div class="small"><b>Staff Debt Balance:</b> ${fmt(debtBalance)}</div>
+      <div class="small"><b>Repayments Already Made:</b> ${fmt(repaymentsMade)}</div>
+
+      ${
+        cod.staffNote
+          ? `<div class="small muted" style="margin-top:8px"><b>Staff Note:</b> ${cod.staffNote}</div>`
+          : ``
+      }
     </div>
 
     <input
       id="resolvedAmount"
       class="input"
       style="margin-top:10px"
-      value="${cod.systemExpected}"
+      value="${Number(cod.systemExpected || 0)}"
       placeholder="Final accepted cash amount"
+      type="number"
     />
 
     <textarea
@@ -2183,6 +2342,10 @@ console.log("MODAL BACK FOUND?", back);
       placeholder="Resolution note (required)"
       style="margin-top:8px"
     ></textarea>
+
+    <div class="small muted" style="margin-top:8px">
+      If staff still owes after discussion, post the agreed debt separately to staff account.
+    </div>
   `;
 
   modal.querySelectorAll(".tx-ok").forEach(b => b.remove());
@@ -2192,55 +2355,37 @@ console.log("MODAL BACK FOUND?", back);
   btn.textContent = "Resolve COD";
 
   btn.onclick = () => {
-    const resolvedAmount = Number(
-      document.getElementById("resolvedAmount").value
-    );
-    const note = document.getElementById("resolutionNote").value.trim();
+    const resolvedAmount = Number(document.getElementById("resolvedAmount")?.value || 0);
+    const note = document.getElementById("resolutionNote")?.value.trim();
 
     if (!note) {
       showToast("Resolution note is required");
       return;
     }
 
-    // 🔑 UPDATE REAL RECORD
     cod.resolvedAmount = resolvedAmount;
     cod.resolutionNote = note;
-    cod.resolvedBy = currentStaff().name;
+    cod.resolvedBy = currentStaff()?.name || "Manager";
     cod.resolvedAt = new Date().toISOString();
     cod.status = "resolved";
-    cod.variance = resolvedAmount - cod.systemExpected;
+    cod.variance = resolvedAmount - Number(cod.systemExpected || 0);
 
-    // ✅ If final variance is SHORTAGE, manager can charge staff account
-if (cod.variance < 0) {
-  const shortage = Math.abs(cod.variance);
+    // ✅ no automatic debt posting here
+    // manager and staff determine separately whether to post debt
 
-  // ✅ prevent double charge at COD-level too
-  if (!cod.staffCharged) {
-    const ok = postStaffCharge(
-      cod.staffId,
-      shortage,
-      `COD shortage on ${cod.date}: ${note}`,
-      cod.id
-    );
-    if (ok) cod.staffCharged = true;
-  }
-} else {
-  cod.staffCharged = false; // optional, keeps record clean
-}
+    save?.();
 
-    save();
+    const dateKey = normDate(window.activeCODDate || cod.date);
+    renderCODForDate?.(dateKey);
+    renderManagerCODSummary?.(dateKey);
+    renderDashboard?.();
 
-    renderCODForDate(window.activeCODDate);
-    renderManagerCODSummary(window.activeCODDate);
-
-    document.getElementById("txModalBack").style.display = "none";
-showToast("COD resolved");
+    back.style.display = "none";
+    showToast("COD resolved");
   };
 
-  modal.querySelector(".modal-actions").appendChild(btn);
-
-// 🔑 SHOW MODAL (THIS WAS MISSING)
-back.style.display = "flex";
+  modal.querySelector(".modal-actions")?.appendChild(btn);
+  back.style.display = "flex";
 }
 window.openCODResolutionModal = openCODResolutionModal;
 
