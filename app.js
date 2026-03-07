@@ -1766,11 +1766,17 @@ if (repayBtn) repayBtn.onclick = async () => {
   );
 
   save?.();
-  showToast("Debt repayment request sent for approval");
+ showToast("Debt repayment request sent for approval");
 
-  // reopen staff account after modal closes
-  setTimeout(() => openMyStaffAccount(), 50);
+ // reopen staff account after modal closes
+ setTimeout(() => openMyStaffAccount(), 50);
 };
+
+}, 50);
+
+}
+
+window.openMyStaffAccount = openMyStaffAccount;
 
 window.openMyStaffAccount = openMyStaffAccount;
 
